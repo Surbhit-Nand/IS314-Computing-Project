@@ -7,7 +7,13 @@ type HomePageProps = {
   isLoaded: boolean;
   isSignedIn: boolean | undefined;
   onNavigate: (
-    view: "home" | "login" | "register" | "dashboard" | "user-dashboard",
+    view:
+      | "home"
+      | "login"
+      | "register"
+      | "dashboard"
+      | "staff-dashboard"
+      | "user-dashboard",
   ) => void;
 };
 
@@ -33,6 +39,7 @@ export function HomePage({ isLoaded, isSignedIn, onNavigate }: HomePageProps) {
   const [animalsError, setAnimalsError] = useState("");
   const userRole = user?.publicMetadata.role;
   const isAdmin = userRole === "manager" || userRole === "admin";
+  const isStaff = userRole === "staff" || userRole === "veterinarian";
 
   useEffect(() => {
     void fetch(`${apiBaseUrl}/api/animals`)
@@ -85,10 +92,20 @@ export function HomePage({ isLoaded, isSignedIn, onNavigate }: HomePageProps) {
                 type="button"
                 className="ghost-button dashboard-link"
                 onClick={() =>
-                  onNavigate(isAdmin ? "dashboard" : "user-dashboard")
+                  onNavigate(
+                    isAdmin
+                      ? "dashboard"
+                      : isStaff
+                        ? "staff-dashboard"
+                        : "user-dashboard",
+                  )
                 }
               >
-                {isAdmin ? "Admin dashboard" : "My dashboard"}
+                {isAdmin
+                  ? "Admin dashboard"
+                  : isStaff
+                    ? "Staff dashboard"
+                    : "My dashboard"}
               </button>
               <UserButton />
             </>
