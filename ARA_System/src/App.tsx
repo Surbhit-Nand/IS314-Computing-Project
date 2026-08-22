@@ -4,6 +4,7 @@ import "./App.css";
 import { AuthPage } from "./components/AuthPage";
 import { HomePage } from "./components/HomePage";
 import { ManagerDashboard } from "./components/ManagerDashboard";
+import { StaffDashboard } from "./components/StaffDashboard";
 import { UserDashboard } from "./components/UserDashboard";
 
 export type View =
@@ -11,6 +12,7 @@ export type View =
   | "login"
   | "register"
   | "dashboard"
+  | "staff-dashboard"
   | "user-dashboard";
 
 function App() {
@@ -19,6 +21,10 @@ function App() {
 
   if (view === "dashboard") {
     return <ManagerDashboard onNavigate={setView} />;
+  }
+
+  if (view === "staff-dashboard") {
+    return <StaffDashboard onNavigate={setView} />;
   }
 
   if (view === "user-dashboard") {
