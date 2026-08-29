@@ -1,7 +1,10 @@
 import { SignInButton, UserButton, useAuth, useUser } from "@clerk/react";
 import spcaLogo from "../assets/spca-logo.png";
+import { isDevBypassEnabled } from "../utils/devBypass";
 
-type StaffDashboardProps = { onNavigate: (view: "home") => void };
+type StaffDashboardProps = {
+  onNavigate: (view: "home" | "register-animal" | "manage-animals") => void;
+};
 
 type StaffRole = "staff" | "veterinarian";
 
@@ -16,7 +19,7 @@ export function StaffDashboard({ onNavigate }: StaffDashboardProps) {
   const { isLoaded, isSignedIn } = useAuth();
   const { user } = useUser();
   const role = user?.publicMetadata.role;
-  const hasStaffAccess = role === "staff" || role === "veterinarian";
+  const hasStaffAccess = isDevBypassEnabled || role === "staff" || role === "veterinarian";
   const roleLabel: Record<StaffRole, string> = {
     staff: "SPCA staff",
     veterinarian: "Veterinarian",
@@ -93,13 +96,29 @@ export function StaffDashboard({ onNavigate }: StaffDashboardProps) {
             and keep rescue, intake, adoption, and medical records up to date.
           </p>
         </div>
-        <button
-          type="button"
-          className="ghost-button"
-          onClick={() => onNavigate("home")}
-        >
-          View public listings
-        </button>
+        <div className="header-actions">
+          <button
+            type="button"
+            className="teal-button"
+            onClick={() => onNavigate("register-animal")}
+          >
+            Register animal
+          </button>
+          <button
+            type="button"
+            className="ghost-button"
+            onClick={() => onNavigate("manage-animals")}
+          >
+            Manage animal profiles
+          </button>
+          <button
+            type="button"
+            className="ghost-button"
+            onClick={() => onNavigate("home")}
+          >
+            View public listings
+          </button>
+        </div>
       </section>
 
       <section className="dashboard-metrics" aria-label="Staff work summary">

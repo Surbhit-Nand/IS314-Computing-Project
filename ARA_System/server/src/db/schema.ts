@@ -20,6 +20,14 @@ export const animalStatus = pgEnum("animal_status", [
 
 export const animalType = pgEnum("animal_type", ["dog", "cat", "rabbit", "other"]);
 
+// Whether a vet has recorded any vaccinations for this animal yet. Kept as its
+// own field (separate from the medical-clearance workflow) because staff need
+// to show it on the public listing regardless of adoption status.
+export const vaccinationStatus = pgEnum("vaccination_status", [
+	"not_vaccinated",
+	"vaccinated",
+]);
+
 export const animals = pgTable("animals", {
 	id: uuid("id").defaultRandom().primaryKey(),
 	publicId: text("public_id").notNull().unique(),
@@ -29,10 +37,12 @@ export const animals = pgTable("animals", {
 	estimatedAge: text("estimated_age"),
 	gender: text("gender"),
 	colour: text("colour"),
+	description: text("description"),
 	rescueDate: date("rescue_date"),
 	behaviour: text("behaviour"),
 	rescueHistory: text("rescue_history"),
 	photoUrls: jsonb("photo_urls").$type<string[]>().notNull().default([]),
+	vaccinationStatus: vaccinationStatus("vaccination_status").notNull().default("not_vaccinated"),
 	medicallyCleared: boolean("medically_cleared").notNull().default(false),
 	status: animalStatus("status").notNull().default("intake"),
 	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

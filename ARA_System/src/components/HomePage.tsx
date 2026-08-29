@@ -2,6 +2,7 @@ import { SignInButton, SignUpButton, UserButton, useUser } from "@clerk/react";
 import { useEffect, useState } from "react";
 import featureHero from "../assets/spca-hero.webp";
 import spcaLogo from "../assets/spca-logo.png";
+import { isDevBypassEnabled } from "../utils/devBypass";
 
 type HomePageProps = {
   isLoaded: boolean;
@@ -39,7 +40,9 @@ export function HomePage({ isLoaded, isSignedIn, onNavigate }: HomePageProps) {
   const [animalsError, setAnimalsError] = useState("");
   const userRole = user?.publicMetadata.role;
   const isAdmin = userRole === "manager" || userRole === "admin";
-  const isStaff = userRole === "staff" || userRole === "veterinarian";
+  // isDevBypassEnabled is OR'd in here only so the "Staff dashboard" nav
+  // button/route appears locally without a real role - see src/utils/devBypass.ts.
+  const isStaff = isDevBypassEnabled || userRole === "staff" || userRole === "veterinarian";
 
   useEffect(() => {
     void fetch(`${apiBaseUrl}/api/animals`)
