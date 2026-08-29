@@ -8,7 +8,7 @@
     "server:dev": "tsx server/src/server.ts",
     "server:check": "tsc -p server/tsconfig.json --noEmit",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
+    "db:migrate": "tsx server/src/db/migrate.ts",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
