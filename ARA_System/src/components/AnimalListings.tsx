@@ -2,7 +2,9 @@ import { SignInButton, SignUpButton, UserButton, useUser } from "@clerk/react";
 import { useEffect, useMemo, useState } from "react";
 import featureHero from "../assets/spca-hero.webp";
 import spcaLogo from "../assets/spca-logo.png";
+import type { Animal } from "../types/animal";
 import { isDevBypassEnabled } from "../utils/devBypass";
+import { useFavoriteAnimals } from "../utils/favorites";
 
 type View =
   | "home"
@@ -17,21 +19,7 @@ type AnimalListingsProps = {
   isLoaded: boolean;
   isSignedIn: boolean | undefined;
   onNavigate: (view: View) => void;
-};
-
-type PublicAnimal = {
-  id: string;
-  publicId: string;
-  name: string;
-  type: "dog" | "cat" | "rabbit" | "other";
-  breed: string | null;
-  estimatedAge: string | null;
-  gender: string | null;
-  colour: string | null;
-  description: string | null;
-  behaviour: string | null;
-  photoUrls: string[];
-  status: string;
+  onViewAnimal: (animal: Animal) => void;
 };
 
 const apiBaseUrl = import.meta.env.VITE_API_URL ?? "http://localhost:8787";
@@ -75,13 +63,14 @@ function behaviourKey(behaviour: string | null): string {
   return "";
 }
 
-export function AnimalListings({ isLoaded, isSignedIn, onNavigate }: AnimalListingsProps) {
+export function AnimalListings({ isLoaded, isSignedIn, onNavigate, onViewAnimal }: AnimalListingsProps) {
   const { user } = useUser();
-  const [animals, setAnimals] = useState<PublicAnimal[]>([]);
+  const [animals, setAnimals] = useState<Animal[]>([]);
   const [animalsLoading, setAnimalsLoading] = useState(true);
   const [animalsError, setAnimalsError] = useState("");
   const [searchText, setSearchText] = useState("");
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
+  const { isFavorite, toggle } = useFavoriteAnimals();
 
   const userRole = user?.publicMetadata.role;
   const isAdmin = userRole === "manager" || userRole === "admin";
@@ -91,7 +80,7 @@ export function AnimalListings({ isLoaded, isSignedIn, onNavigate }: AnimalListi
     void fetch(`${apiBaseUrl}/api/animals`)
       .then(async (response) => {
         if (!response.ok) throw new Error("Animal listings could not be loaded.");
-        return (await response.json()) as PublicAnimal[];
+        return (await response.json()) as Animal[];
       })
       .then(setAnimals)
       .catch((error: unknown) =>
@@ -405,19 +394,21 @@ export function AnimalListings({ isLoaded, isSignedIn, onNavigate }: AnimalListi
                 </p>
               )}
               {visible.map((animal) => (
-                <article key={animal.id} className="animal-card">
-                  <div className="animal-card-top">
-                    <span className="badge badge-primary">Available for adoption</span>
-                    <button
-                      type="button"
-                      className="save-button"
-                      aria-label={`Save ${animal.name}`}
-                    >
-                      ♡
-                    </button>
-                  </div>
+                <article
+                  key={animal.id}
+                  className="pet-card"
+                  role="link"
+                  tabIndex={0}
+                  onClick={() => onViewAnimal(animal)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      onViewAnimal(animal);
+                    }
+                  }}
+                >
                   <div
-                    className="animal-image"
+                    className="pet-card-photo"
                     aria-label={`${animal.name} profile image`}
                     style={
                       animal.photoUrls[0]
@@ -425,30 +416,34 @@ export function AnimalListings({ isLoaded, isSignedIn, onNavigate }: AnimalListi
                         : undefined
                     }
                   >
-                    <span className="animal-image-label">{animal.type}</span>
+                    {!animal.photoUrls[0] && (
+                      <span className="animal-image-label">{animal.type}</span>
+                    )}
+                    <button
+                      type="button"
+                      className={isFavorite(animal.id) ? "favorite-button active" : "favorite-button"}
+                      aria-label={
+                        isFavorite(animal.id)
+                          ? `Remove ${animal.name} from saved`
+                          : `Save ${animal.name}`
+                      }
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        toggle(animal.id);
+                      }}
+                    >
+                      {isFavorite(animal.id) ? "♥" : "♡"}
+                    </button>
                   </div>
-                  <div className="animal-body">
-                    <div className="animal-topline">
-                      <div>
-                        <p className="animal-species">
-                          {animal.type} • {animal.breed ?? "Breed not recorded"}
-                        </p>
-                        <h3>{animal.name}</h3>
-                      </div>
-                    </div>
-                    <p className="animal-meta">
-                      {animal.estimatedAge ?? "Age not recorded"} •{" "}
-                      {animal.gender ?? "Gender not recorded"}
+                  <div className="pet-card-body">
+                    <h3 className="pet-card-name">{animal.name}</h3>
+                    <p className="pet-card-breed">{animal.breed ?? "Breed not recorded"}</p>
+                    {animal.behaviour && <p className="pet-card-blurb">{animal.behaviour}</p>}
+                    <p className="pet-card-line">
+                      <span aria-hidden="true">🐾</span>
+                      {animal.gender ?? "Gender unknown"} • {animal.estimatedAge ?? "Age unknown"}
                     </p>
-                    <div className="animal-tags">
-                      {animal.behaviour && <span>{animal.behaviour}</span>}
-                    </div>
-                    <div className="animal-footer">
-                      <span className="status-badge">Available for adoption</span>
-                      <button type="button" className="text-button">
-                        View full profile
-                      </button>
-                    </div>
+                    <p className="pet-card-check">✓ Available for adoption</p>
                   </div>
                 </article>
               ))}
