@@ -54,7 +54,8 @@ function getIdParam(value: string | string[]): string {
 
 export const animalsRouter = Router();
 
-// Public: only medically-cleared, still-available animals.
+// Public: every not-yet-adopted animal (see the NOTE on findPublicAnimals
+// in animals.repository.ts for why this isn't gated on medical clearance).
 animalsRouter.get("/", async (_request, response, next) => {
 	try {
 		response.json(await listPublicAnimals());

@@ -1,14 +1,17 @@
-import { and, eq } from "drizzle-orm";
+import { eq, ne } from "drizzle-orm";
 import { db } from "../../db/client.js";
 import { animals } from "../../db/schema.js";
 
-// Public listing: only animals a vet has medically cleared and whose status
-// is still "medically_cleared" (not yet adopted) are visible to the public.
+// Public listing: every animal not yet adopted is publicly visible.
+//
+// NOTE: AGENTS.md's default rule is that an animal can't appear publicly
+// until a vet sets medically_cleared - that gate is intentionally NOT
+// applied here. The team decided to skip strict medical clearance for this
+// prototype (vaccination status is shown as informational only, not a
+// listing gate), since the Veterinary module that would set that flag
+// hasn't been built yet. Revisit this once that module exists.
 export async function findPublicAnimals() {
-	return db
-		.select()
-		.from(animals)
-		.where(and(eq(animals.medicallyCleared, true), eq(animals.status, "medically_cleared")));
+	return db.select().from(animals).where(ne(animals.status, "adopted"));
 }
 
 // Staff listing: every animal regardless of clearance/adoption status, for

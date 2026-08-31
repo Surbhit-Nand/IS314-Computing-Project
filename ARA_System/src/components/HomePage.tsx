@@ -215,7 +215,7 @@ export function HomePage({ isLoaded, isSignedIn, onNavigate }: HomePageProps) {
           <div className="animals-summary">
             {animalsLoading
               ? "Loading available animals..."
-              : `${animals.length} medically cleared animals currently available`}
+              : `${animals.length} animals currently available for adoption`}
           </div>
           <div className="filter-row" aria-label="Animal categories">
             <button type="button" className="chip active">
@@ -237,13 +237,13 @@ export function HomePage({ isLoaded, isSignedIn, onNavigate }: HomePageProps) {
             )}
             {!animalsLoading && !animalsError && animals.length === 0 && (
               <p className="dashboard-data-state">
-                No medically cleared animals are currently listed.
+                No animals are currently listed for adoption.
               </p>
             )}
             {animals.map((animal) => (
               <article key={animal.id} className="animal-card">
                 <div className="animal-card-top">
-                  <span className="badge badge-primary">Medically cleared</span>
+                  <span className="badge badge-primary">Available for adoption</span>
                   <button
                     type="button"
                     className="save-button"
@@ -280,7 +280,7 @@ export function HomePage({ isLoaded, isSignedIn, onNavigate }: HomePageProps) {
                     {animal.behaviour && <span>{animal.behaviour}</span>}
                   </div>
                   <div className="animal-footer">
-                    <span className="status-badge">Medically cleared</span>
+                    <span className="status-badge">Available for adoption</span>
                     <button type="button" className="text-button">
                       View full profile
                     </button>
