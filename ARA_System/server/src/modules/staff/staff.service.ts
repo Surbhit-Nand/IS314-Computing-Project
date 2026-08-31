@@ -4,7 +4,7 @@ import { invitationalStaffRoles } from "../../shared/types/roles.js";
 export const staffRoles = invitationalStaffRoles;
 export type StaffRole = (typeof staffRoles)[number];
 
-export async function inviteStaffMember(emailAddress: string, role: StaffRole, organizationId?: string) {
+export async function inviteStaffMember(emailAddress: string, role: StaffRole) {
 	return clerkClient.invitations.createInvitation({
 		emailAddress,
 		notify: true,

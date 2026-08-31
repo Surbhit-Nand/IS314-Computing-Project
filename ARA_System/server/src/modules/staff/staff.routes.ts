@@ -39,7 +39,6 @@ staffRouter.post(
 			const invitation = await inviteStaffMember(
 				parsed.data.emailAddress,
 				parsed.data.role,
-				request.clerkOrgId,
 			);
 			response.status(201).json({
 				id: invitation.id,

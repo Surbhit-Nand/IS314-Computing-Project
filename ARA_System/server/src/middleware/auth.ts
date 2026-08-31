@@ -3,6 +3,7 @@ import { verifyToken } from "@clerk/backend";
 import { env } from "../config/env.js";
 
 declare global {
+	// eslint-disable-next-line @typescript-eslint/no-namespace -- Express type augmentation requires a namespace
 	namespace Express {
 		interface Request {
 			clerkUserId?: string;
@@ -10,6 +11,8 @@ declare global {
 		}
 	}
 }
+
+export {};
 
 export async function requireClerkSession(
 	request: Request,
