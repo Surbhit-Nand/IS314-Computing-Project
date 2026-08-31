@@ -119,7 +119,9 @@ export function AnimalRegistrationForm({ onNavigate }: AnimalRegistrationFormPro
           <button type="button" className="ghost-button" onClick={() => onNavigate("staff-dashboard")}>
             Back to dashboard
           </button>
-          <UserButton />
+          <div className="user-avatar-circle">
+            <UserButton />
+          </div>
         </div>
       </header>
 

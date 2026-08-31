@@ -83,7 +83,9 @@ export function StaffDashboard({ onNavigate }: StaffDashboardProps) {
         </div>
         <div className="dashboard-header-actions">
           <span className="role-pill">{currentRole}</span>
-          <UserButton />
+          <div className="user-avatar-circle">
+            <UserButton />
+          </div>
         </div>
       </header>
 

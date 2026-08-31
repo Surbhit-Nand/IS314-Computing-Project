@@ -61,7 +61,9 @@ export function UserDashboard({ onNavigate }: UserDashboardProps) {
         </div>
         <div className="dashboard-header-actions">
           <span className="role-pill">Registered user</span>
-          <UserButton />
+          <div className="user-avatar-circle">
+            <UserButton />
+          </div>
         </div>
       </header>
 

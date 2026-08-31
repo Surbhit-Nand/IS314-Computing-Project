@@ -1,12 +1,13 @@
 import { SignInButton, SignUpButton, UserButton, useUser } from "@clerk/react";
 import { useEffect, useMemo, useState } from "react";
-import featureHero from "../assets/spca-hero.webp";
 import spcaLogo from "../assets/spca-logo.png";
 import { isDevBypassEnabled } from "../utils/devBypass";
+import { SiteFooter } from "./SiteFooter";
 
 type View =
   | "home"
   | "animal-listings"
+  | "about"
   | "login"
   | "register"
   | "dashboard"
@@ -16,6 +17,7 @@ type View =
 type AnimalListingsProps = {
   isLoaded: boolean;
   isSignedIn: boolean | undefined;
+  currentPage: "home" | "animal-listings" | "about";
   onNavigate: (view: View) => void;
 };
 
@@ -75,7 +77,7 @@ function behaviourKey(behaviour: string | null): string {
   return "";
 }
 
-export function AnimalListings({ isLoaded, isSignedIn, onNavigate }: AnimalListingsProps) {
+export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate }: AnimalListingsProps) {
   const { user } = useUser();
   const [animals, setAnimals] = useState<PublicAnimal[]>([]);
   const [animalsLoading, setAnimalsLoading] = useState(true);
@@ -176,21 +178,36 @@ export function AnimalListings({ isLoaded, isSignedIn, onNavigate }: AnimalListi
           <img src={spcaLogo} alt="SPCA Fiji logo" className="brand-logo" />
         </button>
         <nav className="main-nav" aria-label="Main navigation">
-          <button type="button" onClick={() => onNavigate("animal-listings")}>
+          <button
+            type="button"
+            className={currentPage === "home" ? "nav-link active" : "nav-link"}
+            onClick={() => onNavigate("home")}
+          >
+            Home
+          </button>
+          <button
+            type="button"
+            className={currentPage === "about" ? "nav-link active" : "nav-link"}
+            onClick={() => onNavigate("about")}
+          >
+            About Us
+          </button>
+          <button
+            type="button"
+            className={currentPage === "animal-listings" ? "nav-link active" : "nav-link"}
+            onClick={() => onNavigate("animal-listings")}
+          >
             Animals
           </button>
-          <button type="button" onClick={() => onNavigate("animal-listings")}>
-            AI Search
-          </button>
-          <button type="button">Rescue Report</button>
-          <button type="button">Donate</button>
+          <button type="button" className="nav-link">Rescue Report</button>
+          <button type="button" className="nav-link">Donate</button>
         </nav>
         <div className="header-actions">
           {!isLoaded ? null : isSignedIn ? (
             <>
               <button
                 type="button"
-                className="ghost-button dashboard-link"
+                className="teal-button dashboard-link"
                 onClick={() =>
                   onNavigate(
                     isAdmin
@@ -207,7 +224,9 @@ export function AnimalListings({ isLoaded, isSignedIn, onNavigate }: AnimalListi
                     ? "Staff dashboard"
                     : "My dashboard"}
               </button>
-              <UserButton />
+              <div className="user-avatar-circle">
+                <UserButton />
+              </div>
             </>
           ) : (
             <>
@@ -375,25 +394,6 @@ export function AnimalListings({ isLoaded, isSignedIn, onNavigate }: AnimalListi
               </p>
             </div>
 
-            <div className="catalog-featured">
-              <div className="pet-visual" aria-hidden="true">
-                <img src={featureHero} alt="Featured animal" className="hero-visual-image" />
-                <span className="pet-badge">Ready to adopt</span>
-              </div>
-              <div className="panel-copy">
-                <p className="eyebrow light">Featured companion</p>
-                <h2>Milo</h2>
-                <p>
-                  Gentle cattle dog • 2 years • House-trained • Great with
-                  families
-                </p>
-                <div className="meta-pills">
-                  <span>Available</span>
-                  <span>Medium</span>
-                </div>
-              </div>
-            </div>
-
             <div className="animal-grid catalog-grid">
               {animalsError && (
                 <p className="dashboard-data-state error">{animalsError}</p>
@@ -456,6 +456,7 @@ export function AnimalListings({ isLoaded, isSignedIn, onNavigate }: AnimalListi
           </section>
         </div>
       </main>
+      <SiteFooter />
     </div>
   );
 }

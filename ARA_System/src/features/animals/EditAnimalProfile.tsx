@@ -145,7 +145,9 @@ export function EditAnimalProfile({ animalId, onNavigate }: EditAnimalProfilePro
           <button type="button" className="ghost-button" onClick={() => onNavigate("manage-animals")}>
             Back to manage profiles
           </button>
-          <UserButton />
+          <div className="user-avatar-circle">
+            <UserButton />
+          </div>
         </div>
       </header>
 
