@@ -10,3 +10,8 @@ export const staffOrAboveRoles = ["staff", "veterinarian", "manager", "admin"] a
 
 // Roles allowed to manage staff accounts/invitations (manager and admin only).
 export const managerOrAdminRoles = ["manager", "admin"] as const satisfies readonly Role[];
+
+// Staff-role values used for invitation creation and listing. `admin` is
+// included here because an admin can also manage team access and create
+// invitations, even though the manager/admin gate is enforced separately.
+export const invitationalStaffRoles = ["staff", "veterinarian", "manager", "admin"] as const satisfies readonly Role[];

@@ -28,7 +28,7 @@ staffRouter.post(
 	"/invitations",
 	requireClerkSession,
 	requireManagerOrAdmin,
-	async (request, response, next) => {
+	async (request, response) => {
 		const parsed = invitationSchema.safeParse(request.body);
 		if (!parsed.success) {
 			response.status(400).json({ error: "A valid email address and role are required" });
@@ -39,6 +39,7 @@ staffRouter.post(
 			const invitation = await inviteStaffMember(
 				parsed.data.emailAddress,
 				parsed.data.role,
+				request.clerkOrgId,
 			);
 			response.status(201).json({
 				id: invitation.id,
@@ -47,7 +48,13 @@ staffRouter.post(
 				status: invitation.status,
 			});
 		} catch (error) {
-			next(error);
+			console.error("[INVITATION_ERROR]", error instanceof Error ? error.message : error);
+			// Return the actual error details for debugging
+			const errorMessage = error instanceof Error ? error.message : String(error);
+			response.status(500).json({
+				error: "Invitation failed",
+				details: errorMessage,
+			});
 		}
 	},
 );

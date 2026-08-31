@@ -6,6 +6,7 @@ declare global {
 	namespace Express {
 		interface Request {
 			clerkUserId?: string;
+			clerkOrgId?: string;
 		}
 	}
 }
@@ -33,6 +34,10 @@ export async function requireClerkSession(
 		}
 
 		request.clerkUserId = payload.sub;
+		// Extract organization ID if the user is in an org context
+		if (payload.o && typeof payload.o === "object" && "id" in payload.o) {
+			request.clerkOrgId = (payload.o as { id: string }).id;
+		}
 		next();
 	} catch {
 		response.status(401).json({ error: "Invalid Clerk session" });

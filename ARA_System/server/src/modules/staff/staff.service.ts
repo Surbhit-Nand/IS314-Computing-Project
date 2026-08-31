@@ -1,9 +1,10 @@
 import { clerkClient } from "../../services/clerkClient.js";
+import { invitationalStaffRoles } from "../../shared/types/roles.js";
 
-export const staffRoles = ["staff", "veterinarian", "manager"] as const;
+export const staffRoles = invitationalStaffRoles;
 export type StaffRole = (typeof staffRoles)[number];
 
-export async function inviteStaffMember(emailAddress: string, role: StaffRole) {
+export async function inviteStaffMember(emailAddress: string, role: StaffRole, organizationId?: string) {
 	return clerkClient.invitations.createInvitation({
 		emailAddress,
 		notify: true,
@@ -26,7 +27,7 @@ export async function listStaffAccess() {
 			role: user.publicMetadata.role,
 			status: "Active" as const,
 		}))
-		.filter((member) => staffRoles.includes(member.role as StaffRole) || member.role === "admin");
+		.filter((member) => staffRoles.includes(member.role as StaffRole));
 
 	const pendingInvitations = invitations.data.map((invitation) => ({
 		id: invitation.id,

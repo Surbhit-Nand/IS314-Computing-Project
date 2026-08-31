@@ -309,6 +309,7 @@ export function ManagerDashboard({ onNavigate }: ManagerDashboardProps) {
                 <option value="staff">Staff</option>
                 <option value="veterinarian">Veterinarian</option>
                 <option value="manager">Manager</option>
+                <option value="admin">Admin</option>
               </select>
             </label>
             <button
