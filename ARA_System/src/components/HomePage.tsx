@@ -10,6 +10,7 @@ type HomePageProps = {
   onNavigate: (
     view:
       | "home"
+      | "animal-listings"
       | "login"
       | "register"
       | "dashboard"
@@ -81,10 +82,12 @@ export function HomePage({ isLoaded, isSignedIn, onNavigate }: HomePageProps) {
           <img src={spcaLogo} alt="SPCA Fiji logo" className="brand-logo" />
         </button>
         <nav className="main-nav" aria-label="Main navigation">
-          <button type="button" onClick={() => onNavigate("home")}>
+          <button type="button" onClick={() => onNavigate("animal-listings")}>
             Animals
           </button>
-          <button type="button">AI Search</button>
+          <button type="button" onClick={() => onNavigate("animal-listings")}>
+            AI Search
+          </button>
           <button type="button">Rescue Report</button>
           <button type="button">Donate</button>
         </nav>
@@ -142,7 +145,11 @@ export function HomePage({ isLoaded, isSignedIn, onNavigate }: HomePageProps) {
               and community support.
             </p>
             <div className="hero-actions">
-              <button type="button" className="teal-button">
+              <button
+                type="button"
+                className="teal-button"
+                onClick={() => onNavigate("animal-listings")}
+              >
                 Meet the animals
               </button>
               <button type="button" className="ghost-button">
@@ -208,7 +215,11 @@ export function HomePage({ isLoaded, isSignedIn, onNavigate }: HomePageProps) {
               <p className="eyebrow">Adopt a friend</p>
               <h2>Animals looking for homes</h2>
             </div>
-            <button type="button" className="ghost-button">
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={() => onNavigate("animal-listings")}
+            >
               Browse all animals
             </button>
           </div>
@@ -348,7 +359,7 @@ export function HomePage({ isLoaded, isSignedIn, onNavigate }: HomePageProps) {
           />
         </div>
         <div className="footer-links">
-          <button type="button" onClick={() => onNavigate("home")}>
+          <button type="button" onClick={() => onNavigate("animal-listings")}>
             Animals
           </button>
           <button type="button" onClick={() => onNavigate("register")}>

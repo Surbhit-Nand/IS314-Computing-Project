@@ -1,6 +1,7 @@
 import { useAuth } from "@clerk/react";
 import { useState } from "react";
 import "./App.css";
+import { AnimalListings } from "./components/AnimalListings";
 import { AuthPage } from "./components/AuthPage";
 import { HomePage } from "./components/HomePage";
 import { ManagerDashboard } from "./components/ManagerDashboard";
@@ -12,6 +13,7 @@ import { ManageAnimalProfiles } from "./features/animals/ManageAnimalProfiles";
 
 export type View =
   | "home"
+  | "animal-listings"
   | "login"
   | "register"
   | "dashboard"
@@ -39,6 +41,16 @@ function App() {
 
   if (view === "user-dashboard") {
     return <UserDashboard onNavigate={setView} />;
+  }
+
+  if (view === "animal-listings") {
+    return (
+      <AnimalListings
+        isLoaded={isLoaded}
+        isSignedIn={isSignedIn}
+        onNavigate={setView}
+      />
+    );
   }
 
   if (view === "register-animal") {
