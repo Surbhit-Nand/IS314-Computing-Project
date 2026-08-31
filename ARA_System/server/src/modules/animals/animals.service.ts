@@ -1,4 +1,4 @@
-import { cloudinary } from "../../services/cloudinaryClient.js";
+import { cloudinary, isCloudinaryConfigured } from "../../services/cloudinaryClient.js";
 import {
 	createAnimal,
 	findAllAnimals,
@@ -62,6 +62,12 @@ export async function updateAnimalProfile(
 // Cloudinary SDK directly, per AGENTS.md's rule to keep third-party
 // providers behind a service-layer boundary rather than called from routes.
 export async function uploadAnimalPhoto(fileBuffer: Buffer): Promise<string> {
+	if (!isCloudinaryConfigured()) {
+		throw new Error(
+			"Cloudinary is not configured. Set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET before uploading photos.",
+		);
+	}
+
 	return new Promise<string>((resolve, reject) => {
 		const stream = cloudinary.uploader.upload_stream({ folder: "ara/animals" }, (error, result) => {
 			if (error || !result) {

@@ -17,11 +17,9 @@ if (!databaseUrl) {
 	throw new Error("DATABASE_URL is required to start the API");
 }
 
-if (!cloudinaryCloudName || !cloudinaryApiKey || !cloudinaryApiSecret) {
-	throw new Error(
-		"CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET are required to start the API",
-	);
-}
+// Cloudinary is optional at startup so local development can run without
+// image-upload credentials. Uploads fail fast only when a route actually
+// attempts to send a file to Cloudinary.
 
 // DEV-ONLY. Defaults to false/off whenever the variable is absent (including
 // in production, where it should never be set). Lets a developer without
