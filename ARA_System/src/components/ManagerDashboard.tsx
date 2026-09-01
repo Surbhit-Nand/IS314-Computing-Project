@@ -182,7 +182,9 @@ export function ManagerDashboard({ onNavigate }: ManagerDashboardProps) {
         </div>
         <div className="dashboard-header-actions">
           <span className="role-pill">Manager / Admin</span>
-          <UserButton />
+          <div className="user-avatar-circle">
+            <UserButton />
+          </div>
         </div>
       </header>
       <section className="dashboard-welcome">
@@ -309,6 +311,7 @@ export function ManagerDashboard({ onNavigate }: ManagerDashboardProps) {
                 <option value="staff">Staff</option>
                 <option value="veterinarian">Veterinarian</option>
                 <option value="manager">Manager</option>
+                <option value="admin">Admin</option>
               </select>
             </label>
             <button

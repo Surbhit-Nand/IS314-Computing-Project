@@ -3,12 +3,16 @@ import { verifyToken } from "@clerk/backend";
 import { env } from "../config/env.js";
 
 declare global {
+	// eslint-disable-next-line @typescript-eslint/no-namespace -- Express type augmentation requires a namespace
 	namespace Express {
 		interface Request {
 			clerkUserId?: string;
+			clerkOrgId?: string;
 		}
 	}
 }
+
+export {};
 
 export async function requireClerkSession(
 	request: Request,
@@ -33,6 +37,10 @@ export async function requireClerkSession(
 		}
 
 		request.clerkUserId = payload.sub;
+		// Extract organization ID if the user is in an org context
+		if (payload.o && typeof payload.o === "object" && "id" in payload.o) {
+			request.clerkOrgId = (payload.o as { id: string }).id;
+		}
 		next();
 	} catch {
 		response.status(401).json({ error: "Invalid Clerk session" });
