@@ -1990,6 +1990,10 @@
 
 .profile-story {
   min-width: 0;
+  /* Small top offset so "About"/Temperament/Rescue history don't sit flush
+     against the grid's top edge, level with the photo - the left details
+     card already has this breathing room via its own padding. */
+  padding-top: 12px;
 }
 
 .profile-about + .profile-about {

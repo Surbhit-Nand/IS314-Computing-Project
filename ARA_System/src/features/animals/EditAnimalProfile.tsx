@@ -28,6 +28,9 @@ function toFormInput(animal: Animal): AnimalFormInput {
     rescueHistory: animal.rescueHistory ?? "",
     photoUrls: animal.photoUrls,
     vaccinationStatus: animal.vaccinationStatus,
+    // Legacy animals registered before this field existed have size: null -
+    // fall back to the unselected placeholder so staff can pick one now.
+    size: animal.size ?? "",
   };
 }
 

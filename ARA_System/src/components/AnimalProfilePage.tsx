@@ -1,6 +1,6 @@
 import { useState } from "react";
 import spcaLogo from "../assets/spca-logo.png";
-import { adoptionStatusLabel, vaccinationStatusLabel, type Animal } from "../types/animal";
+import { adoptionStatusLabel, sizeDisplayLabel, vaccinationStatusLabel, type Animal } from "../types/animal";
 import { useFavoriteAnimals } from "../utils/favorites";
 import { capitalize } from "../utils/format";
 
@@ -134,6 +134,10 @@ export function AnimalProfilePage({ animal, onBack }: AnimalProfilePageProps) {
                 <div>
                   <dt>Colour</dt>
                   <dd>{animal.colour ?? "Not recorded"}</dd>
+                </div>
+                <div>
+                  <dt>Size</dt>
+                  <dd>{sizeDisplayLabel(animal.size)}</dd>
                 </div>
               </dl>
 

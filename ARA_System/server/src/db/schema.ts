@@ -27,6 +27,12 @@ export const vaccinationStatus = pgEnum("vaccination_status", [
 	"vaccinated",
 ]);
 
+// Weight-based size bucket, required going forward on new registrations but
+// left nullable at the DB level so animals registered before this field
+// existed keep working (their `size` is simply null) instead of breaking a
+// migration that would otherwise need a value for every existing row.
+export const animalSize = pgEnum("animal_size", ["small", "medium", "large", "extra_large"]);
+
 export const animals = pgTable("animals", {
 	id: uuid("id").defaultRandom().primaryKey(),
 	publicId: text("public_id").notNull().unique(),
@@ -42,6 +48,7 @@ export const animals = pgTable("animals", {
 	rescueHistory: text("rescue_history"),
 	photoUrls: jsonb("photo_urls").$type<string[]>().notNull().default([]),
 	vaccinationStatus: vaccinationStatus("vaccination_status").notNull().default("not_vaccinated"),
+	size: animalSize("size"),
 	medicallyCleared: boolean("medically_cleared").notNull().default(false),
 	status: animalStatus("status").notNull().default("intake"),
 	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

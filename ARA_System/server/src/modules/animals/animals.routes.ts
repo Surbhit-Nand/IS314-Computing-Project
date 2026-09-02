@@ -37,6 +37,7 @@ const animalSchema = z.object({
 	// and again client-side in validateAnimalForm.ts.
 	photoUrls: z.array(z.string().url()).min(1).max(3),
 	vaccinationStatus: z.enum(["not_vaccinated", "vaccinated"]),
+	size: z.enum(["small", "medium", "large", "extra_large"]),
 });
 
 // Same shape, but every field is optional since an edit can touch just one
