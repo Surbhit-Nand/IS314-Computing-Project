@@ -3,7 +3,14 @@ import { isDevBypassEnabled } from "../utils/devBypass";
 import { SiteHeader, type SiteHeaderView } from "./SiteHeader";
 
 type StaffDashboardProps = {
-  onNavigate: (view: SiteHeaderView | "register-animal" | "manage-animals") => void;
+  onNavigate: (
+    view:
+      | SiteHeaderView
+      | "register-animal"
+      | "manage-animals"
+      | "manage-rescue-reports"
+      | "rescue-report-phone",
+  ) => void;
 };
 
 type StaffRole = "staff" | "veterinarian";
@@ -85,6 +92,13 @@ export function StaffDashboard({ onNavigate }: StaffDashboardProps) {
           </p>
         </div>
         <div className="header-actions">
+          <button
+            type="button"
+            className="ghost-button"
+            onClick={() => onNavigate("manage-rescue-reports")}
+          >
+            Rescue queue
+          </button>
           <button
             type="button"
             className="teal-button"

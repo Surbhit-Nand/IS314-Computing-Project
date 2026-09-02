@@ -1,4 +1,5 @@
-import { insertDonation } from "./donations.repository.js";
+import { logAuditEntry } from "../../shared/audit/audit.service.js";
+import { createDonationRecord } from "./donations.repository.js";
 
 export type DonationInput = {
 	amountCents: number;
@@ -6,6 +7,14 @@ export type DonationInput = {
 	donorName?: string;
 	donorEmail?: string;
 	message?: string;
+};
+
+export type NormalizedDonation = {
+	amountCents: number;
+	currency: string;
+	donorName: string;
+	donorEmail: string;
+	message: string;
 };
 
 // Matches the frontend's $1–$10,000 bound shown in the Donate modal.
@@ -18,11 +27,12 @@ function trimOrUndefined(value: string | undefined): string | undefined {
 
 // Validates and normalizes a donation payload coming from the frontend.
 // Exported for the unit tests in donations.service.test.ts.
-export function normalizeDonationInput(input: DonationInput) {
-	if (!Number.isInteger(input.amountCents) || input.amountCents < 1) {
+export function normalizeDonationInput(input: DonationInput): NormalizedDonation {
+	const amountCents = Number(input.amountCents);
+	if (!Number.isInteger(amountCents) || amountCents < 1) {
 		throw new Error("Donation amount must be at least $0.01");
 	}
-	if (input.amountCents > MAX_AMOUNT_CENTS) {
+	if (amountCents > MAX_AMOUNT_CENTS) {
 		throw new Error("Donation amount cannot exceed $10,000");
 	}
 
@@ -32,14 +42,43 @@ export function normalizeDonationInput(input: DonationInput) {
 	}
 
 	return {
-		amountCents: input.amountCents,
+		amountCents,
 		currency: currency.toUpperCase(),
-		donorName: trimOrUndefined(input.donorName),
-		donorEmail: trimOrUndefined(input.donorEmail),
-		message: trimOrUndefined(input.message),
+		donorName: (input.donorName ?? "").trim(),
+		donorEmail: (input.donorEmail ?? "").trim(),
+		message: (input.message ?? "").trim(),
 	};
 }
 
-export async function createDonation(input: DonationInput) {
-	return insertDonation(normalizeDonationInput(input));
+// Records a donation. Works for anonymous visitors and signed-in donors -
+// when the donor is signed in their Clerk id is stamped and an audit entry is
+// written, mirroring how rescue reports keep an audit trail for logged-in
+// actors while staying usable for the public.
+export async function createDonation(
+	input: DonationInput,
+	options: { actorClerkUserId?: string } = {},
+) {
+	const normalized = normalizeDonationInput(input);
+	const donation = await createDonationRecord({
+		...normalized,
+		donorClerkUserId: options.actorClerkUserId ?? null,
+		donorName: trimOrUndefined(normalized.donorName) ?? null,
+		donorEmail: trimOrUndefined(normalized.donorEmail) ?? null,
+		message: trimOrUndefined(normalized.message) ?? null,
+	});
+
+	if (options.actorClerkUserId) {
+		await logAuditEntry({
+			actorClerkUserId: options.actorClerkUserId,
+			action: "donation.created",
+			entityType: "donation",
+			entityId: donation.id,
+			metadata: {
+				amountCents: donation.amountCents,
+				currency: donation.currency,
+			},
+		});
+	}
+
+	return donation;
 }

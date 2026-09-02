@@ -1,7 +1,9 @@
 import { SignInButton, useAuth, useUser } from "@clerk/react";
 import { SiteHeader, type SiteHeaderView } from "./SiteHeader";
 
-type UserDashboardProps = { onNavigate: (view: SiteHeaderView) => void };
+type UserDashboardProps = {
+  onNavigate: (view: SiteHeaderView | "rescue-report" | "my-reports") => void;
+};
 
 const activity = [
   [
@@ -128,7 +130,11 @@ export function UserDashboard({ onNavigate }: UserDashboardProps) {
               <h2>Start something new</h2>
             </div>
           </div>
-          <button type="button" className="user-action-button">
+          <button
+            type="button"
+            className="user-action-button"
+            onClick={() => onNavigate("rescue-report")}
+          >
             <strong>Submit a rescue report</strong>
             <span>Tell SPCA Fiji about an animal that needs help.</span>
           </button>

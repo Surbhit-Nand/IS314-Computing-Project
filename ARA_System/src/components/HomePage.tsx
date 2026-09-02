@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { Animal } from "../types/animal";
 import { capitalize } from "../utils/format";
 import { useFavoriteAnimals } from "../utils/favorites";
-import { DonateModal } from "../features/donations/DonateModal";
+import { DonateButton } from "../features/donations/DonateButton";
 import { SiteFooter } from "./SiteFooter";
 import { SiteHeader } from "./SiteHeader";
 
@@ -19,7 +19,9 @@ type HomePageProps = {
       | "register"
       | "dashboard"
       | "staff-dashboard"
-      | "user-dashboard",
+      | "user-dashboard"
+      | "rescue-report"
+      | "my-reports",
   ) => void;
   onViewAnimal: (animal: Animal) => void;
 };
@@ -43,7 +45,6 @@ export function HomePage({ isLoaded, isSignedIn, currentPage, onNavigate, onView
   const [animalsLoading, setAnimalsLoading] = useState(true);
   const [animalsError, setAnimalsError] = useState("");
   const [heroSlide, setHeroSlide] = useState(0);
-  const [donateOpen, setDonateOpen] = useState(false);
   const { isFavorite, toggle } = useFavoriteAnimals();
 
   useEffect(() => {
@@ -82,7 +83,7 @@ export function HomePage({ isLoaded, isSignedIn, currentPage, onNavigate, onView
 
   return (
     <div className="home-page">
-      <SiteHeader
+<SiteHeader
         isLoaded={isLoaded}
         isSignedIn={isSignedIn}
         currentPage={currentPage}
@@ -122,13 +123,7 @@ export function HomePage({ isLoaded, isSignedIn, currentPage, onNavigate, onView
               >
                 Meet the animals
               </button>
-              <button
-                type="button"
-                className="teal-button donate-button"
-                onClick={() => setDonateOpen(true)}
-              >
-                Donate & support
-              </button>
+<DonateButton className="teal-button donate-button">Donate & support</DonateButton>
             </div>
           </div>
         </section>
@@ -284,20 +279,17 @@ export function HomePage({ isLoaded, isSignedIn, currentPage, onNavigate, onView
             <h2>Report a rescue and give an animal a second chance.</h2>
           </div>
           <div className="cta-actions">
-            <button type="button" className="teal-button">
-              Submit rescue report
-            </button>
             <button
               type="button"
-              className="ghost-button light"
-              onClick={() => setDonateOpen(true)}
+              className="teal-button"
+              onClick={() => onNavigate("rescue-report")}
             >
-              Donate
+              Submit rescue report
             </button>
+<DonateButton className="ghost-button light">Donate</DonateButton>
           </div>
         </section>
       </main>
-      <DonateModal open={donateOpen} onClose={() => setDonateOpen(false)} />
       <SiteFooter />
     </div>
   );

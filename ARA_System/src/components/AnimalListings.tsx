@@ -13,7 +13,9 @@ type View =
   | "register"
   | "dashboard"
   | "staff-dashboard"
-  | "user-dashboard";
+  | "user-dashboard"
+  | "rescue-report"
+  | "my-reports";
 
 type AnimalListingsProps = {
   isLoaded: boolean;
@@ -152,7 +154,7 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
 
   return (
     <div className="home-page">
-      <SiteHeader
+<SiteHeader
         isLoaded={isLoaded}
         isSignedIn={isSignedIn}
         currentPage={currentPage}

@@ -5,29 +5,15 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1787300593332,
-      "tag": "0000_true_madame_masque",
+      "when": 1788321306976,
+      "tag": "0000_black_mordo",
       "breakpoints": true
     },
     {
       "idx": 1,
       "version": "7",
-      "when": 1787887746922,
-      "tag": "0001_living_hammerhead",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1788312098961,
-      "tag": "0002_high_deathbird",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1788316644172,
-      "tag": "0003_outgoing_raider",
+      "when": 1788324754204,
+      "tag": "0001_cynical_sheva_callister",
       "breakpoints": true
     }
   ]

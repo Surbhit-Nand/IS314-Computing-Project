@@ -13,6 +13,9 @@ import { AnimalRegistrationForm } from "./features/animals/AnimalRegistrationFor
 import { EditAnimalProfile } from "./features/animals/EditAnimalProfile";
 import { ManageAnimalProfiles } from "./features/animals/ManageAnimalProfiles";
 import type { Animal } from "./types/animal";
+import { ManageRescueReports } from "./features/rescue/ManageRescueReports";
+import { RescueReportForm } from "./features/rescue/RescueReportForm";
+import { MyReports } from "./features/rescue/MyReports";
 
 export type View =
   | "home"
@@ -26,7 +29,11 @@ export type View =
   | "user-dashboard"
   | "register-animal"
   | "manage-animals"
-  | "edit-animal";
+  | "edit-animal"
+  | "rescue-report"
+  | "rescue-report-phone"
+  | "my-reports"
+  | "manage-rescue-reports";
 
 function App() {
   const [view, setView] = useState<View>("home");
@@ -44,6 +51,10 @@ function App() {
   function handleViewAnimal(animal: Animal) {
     setViewedAnimal(animal);
     setView("animal-profile");
+  }
+
+  function openMyReports() {
+    setView("my-reports");
   }
 
   if (view === "dashboard") {
@@ -91,6 +102,42 @@ function App() {
         onNavigate={setView}
       />
     );
+  }
+
+  if (view === "rescue-report") {
+    return (
+      <RescueReportForm
+        variant="public"
+        source="online"
+        onNavigate={setView}
+        onShowMyReports={openMyReports}
+      />
+    );
+  }
+
+  if (view === "rescue-report-phone") {
+    return (
+      <RescueReportForm
+        variant="staff"
+        source="phone"
+        onNavigate={setView}
+        onShowMyReports={openMyReports}
+      />
+    );
+  }
+
+  if (view === "my-reports") {
+    return (
+      <MyReports
+        isLoaded={isLoaded}
+        isSignedIn={isSignedIn}
+        onNavigate={setView}
+      />
+    );
+  }
+
+  if (view === "manage-rescue-reports") {
+    return <ManageRescueReports onNavigate={setView} />;
   }
 
   if (view === "register-animal") {

@@ -1,3 +1,4 @@
+import { DonateButton } from "../features/donations/DonateButton";
 import { SiteFooter } from "./SiteFooter";
 import { SiteHeader } from "./SiteHeader";
 
@@ -9,7 +10,9 @@ type View =
   | "register"
   | "dashboard"
   | "staff-dashboard"
-  | "user-dashboard";
+  | "user-dashboard"
+  | "rescue-report"
+  | "my-reports";
 
 type AboutUsProps = {
   isLoaded: boolean;
@@ -21,7 +24,7 @@ type AboutUsProps = {
 export function AboutUs({ isLoaded, isSignedIn, currentPage, onNavigate }: AboutUsProps) {
   return (
     <div className="home-page">
-      <SiteHeader
+<SiteHeader
         isLoaded={isLoaded}
         isSignedIn={isSignedIn}
         currentPage={currentPage}
@@ -96,7 +99,7 @@ export function AboutUs({ isLoaded, isSignedIn, currentPage, onNavigate }: About
             <button type="button" className="teal-button" onClick={() => onNavigate("animal-listings")}>
               Meet the animals
             </button>
-            <button type="button" className="ghost-button">Donate</button>
+            <DonateButton className="ghost-button">Donate</DonateButton>
           </div>
         </section>
       </main>
