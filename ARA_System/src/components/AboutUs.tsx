@@ -1,7 +1,5 @@
-import { SignInButton, SignUpButton, UserButton, useUser } from "@clerk/react";
-import spcaLogo from "../assets/spca-logo.png";
-import { isDevBypassEnabled } from "../utils/devBypass";
 import { SiteFooter } from "./SiteFooter";
+import { SiteHeader } from "./SiteHeader";
 
 type View =
   | "home"
@@ -21,88 +19,14 @@ type AboutUsProps = {
 };
 
 export function AboutUs({ isLoaded, isSignedIn, currentPage, onNavigate }: AboutUsProps) {
-  const { user } = useUser();
-  const userRole = user?.publicMetadata.role;
-  const isAdmin = userRole === "manager" || userRole === "admin";
-  const isStaff = isDevBypassEnabled || userRole === "staff" || userRole === "veterinarian";
-
   return (
     <div className="home-page">
-      <header className="site-header">
-        <button
-          type="button"
-          className="brand-group brand-button"
-          onClick={() => onNavigate("home")}
-        >
-          <img src={spcaLogo} alt="SPCA Fiji logo" className="brand-logo" />
-        </button>
-        <nav className="main-nav" aria-label="Main navigation">
-          <button
-            type="button"
-            className={currentPage === "home" ? "nav-link active" : "nav-link"}
-            onClick={() => onNavigate("home")}
-          >
-            Home
-          </button>
-          <button
-            type="button"
-            className={currentPage === "about" ? "nav-link active" : "nav-link"}
-            onClick={() => onNavigate("about")}
-          >
-            About Us
-          </button>
-          <button
-            type="button"
-            className={currentPage === "animal-listings" ? "nav-link active" : "nav-link"}
-            onClick={() => onNavigate("animal-listings")}
-          >
-            Animals
-          </button>
-          <button type="button" className="nav-link">Rescue Report</button>
-          <button type="button" className="nav-link">Donate</button>
-        </nav>
-        <div className="header-actions">
-          {!isLoaded ? null : isSignedIn ? (
-            <>
-              <button
-                type="button"
-                className="teal-button dashboard-link"
-                onClick={() =>
-                  onNavigate(
-                    isAdmin
-                      ? "dashboard"
-                      : isStaff
-                        ? "staff-dashboard"
-                        : "user-dashboard",
-                  )
-                }
-              >
-                {isAdmin
-                  ? "Admin dashboard"
-                  : isStaff
-                    ? "Staff dashboard"
-                    : "My dashboard"}
-              </button>
-              <div className="user-avatar-circle">
-                <UserButton />
-              </div>
-            </>
-          ) : (
-            <>
-              <SignInButton mode="modal">
-                <button type="button" className="ghost-button">
-                  Login
-                </button>
-              </SignInButton>
-              <SignUpButton mode="modal">
-                <button type="button" className="teal-button">
-                  Register
-                </button>
-              </SignUpButton>
-            </>
-          )}
-        </div>
-      </header>
+      <SiteHeader
+        isLoaded={isLoaded}
+        isSignedIn={isSignedIn}
+        currentPage={currentPage}
+        onNavigate={onNavigate}
+      />
 
       <main className="page-shell">
         <section className="about-hero">

@@ -181,7 +181,7 @@ export function ManagerDashboard({ onNavigate }: ManagerDashboardProps) {
           </div>
         </div>
         <div className="dashboard-header-actions">
-          <span className="role-pill">Manager / Admin</span>
+          <span className="role-pill teal-pill">Manager / Admin</span>
           <div className="user-avatar-circle">
             <UserButton />
           </div>

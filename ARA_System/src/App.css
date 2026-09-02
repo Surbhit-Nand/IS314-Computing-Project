@@ -12,6 +12,7 @@
 }
 
 .site-header {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -32,6 +33,8 @@
 .brand-button {
   cursor: pointer;
   padding: 0;
+  background: transparent;
+  border: none;
 }
 
 .brand-logo {
@@ -44,10 +47,6 @@
 
 .footer-logo {
   height: 52px;
-}
-
-.auth-logo {
-  height: 80px;
 }
 
 .brand-mark {
@@ -154,6 +153,43 @@
 
 .main-nav .nav-link.active {
   color: var(--teal);
+}
+
+/* Hamburger toggle - hidden on desktop, shown ≤980px. */
+.nav-toggle {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: 44px;
+  height: 44px;
+  padding: 10px;
+  background: var(--teal);
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.nav-toggle span {
+  display: block;
+  width: 20px;
+  height: 3px;
+  border-radius: 3px;
+  background: #fff;
+  transition: transform 0.25s ease, opacity 0.25s ease;
+}
+
+.nav-toggle.open span:nth-child(1) {
+  transform: translateY(8px) rotate(45deg);
+}
+
+.nav-toggle.open span:nth-child(2) {
+  opacity: 0;
+}
+
+.nav-toggle.open span:nth-child(3) {
+  transform: translateY(-8px) rotate(-45deg);
 }
 
 .header-actions,
@@ -1299,6 +1335,15 @@
   white-space: nowrap;
 }
 
+/* Role label matching the solid teal homepage dashboard button. */
+.role-pill.teal-pill {
+  background: linear-gradient(135deg, var(--teal) 0%, var(--teal-dark) 100%);
+  color: #fff;
+  padding: 12px 18px;
+  font-size: 1rem;
+  box-shadow: 0 10px 22px rgba(21, 135, 195, 0.18);
+}
+
 .dashboard-welcome {
   padding: 28px 30px;
   border: 1px solid var(--line);
@@ -2176,6 +2221,36 @@
     display: none;
   }
 
+  .nav-toggle {
+    display: inline-flex;
+  }
+
+  .main-nav.open {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    left: 0;
+    padding: 14px;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    box-shadow: var(--shadow);
+    z-index: 20;
+  }
+
+  .main-nav.open .nav-link {
+    padding: 10px 8px;
+    text-align: left;
+  }
+
+  .user-avatar-circle {
+    align-self: center;
+  }
+
   .auth-shell {
     grid-template-columns: 1fr;
   }
@@ -2197,6 +2272,18 @@
   .header-actions {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .site-header {
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .header-actions {
+    flex-direction: row;
+    align-items: center;
+    margin-left: auto;
   }
 
   .site-header,

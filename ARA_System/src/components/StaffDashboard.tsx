@@ -82,7 +82,7 @@ export function StaffDashboard({ onNavigate }: StaffDashboardProps) {
           </div>
         </div>
         <div className="dashboard-header-actions">
-          <span className="role-pill">{currentRole}</span>
+          <span className="role-pill teal-pill">{currentRole}</span>
           <div className="user-avatar-circle">
             <UserButton />
           </div>

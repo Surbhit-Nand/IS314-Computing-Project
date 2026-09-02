@@ -60,7 +60,7 @@ export function UserDashboard({ onNavigate }: UserDashboardProps) {
           </div>
         </div>
         <div className="dashboard-header-actions">
-          <span className="role-pill">Registered user</span>
+          <span className="role-pill teal-pill">Registered user</span>
           <div className="user-avatar-circle">
             <UserButton />
           </div>

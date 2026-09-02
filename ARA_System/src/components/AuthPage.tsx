@@ -16,7 +16,7 @@ export function AuthPage({ mode, onNavigate }: AuthPageProps) {
             <img
               src={spcaLogo}
               alt="SPCA Fiji logo"
-              className="brand-logo auth-logo"
+              className="brand-logo"
             />
           </div>
           <div className="hero-copy">
