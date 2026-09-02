@@ -134,12 +134,10 @@ export function ManageAnimalProfiles({ onNavigate, onSelectAnimal }: ManageAnima
         {!isLoading && !loadError && filteredAnimals.length > 0 && (
           <div className="animal-table">
             {filteredAnimals.map((animal) => (
-              <button
-                type="button"
-                key={animal.id}
-                className="animal-table-row"
-                onClick={() => onSelectAnimal(animal.id)}
-              >
+              // A plain, non-interactive row - clicking the photo/name/ID/
+              // badges does nothing. Editing is only reachable through the
+              // explicit "Edit" button below, not the row itself.
+              <div key={animal.id} className="animal-table-row">
                 <span className="animal-table-photo">
                   {animal.photoUrls[0] ? (
                     <img src={animal.photoUrls[0]} alt={animal.name} />
@@ -155,8 +153,14 @@ export function ManageAnimalProfiles({ onNavigate, onSelectAnimal }: ManageAnima
                 </span>
                 <span className="role-pill muted">{adoptionStatusLabel(animal.status)}</span>
                 <span className="role-pill muted">{vaccinationStatusLabel(animal.vaccinationStatus)}</span>
-                <span className="text-button">View / Edit</span>
-              </button>
+                <button
+                  type="button"
+                  className="teal-button small-button"
+                  onClick={() => onSelectAnimal(animal.id)}
+                >
+                  Edit
+                </button>
+              </div>
             ))}
           </div>
         )}

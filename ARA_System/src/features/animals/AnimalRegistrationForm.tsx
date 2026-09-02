@@ -1,6 +1,7 @@
 import { SignInButton, UserButton, useAuth, useUser } from "@clerk/react";
 import { useState, type FormEvent } from "react";
 import spcaLogo from "../../assets/spca-logo.png";
+import { SuccessToast } from "../../components/SuccessToast";
 import { createAnimal } from "../../services/animalsApi";
 import type { AnimalFormInput } from "../../types/animal";
 import { isDevBypassEnabled } from "../../utils/devBypass";
@@ -41,6 +42,11 @@ export function AnimalRegistrationForm({ onNavigate }: AnimalRegistrationFormPro
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [createdPublicId, setCreatedPublicId] = useState("");
+  // Separate from errorMessage/createdPublicId on purpose: this only ever
+  // gets set in the success branch below, so it can't collide with or hide
+  // the existing error-handling path (alert + inline .invite-feedback.error
+  // message), which is untouched.
+  const [successToastMessage, setSuccessToastMessage] = useState("");
 
   // Validates the form, shows an alert and blocks submission if anything
   // required is missing/invalid, then sends the profile to the server.
@@ -62,6 +68,7 @@ export function AnimalRegistrationForm({ onNavigate }: AnimalRegistrationFormPro
 
       const animal = await createAnimal(token, form);
       setCreatedPublicId(animal.publicId);
+      setSuccessToastMessage(`✓ ${animal.name} registered successfully!`);
       setForm(emptyForm);
     } catch (error) {
       const message = error instanceof Error ? error.message : "The animal profile could not be created.";
@@ -106,6 +113,13 @@ export function AnimalRegistrationForm({ onNavigate }: AnimalRegistrationFormPro
 
   return (
     <main className="dashboard-page">
+      {successToastMessage && (
+        <SuccessToast
+          message={successToastMessage}
+          onDismiss={() => setSuccessToastMessage("")}
+        />
+      )}
+
       <header className="dashboard-header">
         <div className="dashboard-brand">
           <button type="button" className="brand-button" onClick={() => onNavigate("home")}>

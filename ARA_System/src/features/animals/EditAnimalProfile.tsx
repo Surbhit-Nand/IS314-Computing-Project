@@ -1,6 +1,7 @@
 import { SignInButton, UserButton, useAuth, useUser } from "@clerk/react";
 import { useEffect, useState, type FormEvent } from "react";
 import spcaLogo from "../../assets/spca-logo.png";
+import { SuccessToast } from "../../components/SuccessToast";
 import { fetchAnimalById, updateAnimal } from "../../services/animalsApi";
 import type { Animal, AnimalFormInput } from "../../types/animal";
 import { isDevBypassEnabled } from "../../utils/devBypass";
@@ -50,6 +51,11 @@ export function EditAnimalProfile({ animalId, onNavigate }: EditAnimalProfilePro
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
   const [saveError, setSaveError] = useState("");
+  // Separate from saveMessage/saveError on purpose: this only ever gets set
+  // in the success branch below, so it can't collide with or hide the
+  // existing error-handling path (alert + inline .invite-feedback.error
+  // message), which is untouched.
+  const [successToastMessage, setSuccessToastMessage] = useState("");
 
   // Fetches the animal to edit once staff access is confirmed.
   useEffect(() => {
@@ -91,6 +97,7 @@ export function EditAnimalProfile({ animalId, onNavigate }: EditAnimalProfilePro
       if (!token) throw new Error("Your Clerk session has expired. Please sign in again.");
       await updateAnimal(token, animalId, form);
       setSaveMessage("Animal profile updated.");
+      setSuccessToastMessage(`✓ ${form.name} updated successfully!`);
     } catch (error) {
       const message = error instanceof Error ? error.message : "The animal profile could not be updated.";
       window.alert(message);
@@ -134,6 +141,13 @@ export function EditAnimalProfile({ animalId, onNavigate }: EditAnimalProfilePro
 
   return (
     <main className="dashboard-page">
+      {successToastMessage && (
+        <SuccessToast
+          message={successToastMessage}
+          onDismiss={() => setSuccessToastMessage("")}
+        />
+      )}
+
       <header className="dashboard-header">
         <div className="dashboard-brand">
           <button type="button" className="brand-button" onClick={() => onNavigate("home")}>

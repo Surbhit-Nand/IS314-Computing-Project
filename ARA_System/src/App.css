@@ -1616,13 +1616,7 @@
   gap: 14px;
   width: 100%;
   padding: 13px 0;
-  border: none;
   border-top: 1px solid var(--line);
-  background: transparent;
-  cursor: pointer;
-  text-align: left;
-  font: inherit;
-  color: inherit;
 }
 
 .animal-table-photo {
@@ -2060,7 +2054,62 @@
   }
 }
 
+/* toast notification - z-index 1000 per the documented layer scale
+   (nav 20, modal 100, toast 1000) */
+
+.toast {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: 360px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: #fff;
+  border-left: 4px solid transparent;
+  box-shadow: var(--shadow);
+  color: var(--navy);
+  font-weight: 700;
+  font-size: 0.88rem;
+  animation: toast-in 0.25s ease;
+}
+
+.toast-success {
+  border-left-color: var(--success);
+}
+
+.toast-close {
+  flex: 0 0 auto;
+  border: none;
+  background: transparent;
+  color: var(--slate);
+  font-size: 1.2rem;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+}
+
+@keyframes toast-in {
+  from {
+    transform: translateY(-8px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
 @media (max-width: 720px) {
+  .toast {
+    left: 16px;
+    right: 16px;
+    max-width: none;
+  }
+
   .site-header,
   .site-footer,
   .cta-strip,
