@@ -120,6 +120,9 @@ export const donations = pgTable("donations", {
 	amountCents: integer("amount_cents").notNull(),
 	currency: text("currency").notNull().default("USD"),
 	status: donationStatus("status").notNull().default("completed"),
+	// Which method the donor picked in the Donate modal toggle; validated to
+	// "card" | "qr" in donations.service.ts before it ever reaches this table.
+	paymentMethod: text("payment_method").notNull().default("card"),
 	message: text("message"),
 	stripeCheckoutSessionId: text("stripe_checkout_session_id"),
 	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

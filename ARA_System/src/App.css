@@ -2884,6 +2884,10 @@
   color: var(--navy);
 }
 
+.donate-modal {
+  width: min(600px, 100%);
+}
+
 .donate-intro {
   margin-bottom: 18px;
   color: var(--slate);
@@ -2893,6 +2897,7 @@
 
 .donate-form {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
 }
 
@@ -2900,11 +2905,14 @@
   border: none;
   margin: 0;
   padding: 0;
+  min-width: 0;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
 }
 
 .donate-amounts legend,
+.donate-methods legend,
 .donate-field span {
   font-size: 0.78rem;
   font-weight: 800;
@@ -2917,12 +2925,18 @@
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+  min-width: 0;
+}
+
+.donate-custom {
+  min-width: 0;
 }
 
 .donate-custom input,
 .donate-field input,
 .donate-field textarea {
   width: 100%;
+  max-width: 100%;
   border: 1px solid var(--teal);
   border-radius: 10px;
   padding: 11px 14px;
@@ -2939,7 +2953,9 @@
 
 .donate-field {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 6px;
+  min-width: 0;
 }
 
 .donate-field textarea {
@@ -2970,4 +2986,118 @@
 
 .donate-success .teal-button {
   margin-top: 18px;
+}
+
+/* Donate modal: Card/QR payment-method toggle with sliding panels. Reuses
+   token palette + pill/radius scale; the track slides one full panel left
+   when QR is chosen (see DonateModal.tsx). */
+.donate-methods {
+  border: none;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+}
+
+.donate-method-toggle {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--bg);
+  border-radius: 999px;
+}
+
+.method-button {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: none;
+  cursor: pointer;
+  background: transparent;
+  color: var(--slate);
+  border-radius: 999px;
+  padding: 10px 12px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.method-button.active {
+  background: linear-gradient(135deg, var(--teal) 0%, var(--teal-dark) 100%);
+  color: #fff;
+  box-shadow: 0 8px 18px rgba(21, 135, 195, 0.25);
+}
+
+.donate-panel-viewport {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(21, 135, 195, 0.04);
+}
+
+.donate-panel-track {
+  display: flex;
+  min-width: 0;
+  transition: transform 0.45s ease;
+  will-change: transform;
+}
+
+.donate-panel-track.qr {
+  /* Track box is exactly one panel wide, so -100% slides it one full
+     panel — aligning the QR pane perfectly (see DonateModal). */
+  transform: translateX(-100%);
+}
+
+.donate-panel {
+  flex: 0 0 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 14px;
+  padding: 16px 18px;
+}
+
+.qr-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  min-width: 0;
+}
+
+.donate-panel p {
+  margin: 0;
+  min-width: 0;
+  color: var(--slate);
+  font-size: 0.9rem;
+  line-height: 1.55;
+  overflow-wrap: break-word;
+}
+
+.qr-row p {
+  flex: 1 1 180px;
+}
+
+.donate-panel .qr-art {
+  flex-shrink: 0;
+  width: 120px;
+  height: 120px;
+  padding: 6px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+
+/* Below the 620px mobile breakpoint the QR panel stacks: image on top,
+   description full-width underneath. */
+@media (max-width: 620px) {
+  .qr-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }
