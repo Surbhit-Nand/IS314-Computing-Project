@@ -109,16 +109,20 @@ export function SiteHeader({
         >
           Adopt
         </button>
-        <button
-          type="button"
-          className="nav-link"
-          onClick={() => {
-            setMenuOpen(false);
-            setDonateOpen(true);
-          }}
-        >
-          Donate
-        </button>
+        {/* Staff, vets, and managers run the rescue operation, so the
+            public donate prompt is hidden for their accounts. */}
+        {!isStaff && !isAdmin && (
+          <button
+            type="button"
+            className="nav-link"
+            onClick={() => {
+              setMenuOpen(false);
+              setDonateOpen(true);
+            }}
+          >
+            Donate
+          </button>
+        )}
       </nav>
 
       <div className="header-actions">
