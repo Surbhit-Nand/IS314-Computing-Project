@@ -1,6 +1,7 @@
 import { SignInButton, SignUpButton, UserButton, useUser } from "@clerk/react";
 import { useState } from "react";
 import spcaLogo from "../assets/spca-logo.png";
+import { DonateModal } from "../features/donations/DonateModal";
 import { isDevBypassEnabled } from "../utils/devBypass";
 
 export type SiteHeaderView =
@@ -31,6 +32,7 @@ export function SiteHeader({
 }: SiteHeaderProps) {
   const { user } = useUser();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [donateOpen, setDonateOpen] = useState(false);
   const userRole = user?.publicMetadata.role;
   const isAdmin = userRole === "manager" || userRole === "admin";
   // isDevBypassEnabled is OR'd in here only so the "Staff dashboard" nav
@@ -110,7 +112,10 @@ export function SiteHeader({
         <button
           type="button"
           className="nav-link"
-          onClick={() => setMenuOpen(false)}
+          onClick={() => {
+            setMenuOpen(false);
+            setDonateOpen(true);
+          }}
         >
           Donate
         </button>
@@ -157,6 +162,8 @@ export function SiteHeader({
           </>
         )}
       </div>
+
+      <DonateModal open={donateOpen} onClose={() => setDonateOpen(false)} />
     </header>
   );
 }
