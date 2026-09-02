@@ -12,6 +12,7 @@
 }
 
 .site-header {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -32,6 +33,8 @@
 .brand-button {
   cursor: pointer;
   padding: 0;
+  background: transparent;
+  border: none;
 }
 
 .brand-logo {
@@ -44,10 +47,6 @@
 
 .footer-logo {
   height: 52px;
-}
-
-.auth-logo {
-  height: 80px;
 }
 
 .brand-mark {
@@ -116,10 +115,81 @@
   color: var(--navy);
   text-decoration: none;
   font-weight: 800;
-  font-size: 0.92rem;
+  font-size: 1.05rem;
   background: transparent;
   border: none;
   cursor: pointer;
+}
+
+.main-nav .nav-link {
+  color: var(--navy);
+  position: relative;
+  padding: 6px 2px;
+  text-decoration: none;
+}
+
+.main-nav .nav-link::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -4px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--teal);
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform 0.2s ease;
+}
+
+.main-nav .nav-link:hover {
+  color: var(--teal);
+}
+
+.main-nav .nav-link:hover::after,
+.main-nav .nav-link.active::after {
+  transform: scaleX(1);
+}
+
+.main-nav .nav-link.active {
+  color: var(--teal);
+}
+
+/* Hamburger toggle - hidden on desktop, shown ≤980px. */
+.nav-toggle {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: 44px;
+  height: 44px;
+  padding: 10px;
+  background: var(--teal);
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.nav-toggle span {
+  display: block;
+  width: 20px;
+  height: 3px;
+  border-radius: 3px;
+  background: #fff;
+  transition: transform 0.25s ease, opacity 0.25s ease;
+}
+
+.nav-toggle.open span:nth-child(1) {
+  transform: translateY(8px) rotate(45deg);
+}
+
+.nav-toggle.open span:nth-child(2) {
+  opacity: 0;
+}
+
+.nav-toggle.open span:nth-child(3) {
+  transform: translateY(-8px) rotate(-45deg);
 }
 
 .header-actions,
@@ -128,6 +198,15 @@
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.user-avatar-circle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 3px solid var(--teal);
+  border-radius: 50%;
+  padding: 2px;
 }
 
 .ghost-button,
@@ -189,6 +268,89 @@
   align-items: center;
   gap: 30px;
   padding: 18px 0 12px;
+}
+
+/* Homepage hero slideshow: full-width rotating images with overlaid text */
+.hero-section.slideshow-hero {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: 24px;
+  overflow: hidden;
+  min-height: 540px;
+}
+
+.slideshow-window {
+  position: absolute;
+  inset: 0;
+}
+
+.slideshow-slide {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: 0;
+  transition: opacity 1s ease;
+}
+
+.slideshow-slide.active {
+  opacity: 1;
+}
+
+/* Transparent overlay - images are shown at full brightness */
+.slideshow-overlay {
+  position: absolute;
+  inset: 0;
+  background: transparent;
+  pointer-events: none;
+}
+
+.slideshow-copy {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 760px;
+  padding: 60px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.slideshow-copy h1 {
+  color: var(--navy);
+  margin-left: auto;
+  margin-right: auto;
+  font-size: clamp(2.4rem, 4.2vw, 4.6rem);
+}
+
+.slideshow-copy h1 span {
+  color: var(--teal);
+}
+
+.slideshow-copy .lead-copy {
+  color: var(--navy);
+  mix-blend-mode: normal;
+  margin-left: auto;
+  margin-right: auto;
+  font-size: 1.2rem;
+  line-height: 1.8;
+  max-width: 680px;
+}
+
+.slideshow-copy .hero-actions {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Solid blue variant for the "Donate & support" hero button */
+.donate-button {
+  background: var(--teal);
 }
 
 .hero-copy {
@@ -272,22 +434,22 @@
 }
 
 .hero-panel {
-  background: linear-gradient(180deg, var(--navy) 0%, #1d2a38 100%);
+  position: relative;
+  height: 100%;
+  min-height: 480px;
   border-radius: 24px;
-  padding: 22px;
   box-shadow: var(--shadow);
   overflow: hidden;
 }
 
 .pet-visual {
-  position: relative;
-  height: 260px;
-  border-radius: 20px;
+  position: absolute;
+  inset: 0;
   display: grid;
   place-items: center;
   overflow: hidden;
-  background: rgba(255,255,255,0.08);
-  border: 1px solid rgba(255,255,255,0.16);
+  background-color: var(--bg);
+  background-repeat: no-repeat;
 }
 
 .hero-visual-image {
@@ -397,6 +559,19 @@
   margin-bottom: 16px;
 }
 
+.section-head-copy {
+  flex: 1;
+  text-align: left;
+}
+
+.adopt-eyebrow {
+  display: block;
+  text-align: center;
+  font-size: clamp(2.1rem, 3vw, 2.7rem);
+  letter-spacing: -0.04em;
+  margin-bottom: 4px;
+}
+
 .section-head.center {
   justify-content: center;
   text-align: center;
@@ -407,6 +582,11 @@
   font-size: clamp(2.1rem, 3vw, 2.7rem);
   letter-spacing: -0.04em;
   color: var(--navy);
+}
+
+.section-head .eyebrow {
+  font-size: clamp(2.1rem, 3vw, 2.7rem);
+  letter-spacing: -0.04em;
 }
 
 .animals-summary {
@@ -689,6 +869,90 @@
   display: flex;
   align-items: center;
   gap: 18px;
+}
+
+/* SPCA Fiji-inspired footer */
+.spca-footer {
+  width: min(1200px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 34px 0 48px;
+}
+
+.spca-footer-inner {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1.4fr;
+  gap: 34px;
+  border-top: 1px solid var(--line);
+  padding-top: 30px;
+}
+
+.spca-footer-col h4 {
+  margin: 0 0 12px;
+  font-size: 0.95rem;
+  letter-spacing: -0.01em;
+  color: var(--navy);
+}
+
+.spca-footer-col p {
+  margin: 0 0 10px;
+  color: var(--slate);
+  font-size: 0.86rem;
+  line-height: 1.6;
+}
+
+.spca-footer-brand-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.spca-footer-follow {
+  margin: 16px 0 12px !important;
+  font-weight: 800;
+  color: var(--navy) !important;
+  letter-spacing: 0.04em;
+}
+
+.spca-social {
+  display: flex;
+  gap: 12px;
+}
+
+.spca-social a {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--navy);
+  color: #fff;
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.spca-social a:hover {
+  transform: translateY(-2px);
+  background: var(--teal);
+}
+
+.spca-footer-small {
+  font-size: 0.78rem !important;
+}
+
+.spca-footer-col a {
+  color: var(--teal-dark);
+  text-decoration: underline;
+}
+
+@media (max-width: 900px) {
+  .spca-footer-inner {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 620px) {
+  .spca-footer-inner {
+    grid-template-columns: 1fr;
+  }
 }
 
 .auth-view {
@@ -1067,6 +1331,15 @@
   background: var(--bg);
   color: var(--slate);
   white-space: nowrap;
+}
+
+/* Role label matching the solid teal homepage dashboard button. */
+.role-pill.teal-pill {
+  background: linear-gradient(135deg, var(--teal) 0%, var(--teal-dark) 100%);
+  color: #fff;
+  padding: 12px 18px;
+  font-size: 1rem;
+  box-shadow: 0 10px 22px rgba(21, 135, 195, 0.18);
 }
 
 .dashboard-welcome {
@@ -1662,9 +1935,132 @@
   font-size: 0.76rem;
 }
 
-/* animal catalog / listings */
+/* about us page */
 
-.catalog-hero {
+.about-hero {
+  padding: 28px 0 30px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 40px;
+}
+
+.about-hero h1 {
+  margin: 0;
+  font-size: clamp(2.4rem, 4vw, 3.4rem);
+  letter-spacing: -0.05em;
+  color: var(--navy);
+}
+
+.about-hero .lead-copy {
+  max-width: 640px;
+  margin: 14px 0 0;
+}
+
+.about-section {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 30px;
+  align-items: center;
+  margin-bottom: 40px;
+}
+
+.about-text h2 {
+  margin: 0 0 14px;
+  font-size: clamp(2rem, 3vw, 2.6rem);
+  letter-spacing: -0.04em;
+  color: var(--navy);
+}
+
+.about-text p:last-child {
+  margin: 0;
+  color: var(--slate);
+  line-height: 1.7;
+}
+
+.about-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.about-values {
+  margin-bottom: 40px;
+}
+
+.about-values > h2 {
+  margin: 0 0 22px;
+  font-size: clamp(2rem, 3vw, 2.6rem);
+  letter-spacing: -0.04em;
+  color: var(--navy);
+}
+
+.about-values-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.about-value-card {
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 22px 18px;
+  box-shadow: 0 10px 24px rgba(15, 25, 34, 0.03);
+}
+
+.about-value-card h3 {
+  margin: 0 0 10px;
+  font-size: 1.3rem;
+  color: var(--navy);
+}
+
+.about-value-card p {
+  margin: 0;
+  color: var(--slate);
+  line-height: 1.6;
+}
+
+.about-cta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  background: linear-gradient(135deg, var(--navy) 0%, #1d2a38 100%);
+  border-radius: 24px;
+  padding: 28px 30px;
+  color: #fff;
+}
+
+.about-cta h2 {
+  margin: 0;
+  max-width: 560px;
+  font-size: clamp(2rem, 3vw, 2.8rem);
+  letter-spacing: -0.04em;
+}
+
+.about-cta p:last-child {
+  margin: 10px 0 0;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+@media (max-width: 980px) {
+  .about-section,
+  .about-values-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 620px) {
+  .about-section,
+  .about-metrics,
+  .about-values-grid,
+  .about-cta {
+    grid-template-columns: 1fr;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+/* animal catalog / listings */.catalog-hero {
   padding: 28px 0 30px;
   border-bottom: 1px solid var(--line);
   margin-bottom: 30px;
@@ -1780,25 +2176,6 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-.catalog-featured {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-  background: linear-gradient(180deg, var(--navy) 0%, #1d2a38 100%);
-  border-radius: 24px;
-  padding: 22px;
-  box-shadow: var(--shadow);
-  margin-bottom: 24px;
-  overflow: hidden;
-}
-
-.catalog-featured .panel-copy {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  padding-top: 0;
-}
-
 @media (max-width: 1180px) {
   .catalog-grid {
     grid-template-columns: 1fr 1fr;
@@ -1820,8 +2197,7 @@
 }
 
 @media (max-width: 620px) {
-  .catalog-grid,
-  .catalog-featured {
+  .catalog-grid {
     grid-template-columns: 1fr;
   }
 }
@@ -2034,12 +2410,52 @@
     display: grid;
   }
 
+  .hero-section.slideshow-hero {
+    display: block;
+    min-height: 460px;
+  }
+
+  .slideshow-copy {
+    padding: 44px 30px;
+    max-width: 75%;
+  }
+
   .animal-grid {
     display: grid;
   }
 
   .main-nav {
     display: none;
+  }
+
+  .nav-toggle {
+    display: inline-flex;
+  }
+
+  .main-nav.open {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    left: 0;
+    padding: 14px;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    box-shadow: var(--shadow);
+    z-index: 20;
+  }
+
+  .main-nav.open .nav-link {
+    padding: 10px 8px;
+    text-align: left;
+  }
+
+  .user-avatar-circle {
+    align-self: center;
   }
 
   .auth-shell {
@@ -2120,6 +2536,18 @@
     align-items: flex-start;
   }
 
+  .site-header {
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .header-actions {
+    flex-direction: row;
+    align-items: center;
+    margin-left: auto;
+  }
+
   .site-header,
   .site-footer,
   .auth-view {
@@ -2151,6 +2579,15 @@
 
   .hero-copy h1 {
     font-size: 2.7rem;
+  }
+
+  .hero-section.slideshow-hero {
+    min-height: 420px;
+  }
+
+  .slideshow-copy {
+    max-width: 100%;
+    padding: 32px 24px;
   }
 
   .search-row {
@@ -2212,4 +2649,130 @@
   .staff-details {
     flex-basis: calc(100% - 60px);
   }
+}
+
+/* Donate modal: public donation flow, reuses the app's modal/button/input
+   conventions (see STYLE_FORMAT.md - modal z-index 100, 20-24px radii). */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(17, 24, 32, 0.6);
+}
+
+.modal {
+  width: min(460px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  background: var(--white);
+  border-radius: 24px;
+  padding: 26px;
+  box-shadow: 0 30px 60px rgba(15, 25, 34, 0.25);
+}
+
+.modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  letter-spacing: -0.03em;
+  color: var(--navy);
+}
+
+.donate-intro {
+  margin-bottom: 18px;
+  color: var(--slate);
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
+.donate-form {
+  display: grid;
+  gap: 16px;
+}
+
+.donate-amounts {
+  border: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.donate-amounts legend,
+.donate-field span {
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--slate);
+}
+
+.donate-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.donate-custom input,
+.donate-field input,
+.donate-field textarea {
+  width: 100%;
+  border: 1px solid var(--teal);
+  border-radius: 10px;
+  padding: 11px 14px;
+  background: var(--white);
+  color: var(--navy);
+}
+
+.donate-custom input:focus,
+.donate-field input:focus,
+.donate-field textarea:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(21, 135, 195, 0.12);
+}
+
+.donate-field {
+  display: grid;
+  gap: 6px;
+}
+
+.donate-field textarea {
+  resize: vertical;
+}
+
+.donate-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.donate-success {
+  text-align: left;
+}
+
+.donate-success h3 {
+  margin-bottom: 12px;
+  color: var(--navy);
+}
+
+.donate-success p:not(.eyebrow) {
+  color: var(--slate);
+  line-height: 1.55;
+}
+
+.donate-success .teal-button {
+  margin-top: 18px;
 }

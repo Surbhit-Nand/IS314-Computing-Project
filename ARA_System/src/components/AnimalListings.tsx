@@ -1,15 +1,14 @@
-import { SignInButton, SignUpButton, UserButton, useUser } from "@clerk/react";
 import { useEffect, useMemo, useState } from "react";
-import featureHero from "../assets/spca-hero.webp";
-import spcaLogo from "../assets/spca-logo.png";
 import type { Animal } from "../types/animal";
-import { isDevBypassEnabled } from "../utils/devBypass";
-import { useFavoriteAnimals } from "../utils/favorites";
 import { capitalize } from "../utils/format";
+import { useFavoriteAnimals } from "../utils/favorites";
+import { SiteFooter } from "./SiteFooter";
+import { SiteHeader } from "./SiteHeader";
 
 type View =
   | "home"
   | "animal-listings"
+  | "about"
   | "login"
   | "register"
   | "dashboard"
@@ -19,6 +18,7 @@ type View =
 type AnimalListingsProps = {
   isLoaded: boolean;
   isSignedIn: boolean | undefined;
+  currentPage: "home" | "animal-listings" | "about";
   onNavigate: (view: View) => void;
   onViewAnimal: (animal: Animal) => void;
 };
@@ -64,18 +64,13 @@ function behaviourKey(behaviour: string | null): string {
   return "";
 }
 
-export function AnimalListings({ isLoaded, isSignedIn, onNavigate, onViewAnimal }: AnimalListingsProps) {
-  const { user } = useUser();
+export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, onViewAnimal }: AnimalListingsProps) {
   const [animals, setAnimals] = useState<Animal[]>([]);
   const [animalsLoading, setAnimalsLoading] = useState(true);
   const [animalsError, setAnimalsError] = useState("");
   const [searchText, setSearchText] = useState("");
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const { isFavorite, toggle } = useFavoriteAnimals();
-
-  const userRole = user?.publicMetadata.role;
-  const isAdmin = userRole === "manager" || userRole === "admin";
-  const isStaff = isDevBypassEnabled || userRole === "staff" || userRole === "veterinarian";
 
   useEffect(() => {
     void fetch(`${apiBaseUrl}/api/animals`)
@@ -157,64 +152,12 @@ export function AnimalListings({ isLoaded, isSignedIn, onNavigate, onViewAnimal 
 
   return (
     <div className="home-page">
-      <header className="site-header">
-        <button
-          type="button"
-          className="brand-group brand-button"
-          onClick={() => onNavigate("home")}
-        >
-          <img src={spcaLogo} alt="SPCA Fiji logo" className="brand-logo" />
-        </button>
-        <nav className="main-nav" aria-label="Main navigation">
-          <button type="button" onClick={() => onNavigate("animal-listings")}>
-            Animals
-          </button>
-          <button type="button" onClick={() => onNavigate("animal-listings")}>
-            AI Search
-          </button>
-          <button type="button">Rescue Report</button>
-          <button type="button">Donate</button>
-        </nav>
-        <div className="header-actions">
-          {!isLoaded ? null : isSignedIn ? (
-            <>
-              <button
-                type="button"
-                className="ghost-button dashboard-link"
-                onClick={() =>
-                  onNavigate(
-                    isAdmin
-                      ? "dashboard"
-                      : isStaff
-                        ? "staff-dashboard"
-                        : "user-dashboard",
-                  )
-                }
-              >
-                {isAdmin
-                  ? "Admin dashboard"
-                  : isStaff
-                    ? "Staff dashboard"
-                    : "My dashboard"}
-              </button>
-              <UserButton />
-            </>
-          ) : (
-            <>
-              <SignInButton mode="modal">
-                <button type="button" className="ghost-button">
-                  Login
-                </button>
-              </SignInButton>
-              <SignUpButton mode="modal">
-                <button type="button" className="teal-button">
-                  Register
-                </button>
-              </SignUpButton>
-            </>
-          )}
-        </div>
-      </header>
+      <SiteHeader
+        isLoaded={isLoaded}
+        isSignedIn={isSignedIn}
+        currentPage={currentPage}
+        onNavigate={onNavigate}
+      />
 
       <main className="page-shell">
         <section className="catalog-hero">
@@ -365,25 +308,6 @@ export function AnimalListings({ isLoaded, isSignedIn, onNavigate, onViewAnimal 
               </p>
             </div>
 
-            <div className="catalog-featured">
-              <div className="pet-visual" aria-hidden="true">
-                <img src={featureHero} alt="Featured animal" className="hero-visual-image" />
-                <span className="pet-badge">Ready to adopt</span>
-              </div>
-              <div className="panel-copy">
-                <p className="eyebrow light">Featured companion</p>
-                <h2>Milo</h2>
-                <p>
-                  Gentle cattle dog • 2 years • House-trained • Great with
-                  families
-                </p>
-                <div className="meta-pills">
-                  <span>Available</span>
-                  <span>Medium</span>
-                </div>
-              </div>
-            </div>
-
             <div className="animal-grid catalog-grid">
               {animalsError && (
                 <p className="dashboard-data-state error">{animalsError}</p>
@@ -452,6 +376,7 @@ export function AnimalListings({ isLoaded, isSignedIn, onNavigate, onViewAnimal 
           </section>
         </div>
       </main>
+      <SiteFooter />
     </div>
   );
 }

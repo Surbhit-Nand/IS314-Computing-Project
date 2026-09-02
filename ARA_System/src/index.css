@@ -14,6 +14,7 @@
      elsewhere (e.g. .invite-feedback.success, .activity-dot.medical) and
      changing it would visually affect unrelated UI as a side effect. */
   --success: #1f9d55;
+  --white: #ffffff;
   --shadow: 0 18px 45px rgba(15, 25, 34, 0.1);
   font-family: Arial, Helvetica, sans-serif;
   line-height: 1.45;

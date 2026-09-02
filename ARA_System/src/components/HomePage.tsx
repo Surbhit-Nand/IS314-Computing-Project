@@ -1,19 +1,20 @@
-import { SignInButton, SignUpButton, UserButton, useUser } from "@clerk/react";
 import { useEffect, useState } from "react";
-import featureHero from "../assets/spca-hero.webp";
-import spcaLogo from "../assets/spca-logo.png";
 import type { Animal } from "../types/animal";
-import { isDevBypassEnabled } from "../utils/devBypass";
-import { useFavoriteAnimals } from "../utils/favorites";
 import { capitalize } from "../utils/format";
+import { useFavoriteAnimals } from "../utils/favorites";
+import { DonateModal } from "../features/donations/DonateModal";
+import { SiteFooter } from "./SiteFooter";
+import { SiteHeader } from "./SiteHeader";
 
 type HomePageProps = {
   isLoaded: boolean;
   isSignedIn: boolean | undefined;
+  currentPage: string;
   onNavigate: (
     view:
       | "home"
       | "animal-listings"
+      | "about"
       | "login"
       | "register"
       | "dashboard"
@@ -25,17 +26,25 @@ type HomePageProps = {
 
 const apiBaseUrl = import.meta.env.VITE_API_URL ?? "http://localhost:8787";
 
-export function HomePage({ isLoaded, isSignedIn, onNavigate, onViewAnimal }: HomePageProps) {
-  const { user } = useUser();
+// Homepage hero slideshow images (rotating full-bleed backgrounds).
+const HERO_SLIDES = [
+  "https://images.squarespace-cdn.com/content/v1/66aa641d27420a233354078c/ebc79d4b-d939-4cfc-957f-617327910148/TOM_3732.jpg",
+  "https://images.squarespace-cdn.com/content/v1/66aa641d27420a233354078c/53b69e63-47f1-43c8-b985-c4ebc296edc2/SPCA+Fiji+Islands-03532.jpg",
+  "https://images.squarespace-cdn.com/content/v1/66aa641d27420a233354078c/0b4e7858-1444-46cc-8a33-75ffe2bddece/SPCA+Fiji+Islands-5836.jpg",
+  "https://images.squarespace-cdn.com/content/v1/66aa641d27420a233354078c/260cc2c2-578c-4da8-be5f-0f395225d786/SPCA+Fiji_Tom+Vierus-80929.jpg",
+  "https://images.squarespace-cdn.com/content/v1/66aa641d27420a233354078c/ddacfc9d-701c-4827-b913-394995b72b7a/SPCA+Fiji+Islands-826131.jpg",
+  "https://images.squarespace-cdn.com/content/v1/66aa641d27420a233354078c/545a02d7-50b1-45d4-82c7-124d132a4338/Puppy+in+Suva-03646.jpg",
+  "https://images.squarespace-cdn.com/content/v1/66aa641d27420a233354078c/b55b2c5c-c8fa-4177-971f-373c0eced0d1/SPCA+Fiji+Islands-03654.jpg",
+  "https://images.squarespace-cdn.com/content/v1/66aa641d27420a233354078c/fec17ca8-40bb-4601-b965-b8210c03cafe/SPCA+Fiji_Tom+Vierus-820517.jpg",
+];
+
+export function HomePage({ isLoaded, isSignedIn, currentPage, onNavigate, onViewAnimal }: HomePageProps) {
   const [animals, setAnimals] = useState<Animal[]>([]);
   const [animalsLoading, setAnimalsLoading] = useState(true);
   const [animalsError, setAnimalsError] = useState("");
+  const [heroSlide, setHeroSlide] = useState(0);
+  const [donateOpen, setDonateOpen] = useState(false);
   const { isFavorite, toggle } = useFavoriteAnimals();
-  const userRole = user?.publicMetadata.role;
-  const isAdmin = userRole === "manager" || userRole === "admin";
-  // isDevBypassEnabled is OR'd in here only so the "Staff dashboard" nav
-  // button/route appears locally without a real role - see src/utils/devBypass.ts.
-  const isStaff = isDevBypassEnabled || userRole === "staff" || userRole === "veterinarian";
 
   useEffect(() => {
     void fetch(`${apiBaseUrl}/api/animals`)
@@ -55,6 +64,14 @@ export function HomePage({ isLoaded, isSignedIn, onNavigate, onViewAnimal }: Hom
       .finally(() => setAnimalsLoading(false));
   }, []);
 
+  useEffect(() => {
+    const timer = setInterval(
+      () => setHeroSlide((current) => (current + 1) % HERO_SLIDES.length),
+      5000,
+    );
+    return () => clearInterval(timer);
+  }, []);
+
   const availableDogs = animals.filter(
     (animal) => animal.type === "dog",
   ).length;
@@ -65,68 +82,29 @@ export function HomePage({ isLoaded, isSignedIn, onNavigate, onViewAnimal }: Hom
 
   return (
     <div className="home-page">
-      <header className="site-header">
-        <button
-          type="button"
-          className="brand-group brand-button"
-          onClick={() => onNavigate("home")}
-        >
-          <img src={spcaLogo} alt="SPCA Fiji logo" className="brand-logo" />
-        </button>
-        <nav className="main-nav" aria-label="Main navigation">
-          <button type="button" onClick={() => onNavigate("animal-listings")}>
-            Animals
-          </button>
-          <button type="button" onClick={() => onNavigate("animal-listings")}>
-            AI Search
-          </button>
-          <button type="button">Rescue Report</button>
-          <button type="button">Donate</button>
-        </nav>
-        <div className="header-actions">
-          {!isLoaded ? null : isSignedIn ? (
-            <>
-              <button
-                type="button"
-                className="ghost-button dashboard-link"
-                onClick={() =>
-                  onNavigate(
-                    isAdmin
-                      ? "dashboard"
-                      : isStaff
-                        ? "staff-dashboard"
-                        : "user-dashboard",
-                  )
-                }
-              >
-                {isAdmin
-                  ? "Admin dashboard"
-                  : isStaff
-                    ? "Staff dashboard"
-                    : "My dashboard"}
-              </button>
-              <UserButton />
-            </>
-          ) : (
-            <>
-              <SignInButton mode="modal">
-                <button type="button" className="ghost-button">
-                  Login
-                </button>
-              </SignInButton>
-              <SignUpButton mode="modal">
-                <button type="button" className="teal-button">
-                  Register
-                </button>
-              </SignUpButton>
-            </>
-          )}
-        </div>
-      </header>
+      <SiteHeader
+        isLoaded={isLoaded}
+        isSignedIn={isSignedIn}
+        currentPage={currentPage}
+        onNavigate={onNavigate}
+      />
 
       <main className="page-shell">
-        <section className="hero-section">
-          <div className="hero-copy">
+        <section
+          className="hero-section slideshow-hero"
+          aria-label="Featured rescue animals"
+        >
+          <div className="slideshow-window" aria-hidden="true">
+            {HERO_SLIDES.map((src, index) => (
+              <div
+                key={src}
+                className={`slideshow-slide${index === heroSlide ? " active" : ""}`}
+                style={{ backgroundImage: `url(${src})` }}
+              />
+            ))}
+          </div>
+          <div className="slideshow-overlay" aria-hidden="true" />
+          <div className="slideshow-copy">
             <p className="eyebrow">Fiji Islands • Est. 1964</p>
             <h1>
               Every animal deserves a <span>home</span>.
@@ -144,48 +122,15 @@ export function HomePage({ isLoaded, isSignedIn, onNavigate, onViewAnimal }: Hom
               >
                 Meet the animals
               </button>
-              <button type="button" className="ghost-button">
+              <button
+                type="button"
+                className="teal-button donate-button"
+                onClick={() => setDonateOpen(true)}
+              >
                 Donate & support
               </button>
             </div>
-            <div className="search-card">
-              <label htmlFor="homepage-search">
-                Search by personality or type
-              </label>
-              <div className="search-row">
-                <input
-                  id="homepage-search"
-                  type="text"
-                  placeholder="Small, calm dog good with children"
-                />
-                <button type="button" className="teal-button small-button">
-                  Search
-                </button>
-              </div>
-            </div>
           </div>
-          <aside className="hero-panel" aria-label="Featured animal">
-            <div className="pet-visual" aria-hidden="true">
-              <img
-                src={featureHero}
-                alt="Featured animal"
-                className="hero-visual-image"
-              />
-              <span className="pet-badge">Ready to adopt</span>
-            </div>
-            <div className="panel-copy">
-              <p className="eyebrow light">Featured companion</p>
-              <h2>Milo</h2>
-              <p>
-                Gentle cattle dog • 2 years • House-trained • Great with
-                families
-              </p>
-              <div className="meta-pills">
-                <span>Available</span>
-                <span>Medium</span>
-              </div>
-            </div>
-          </aside>
         </section>
 
         <section className="stats-strip" aria-label="Available animal counts">
@@ -202,14 +147,14 @@ export function HomePage({ isLoaded, isSignedIn, onNavigate, onViewAnimal }: Hom
           ))}
         </section>
         <section className="animals-section" id="adopt">
+          <p className="eyebrow adopt-eyebrow">Adopt a friend</p>
           <div className="section-head">
-            <div>
-              <p className="eyebrow">Adopt a friend</p>
+            <div className="section-head-copy">
               <h2>Animals looking for homes</h2>
             </div>
             <button
               type="button"
-              className="ghost-button"
+              className="teal-button"
               onClick={() => onNavigate("animal-listings")}
             >
               Browse all animals
@@ -342,35 +287,18 @@ export function HomePage({ isLoaded, isSignedIn, onNavigate, onViewAnimal }: Hom
             <button type="button" className="teal-button">
               Submit rescue report
             </button>
-            <button type="button" className="ghost-button light">
+            <button
+              type="button"
+              className="ghost-button light"
+              onClick={() => setDonateOpen(true)}
+            >
               Donate
             </button>
           </div>
         </section>
       </main>
-      <footer className="site-footer" id="donate">
-        <div className="footer-brand">
-          <img
-            src={spcaLogo}
-            alt="SPCA Fiji logo"
-            className="brand-logo footer-logo"
-          />
-        </div>
-        <div className="footer-links">
-          <button type="button" onClick={() => onNavigate("animal-listings")}>
-            Animals
-          </button>
-          <button type="button" onClick={() => onNavigate("register")}>
-            Rescue
-          </button>
-          <button type="button" onClick={() => onNavigate("home")}>
-            Stories
-          </button>
-          <button type="button" onClick={() => onNavigate("home")}>
-            Donate
-          </button>
-        </div>
-      </footer>
+      <DonateModal open={donateOpen} onClose={() => setDonateOpen(false)} />
+      <SiteFooter />
     </div>
   );
 }

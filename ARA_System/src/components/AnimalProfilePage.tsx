@@ -1,12 +1,15 @@
 import { useState } from "react";
-import spcaLogo from "../assets/spca-logo.png";
 import { adoptionStatusLabel, sizeDisplayLabel, vaccinationStatusLabel, type Animal } from "../types/animal";
 import { useFavoriteAnimals } from "../utils/favorites";
 import { capitalize } from "../utils/format";
+import { SiteHeader, type SiteHeaderView } from "./SiteHeader";
 
 type AnimalProfilePageProps = {
   animal: Animal;
-  onBack: () => void;
+  isLoaded: boolean;
+  isSignedIn: boolean | undefined;
+  currentPage: string;
+  onNavigate: (view: SiteHeaderView) => void;
 };
 
 // Public, no-login-required full profile for one animal (AGENTS.md: viewing
@@ -14,7 +17,7 @@ type AnimalProfilePageProps = {
 // than fetching by id - the public listing endpoint that got us here already
 // returns every field, so there's no need for a second network round trip
 // or a new backend route.
-export function AnimalProfilePage({ animal, onBack }: AnimalProfilePageProps) {
+export function AnimalProfilePage({ animal, isLoaded, isSignedIn, currentPage, onNavigate }: AnimalProfilePageProps) {
   const { isFavorite, toggle } = useFavoriteAnimals();
   // Always starts at index 0 - the animal's main/profile picture (see
   // AnimalProfileFields.tsx, where photoUrls[0] is set as the first photo
@@ -35,14 +38,12 @@ export function AnimalProfilePage({ animal, onBack }: AnimalProfilePageProps) {
 
   return (
     <div className="home-page">
-      <header className="site-header">
-        <button type="button" className="brand-group brand-button" onClick={onBack}>
-          <img src={spcaLogo} alt="SPCA Fiji logo" className="brand-logo" />
-        </button>
-        <button type="button" className="ghost-button" onClick={onBack}>
-          ← Back to listings
-        </button>
-      </header>
+      <SiteHeader
+        isLoaded={isLoaded}
+        isSignedIn={isSignedIn}
+        currentPage={currentPage}
+        onNavigate={onNavigate}
+      />
 
       <main className="page-shell profile-page">
         {/* Hero and the two-column body below both live inside
