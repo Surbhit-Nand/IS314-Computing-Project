@@ -4,6 +4,34 @@ export type AnimalType = "dog" | "cat" | "rabbit" | "other";
 
 export type VaccinationStatus = "not_vaccinated" | "vaccinated";
 
+// Weight-based size bucket. These specific ranges (per kg) were given as
+// requirements and are dog-centric - most cats and rabbits will fall in
+// "small" no matter their actual build, since a 10kg+ cat is unusual. Kept
+// as specified rather than redesigned, since the brief gave exact numbers;
+// flagging the skew here rather than silently changing them.
+export type AnimalSize = "small" | "medium" | "large" | "extra_large";
+
+const SIZE_INFO: Record<AnimalSize, { label: string; range: string }> = {
+  small: { label: "Small", range: "Up to 10 kg" },
+  medium: { label: "Medium", range: "10-25 kg" },
+  large: { label: "Large", range: "25-45 kg" },
+  extra_large: { label: "Extra Large (Giant)", range: "Over 45 kg" },
+};
+
+// Dropdown option text, e.g. "Small (Up to 10 kg)".
+export function sizeOptionLabel(size: AnimalSize): string {
+  const info = SIZE_INFO[size];
+  return `${info.label} (${info.range})`;
+}
+
+// Profile-page display text, e.g. "Large (25-45 kg)". Handles animals
+// registered before this field existed, whose `size` is null.
+export function sizeDisplayLabel(size: AnimalSize | null): string {
+  if (!size) return "Not recorded";
+  const info = SIZE_INFO[size];
+  return `${info.label} (${info.range})`;
+}
+
 export type AnimalLifecycleStatus =
   | "intake"
   | "in_treatment"
@@ -26,6 +54,7 @@ export type Animal = {
   rescueHistory: string | null;
   photoUrls: string[];
   vaccinationStatus: VaccinationStatus;
+  size: AnimalSize | null;
   medicallyCleared: boolean;
   status: AnimalLifecycleStatus;
   createdAt: string;
@@ -49,6 +78,9 @@ export type AnimalFormInput = {
   rescueHistory: string;
   photoUrls: string[];
   vaccinationStatus: VaccinationStatus;
+  // "" until staff actively pick one - same required-select pattern as
+  // `gender` - validated in validateAnimalForm.ts before submission.
+  size: AnimalSize | "";
 };
 
 // Turns "Available for Adoption" / "Adopted" into the simple two-value label

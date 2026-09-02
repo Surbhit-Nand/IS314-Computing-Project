@@ -24,6 +24,7 @@ const emptyForm: AnimalFormInput = {
   rescueHistory: "",
   photoUrls: [],
   vaccinationStatus: "not_vaccinated",
+  size: "",
 };
 
 // Staff-only page: registers a brand-new animal profile. The unique Animal

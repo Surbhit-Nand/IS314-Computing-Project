@@ -32,8 +32,12 @@ const animalSchema = z.object({
 		.transform((value) => (value && value.trim() !== "" ? value : undefined)),
 	behaviour: z.string().optional(),
 	rescueHistory: z.string().optional(),
-	photoUrls: z.array(z.string().url()).min(1),
+	// Between 1 and 3 photos - photoUrls[0] is the animal's main/profile
+	// picture (used on listing cards and as the profile hero), enforced here
+	// and again client-side in validateAnimalForm.ts.
+	photoUrls: z.array(z.string().url()).min(1).max(3),
 	vaccinationStatus: z.enum(["not_vaccinated", "vaccinated"]),
+	size: z.enum(["small", "medium", "large", "extra_large"]),
 });
 
 // Same shape, but every field is optional since an edit can touch just one

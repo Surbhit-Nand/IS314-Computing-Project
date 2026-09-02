@@ -20,11 +20,17 @@ export function validateAnimalForm(input: AnimalFormInput): string | null {
   if (!input.colour.trim()) {
     return "Please enter the animal's colour.";
   }
+  if (!input.size) {
+    return "Please select the animal's size.";
+  }
   if (!input.description.trim()) {
     return "Please enter a description for the animal.";
   }
   if (input.photoUrls.length === 0) {
     return "Please upload at least one photo of the animal.";
+  }
+  if (input.photoUrls.length > 3) {
+    return "Please upload no more than 3 photos of the animal.";
   }
   if (input.vaccinationStatus !== "not_vaccinated" && input.vaccinationStatus !== "vaccinated") {
     return "Please select a vaccination status.";
