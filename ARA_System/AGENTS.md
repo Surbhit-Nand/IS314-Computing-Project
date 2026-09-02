@@ -208,6 +208,22 @@ single user type:
 - Keep an **audit trail** for adoption approvals, rescue cases, and donations
   (proposal §6.5, legal compliance) — log who approved/rejected what, and when.
 
+## Database migrations & the shared Neon DB
+
+- The team shares one Neon database, so another branch's migration in the DB
+  is normal (e.g. an extra `animals.deleted_at` column that this repo's schema
+  doesn't know about — extra columns are benign). Run `npm run db:migrate`
+  after every pull and **before** starting the API (`npm run server:dev`).
+  A missing column is the #1 cause of runtime errors like
+  `column "size" of relation "animals" does not exist` surfacing from
+  `NeonHttpPreparedQuery.execute`.
+- Designate **one person** to own applying migrations against the shared DB so
+  the branch's migration journal/snapshots stay consistent — the DB currently
+  records more applied migrations than this repo's `_journal.json`.
+- The API prints a **non-fatal startup warning** if a column defined in
+  `server/src/db/schema.ts` is missing from the live DB (see
+  `server/src/db/drift-check.ts`). Warn, never crash.
+
 ## AI search
 
 The public search bar should accept natural-language queries (e.g. "small,
