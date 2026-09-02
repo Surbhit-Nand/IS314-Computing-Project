@@ -22,12 +22,18 @@ export function AnimalProfileFields({ value, onChange, getToken }: AnimalProfile
     onChange({ ...value, [key]: fieldValue });
   }
 
+  const MAX_PHOTOS = 3;
+  const canAddMorePhotos = value.photoUrls.length < MAX_PHOTOS;
+
   // Uploads the chosen file to Cloudinary (via the backend) and, once it
   // succeeds, appends the returned photo URL to the form's photo list.
+  // photoUrls[0] becomes the animal's main/profile picture - the one shown
+  // on listing cards and as the profile page hero - so the first photo
+  // uploaded (or left after removals) is always the one used everywhere.
   async function handlePhotoSelected(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
-    if (!file) return;
+    if (!file || !canAddMorePhotos) return;
 
     setUploadError("");
     setIsUploadingPhoto(true);
@@ -163,10 +169,14 @@ export function AnimalProfileFields({ value, onChange, getToken }: AnimalProfile
       </label>
 
       <div className="animal-form-full animal-photo-field">
-        <span className="animal-photo-label">Photos</span>
+        <span className="animal-photo-label">
+          Photos ({value.photoUrls.length} of {MAX_PHOTOS}) - the first photo is used as the
+          main profile picture
+        </span>
         <div className="animal-photo-list">
-          {value.photoUrls.map((url) => (
+          {value.photoUrls.map((url, index) => (
             <div className="animal-photo-thumb" key={url}>
+              {index === 0 && <span className="animal-photo-main-badge">Main</span>}
               <img src={url} alt="Animal" />
               <button type="button" onClick={() => removePhoto(url)} aria-label="Remove photo">
                 &times;
@@ -174,8 +184,18 @@ export function AnimalProfileFields({ value, onChange, getToken }: AnimalProfile
             </div>
           ))}
         </div>
-        <input type="file" accept="image/*" onChange={handlePhotoSelected} disabled={isUploadingPhoto} />
+        <input
+          type="file"
+          accept="image/*"
+          onChange={handlePhotoSelected}
+          disabled={isUploadingPhoto || !canAddMorePhotos}
+        />
         {isUploadingPhoto && <p className="dashboard-data-state">Uploading photo...</p>}
+        {!canAddMorePhotos && (
+          <p className="dashboard-data-state">
+            Maximum of {MAX_PHOTOS} photos reached - remove one to add another.
+          </p>
+        )}
         {uploadError && <p className="invite-feedback error">{uploadError}</p>}
       </div>
     </div>

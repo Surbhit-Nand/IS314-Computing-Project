@@ -240,7 +240,7 @@
 .chip:hover,
 .social-button:hover,
 .mini-button:hover,
-.save-button:hover {
+.favorite-button:hover {
   transform: translateY(-1px);
 }
 
@@ -498,7 +498,6 @@
 
 .meta-pills span,
 .animal-tags span,
-.status-badge,
 .chip {
   display: inline-flex;
   align-items: center;
@@ -623,26 +622,6 @@
   gap: 20px;
 }
 
-.animal-card {
-  position: relative;
-  background: rgba(255, 255, 255, 0.8);
-  border: 1px solid var(--line);
-  border-radius: 20px;
-  overflow: hidden;
-  box-shadow: 0 12px 24px rgba(15, 25, 34, 0.04);
-}
-
-.animal-card-top {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  right: 12px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  z-index: 1;
-}
-
 .badge {
   display: inline-flex;
   align-items: center;
@@ -665,39 +644,6 @@
   color: var(--navy);
 }
 
-.save-button {
-  width: 35px;
-  height: 35px;
-  border: none;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.84);
-  color: var(--navy);
-  font-size: 1.1rem;
-  cursor: pointer;
-}
-
-.animal-image {
-  position: relative;
-  height: 210px;
-  display: grid;
-  place-items: center;
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  color: var(--navy);
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  overflow: hidden;
-}
-
-.animal-image::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, rgba(17, 24, 32, 0.08), rgba(17, 24, 32, 0.4));
-}
-
 .animal-image-label {
   position: relative;
   z-index: 1;
@@ -709,45 +655,6 @@
   background: rgba(255,255,255,0.72);
   backdrop-filter: blur(3px);
   color: var(--navy);
-}
-
-.animal-body {
-  padding: 18px 16px 16px;
-}
-
-.animal-topline {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
-}
-
-.animal-species {
-  margin: 0 0 6px;
-  color: var(--slate);
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.animal-topline h3 {
-  margin: 0;
-  font-size: 1.7rem;
-  letter-spacing: -0.04em;
-}
-
-.animal-price {
-  color: var(--navy);
-  font-weight: 800;
-  font-size: 1rem;
-  white-space: nowrap;
-}
-
-.animal-meta {
-  margin: 8px 0 0;
-  color: var(--slate);
-  font-weight: 700;
 }
 
 .animal-tags {
@@ -764,18 +671,109 @@
   padding: 7px 9px;
 }
 
-.animal-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-top: 18px;
+/* pet-card: PetRescue-style listing card - whole card is one click target,
+   heart favorite button overlaid on the photo, no separate status badge
+   (availability is implied by appearing in this listing at all, matching
+   the reference: PetRescue doesn't repeat "available" per card either). */
+
+.favorite-button {
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--slate);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: transform 0.15s ease, color 0.15s ease;
 }
 
-.status-badge {
-  background: rgba(20, 127, 184, 0.12);
+.favorite-button.active {
+  color: var(--red);
+}
+
+.pet-card {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  overflow: hidden;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(15, 25, 34, 0.05);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.pet-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 28px rgba(15, 25, 34, 0.08);
+}
+
+.pet-card:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 2px;
+}
+
+.pet-card-photo {
+  position: relative;
+  height: 200px;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-color: var(--bg);
+  display: grid;
+  place-items: center;
+}
+
+.pet-card-photo .favorite-button {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 32px;
+  height: 32px;
+  font-size: 1rem;
+}
+
+.pet-card-body {
+  padding: 14px 16px 16px;
+}
+
+.pet-card-name {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--teal-dark);
+  letter-spacing: -0.02em;
+}
+
+.pet-card-breed {
+  margin: 2px 0 0;
   color: var(--navy);
-  padding: 7px 10px;
+  font-size: 0.84rem;
+}
+
+.pet-card-blurb {
+  margin: 8px 0 0;
+  color: var(--slate);
+  font-size: 0.84rem;
+  font-style: italic;
+  line-height: 1.4;
+}
+
+.pet-card-line {
+  margin: 10px 0 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--slate);
+  font-size: 0.8rem;
+}
+
+.pet-card-check {
+  margin: 6px 0 0;
+  color: var(--teal-dark);
+  font-size: 0.8rem;
+  font-weight: 700;
 }
 
 .text-button {
@@ -1850,6 +1848,21 @@
   line-height: 1;
 }
 
+.animal-photo-main-badge {
+  position: absolute;
+  z-index: 1;
+  bottom: 4px;
+  left: 4px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(21, 135, 195, 0.9);
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .animal-search-input {
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -2183,12 +2196,208 @@
   .catalog-sidebar {
     position: static;
   }
+
+  .profile-columns {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 620px) {
   .catalog-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* public animal profile page */
+
+.profile-page {
+  padding-top: 24px;
+}
+
+/* Single shared width for the hero photo AND the two-column body below it,
+   so their left/right edges line up instead of the hero spanning the full
+   page-shell width while the content beneath was narrower. */
+.profile-content {
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.profile-name {
+  margin: 0 0 18px;
+  font-size: clamp(2rem, 3.4vw, 2.8rem);
+  letter-spacing: -0.03em;
+  color: var(--teal-dark);
+}
+
+.profile-hero-image {
+  position: relative;
+  height: 420px;
+  border-radius: 24px;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-color: var(--bg);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+
+.profile-hero-image .favorite-button {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 44px;
+  height: 44px;
+  font-size: 1.3rem;
+}
+
+.profile-photo-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--navy);
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.profile-photo-nav:hover {
+  background: #fff;
+}
+
+.profile-photo-nav.prev {
+  left: 16px;
+}
+
+.profile-photo-nav.next {
+  right: 16px;
+}
+
+.profile-photo-strip {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+  overflow-x: auto;
+}
+
+.profile-thumb {
+  flex: 0 0 76px;
+  width: 76px;
+  height: 76px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 2px solid transparent;
+  padding: 0;
+  cursor: pointer;
+  background: var(--bg);
+}
+
+.profile-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.profile-thumb.active {
+  border-color: var(--teal);
+}
+
+/* Two-column body: LEFT structured details, RIGHT prose/story - matches the
+   reference layout's intent rather than its exact stacked structure. */
+.profile-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 360px) 1fr;
+  gap: 34px;
+  margin-top: 28px;
+  align-items: start;
+}
+
+.profile-details {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #fff;
+  padding: 22px;
+  box-shadow: 0 12px 28px rgba(15, 25, 34, 0.04);
+}
+
+.profile-check {
+  font-size: 0.86rem;
+}
+
+.profile-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.profile-facts dt {
+  margin: 0 0 6px;
+  color: var(--slate);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.profile-facts dd {
+  margin: 0;
+  color: var(--navy);
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.profile-adopt-button {
+  display: block;
+  width: 100%;
+  text-align: center;
+}
+
+.profile-story {
+  min-width: 0;
+}
+
+.profile-about + .profile-about {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+}
+
+.profile-about h2 {
+  margin: 0 0 8px;
+  font-size: 1.1rem;
+  letter-spacing: -0.01em;
+  color: var(--teal-dark);
+}
+
+.profile-about p {
+  margin: 0;
+  color: var(--slate);
+  line-height: 1.7;
+}
+
+.profile-rescue-date {
+  margin-top: 8px !important;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--navy) !important;
+}
+
+.profile-story-empty {
+  margin: 0;
+  color: var(--slate);
+  font-style: italic;
 }
 
 @media (max-width: 980px) {
@@ -2309,6 +2518,10 @@
 
   .animal-table-row {
     flex-wrap: wrap;
+  }
+
+  .profile-hero-image {
+    height: 260px;
   }
 
   .hero-copy h1 {
