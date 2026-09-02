@@ -12,7 +12,8 @@ export type SiteHeaderView =
   | "register"
   | "dashboard"
   | "staff-dashboard"
-  | "user-dashboard";
+  | "user-dashboard"
+  | "rescue-report";
 
 type SiteHeaderProps = {
   isLoaded: boolean;
@@ -96,7 +97,7 @@ export function SiteHeader({
         <button
           type="button"
           className="nav-link"
-          onClick={() => setMenuOpen(false)}
+          onClick={() => navigate("rescue-report")}
         >
           Rescue Report
         </button>

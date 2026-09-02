@@ -19,7 +19,9 @@ type HomePageProps = {
       | "register"
       | "dashboard"
       | "staff-dashboard"
-      | "user-dashboard",
+      | "user-dashboard"
+      | "rescue-report"
+      | "my-reports",
   ) => void;
   onViewAnimal: (animal: Animal) => void;
 };
@@ -284,7 +286,11 @@ export function HomePage({ isLoaded, isSignedIn, currentPage, onNavigate, onView
             <h2>Report a rescue and give an animal a second chance.</h2>
           </div>
           <div className="cta-actions">
-            <button type="button" className="teal-button">
+            <button
+              type="button"
+              className="teal-button"
+              onClick={() => onNavigate("rescue-report")}
+            >
               Submit rescue report
             </button>
             <button

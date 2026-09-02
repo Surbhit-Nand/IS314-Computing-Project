@@ -1,6 +1,7 @@
 import {
 	boolean,
 	date,
+	doublePrecision,
 	integer,
 	jsonb,
 	pgEnum,
@@ -68,13 +69,43 @@ export const animals = pgTable("animals", {
 
 export const rescueReports = pgTable("rescue_reports", {
 	id: uuid("id").defaultRandom().primaryKey(),
-	 animalId: uuid("animal_id").references(() => animals.id),
+	// Public-facing tracking code (e.g. "RESCUE-2026-4821") handed back to the
+	// reporter so they - and staff on the phone - can look the report up
+	// without needing an account.
+	reference: text("reference").notNull().unique(),
+	animalId: uuid("animal_id").references(() => animals.id),
+	// Reporter contact. reporterClerkUserId is set only when the report comes
+	// through an online form while signed in; the name/phone are always
+	// captured so phone-in reports (logged by staff) and anonymous online
+	// reports are still trackable.
 	reporterClerkUserId: text("reporter_clerk_user_id"),
+	reporterName: text("reporter_name").notNull().default(""),
+	reporterPhone: text("reporter_phone"),
+	reporterEmail: text("reporter_email"),
 	location: text("location").notNull(),
+	// Pin coordinates from the interactive map on the rescue report form.
+	// Optional - a reporter can type a location without dropping a pin - but
+	// stored whenever chosen so staff can see exactly where the animal is.
+	latitude: doublePrecision("latitude"),
+	longitude: doublePrecision("longitude"),
+	animalType: text("animal_type"),
+	animalBreed: text("animal_breed"),
 	conditionDescription: text("condition_description").notNull(),
 	urgency: text("urgency").notNull(),
+	photoUrls: jsonb("photo_urls").$type<string[]>().notNull().default([]),
+	// 'online' vs 'phone' so the same form/schema serves both entry paths
+	// (see AGENTS.md "one code path" risk mitigation).
+	source: text("source").notNull().default("online"),
 	status: text("status").notNull().default("submitted"),
+	// Dispatch: which rescuer/team member the report is assigned to, plus any
+	// internal handling note. assignedTo is a free-text name because rescuers
+	// can be volunteers without a Clerk account; the clerk user id is kept
+	// separately for when the assignee is a staff account.
+	assignedTo: text("assigned_to"),
+	assignedToClerkUserId: text("assigned_to_clerk_user_id"),
+	officeNote: text("office_note"),
 	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+	updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const adoptionApplications = pgTable("adoption_applications", {

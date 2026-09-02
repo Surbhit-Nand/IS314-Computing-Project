@@ -14,6 +14,29 @@ declare global {
 
 export {};
 
+// Resolves the signed-in Clerk user id from the Authorization header without
+// rejecting the request when there is no token. Used by public endpoints
+// (e.g. rescue report submission) that must work for anonymous visitors but
+// should still stamp the reporter's account id when they happen to be signed
+// in, so they can later track the report from their dashboard.
+export async function resolveOptionalClerkUserId(request: Request): Promise<string | undefined> {
+	const authorization = request.header("authorization");
+	const token = authorization?.startsWith("Bearer ")
+		? authorization.slice("Bearer ".length)
+		: undefined;
+
+	if (!token) {
+		return undefined;
+	}
+
+	try {
+		const payload = await verifyToken(token, { secretKey: env.clerkSecretKey });
+		return payload.sub;
+	} catch {
+		return undefined;
+	}
+}
+
 export async function requireClerkSession(
 	request: Request,
 	response: Response,

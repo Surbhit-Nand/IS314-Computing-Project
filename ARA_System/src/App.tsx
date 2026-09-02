@@ -12,6 +12,9 @@ import { UserDashboard } from "./components/UserDashboard";
 import { AnimalRegistrationForm } from "./features/animals/AnimalRegistrationForm";
 import { EditAnimalProfile } from "./features/animals/EditAnimalProfile";
 import { ManageAnimalProfiles } from "./features/animals/ManageAnimalProfiles";
+import { ManageRescueReports } from "./features/rescue/ManageRescueReports";
+import { MyReports } from "./features/rescue/MyReports";
+import { RescueReportForm } from "./features/rescue/RescueReportForm";
 import type { Animal } from "./types/animal";
 
 export type View =
@@ -26,7 +29,11 @@ export type View =
   | "user-dashboard"
   | "register-animal"
   | "manage-animals"
-  | "edit-animal";
+  | "edit-animal"
+  | "rescue-report"
+  | "rescue-report-phone"
+  | "my-reports"
+  | "manage-rescue-reports";
 
 function App() {
   const [view, setView] = useState<View>("home");
@@ -44,6 +51,10 @@ function App() {
   function handleViewAnimal(animal: Animal) {
     setViewedAnimal(animal);
     setView("animal-profile");
+  }
+
+  function openMyReports() {
+    setView("my-reports");
   }
 
   if (view === "dashboard") {
@@ -111,6 +122,42 @@ function App() {
 
   if (view === "edit-animal" && selectedAnimalId) {
     return <EditAnimalProfile animalId={selectedAnimalId} onNavigate={setView} />;
+  }
+
+  if (view === "rescue-report") {
+    return (
+      <RescueReportForm
+        variant="public"
+        source="online"
+        onNavigate={setView}
+        onShowMyReports={openMyReports}
+      />
+    );
+  }
+
+  if (view === "rescue-report-phone") {
+    return (
+      <RescueReportForm
+        variant="staff"
+        source="phone"
+        onNavigate={setView}
+        onShowMyReports={openMyReports}
+      />
+    );
+  }
+
+  if (view === "my-reports") {
+    return (
+      <MyReports
+        isLoaded={isLoaded}
+        isSignedIn={isSignedIn}
+        onNavigate={setView}
+      />
+    );
+  }
+
+  if (view === "manage-rescue-reports") {
+    return <ManageRescueReports onNavigate={setView} />;
   }
 
   if (view === "login" || view === "register") {

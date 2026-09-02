@@ -16,7 +16,9 @@ type View =
   | "register"
   | "dashboard"
   | "staff-dashboard"
-  | "user-dashboard";
+  | "user-dashboard"
+  | "rescue-report"
+  | "my-reports";
 
 type AboutUsProps = {
   isLoaded: boolean;
