@@ -1575,6 +1575,21 @@
   line-height: 1;
 }
 
+.animal-photo-main-badge {
+  position: absolute;
+  z-index: 1;
+  bottom: 4px;
+  left: 4px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(21, 135, 195, 0.9);
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .animal-search-input {
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -1804,6 +1819,10 @@
   .catalog-sidebar {
     position: static;
   }
+
+  .profile-columns {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 620px) {
@@ -1816,7 +1835,22 @@
 /* public animal profile page */
 
 .profile-page {
-  padding-top: 8px;
+  padding-top: 24px;
+}
+
+/* Single shared width for the hero photo AND the two-column body below it,
+   so their left/right edges line up instead of the hero spanning the full
+   page-shell width while the content beneath was narrower. */
+.profile-content {
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.profile-name {
+  margin: 0 0 18px;
+  font-size: clamp(2rem, 3.4vw, 2.8rem);
+  letter-spacing: -0.03em;
+  color: var(--teal-dark);
 }
 
 .profile-hero-image {
@@ -1840,6 +1874,35 @@
   width: 44px;
   height: 44px;
   font-size: 1.3rem;
+}
+
+.profile-photo-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--navy);
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.profile-photo-nav:hover {
+  background: #fff;
+}
+
+.profile-photo-nav.prev {
+  left: 16px;
+}
+
+.profile-photo-nav.next {
+  right: 16px;
 }
 
 .profile-photo-strip {
@@ -1872,38 +1935,35 @@
   border-color: var(--teal);
 }
 
-.profile-summary {
-  max-width: 780px;
-  margin: 30px auto 0;
+/* Two-column body: LEFT structured details, RIGHT prose/story - matches the
+   reference layout's intent rather than its exact stacked structure. */
+.profile-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 360px) 1fr;
+  gap: 34px;
+  margin-top: 28px;
+  align-items: start;
 }
 
-.profile-name {
-  margin: 0;
-  font-size: clamp(2rem, 3.4vw, 2.8rem);
-  letter-spacing: -0.03em;
-  color: var(--teal-dark);
-}
-
-.profile-breed {
-  margin: 4px 0 0;
-  color: var(--navy);
-  font-size: 1rem;
+.profile-details {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #fff;
+  padding: 22px;
+  box-shadow: 0 12px 28px rgba(15, 25, 34, 0.04);
 }
 
 .profile-check {
-  margin-top: 10px;
   font-size: 0.86rem;
 }
 
 .profile-facts {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
-  margin: 26px 0 0;
-  padding: 20px;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: #fff;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
 }
 
 .profile-facts dt {
@@ -1922,18 +1982,27 @@
   font-size: 0.95rem;
 }
 
-.profile-tags {
-  margin-top: 20px;
+.profile-adopt-button {
+  display: block;
+  width: 100%;
+  text-align: center;
 }
 
-.profile-about {
-  margin-top: 26px;
+.profile-story {
+  min-width: 0;
+}
+
+.profile-about + .profile-about {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
 }
 
 .profile-about h2 {
   margin: 0 0 8px;
-  font-size: 1.2rem;
-  color: var(--navy);
+  font-size: 1.1rem;
+  letter-spacing: -0.01em;
+  color: var(--teal-dark);
 }
 
 .profile-about p {
@@ -1947,6 +2016,12 @@
   font-size: 0.8rem;
   font-weight: 700;
   color: var(--navy) !important;
+}
+
+.profile-story-empty {
+  margin: 0;
+  color: var(--slate);
+  font-style: italic;
 }
 
 @media (max-width: 980px) {
@@ -2011,10 +2086,6 @@
   .stat-grid,
   .animal-form-grid {
     grid-template-columns: 1fr;
-  }
-
-  .profile-facts {
-    grid-template-columns: 1fr 1fr;
   }
 
   .animal-table-row {

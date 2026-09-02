@@ -5,6 +5,7 @@ import spcaLogo from "../assets/spca-logo.png";
 import type { Animal } from "../types/animal";
 import { isDevBypassEnabled } from "../utils/devBypass";
 import { useFavoriteAnimals } from "../utils/favorites";
+import { capitalize } from "../utils/format";
 
 type View =
   | "home"
@@ -417,7 +418,7 @@ export function AnimalListings({ isLoaded, isSignedIn, onNavigate, onViewAnimal 
                     }
                   >
                     {!animal.photoUrls[0] && (
-                      <span className="animal-image-label">{animal.type}</span>
+                      <span className="animal-image-label">{capitalize(animal.type)}</span>
                     )}
                     <button
                       type="button"
