@@ -2011,22 +2011,63 @@
 
 /* about us page */
 
-.about-hero {
-  padding: 28px 0 30px;
-  border-bottom: 1px solid var(--line);
-  margin-bottom: 40px;
+/* Larger eyebrow labels across the about page sections */
+.about-page .eyebrow {
+  font-size: 1.5rem;
+  letter-spacing: 0.1em;
 }
 
-.about-hero h1 {
+/* About us hero banner: single static image, full-width like the homepage
+   slideshow, with the "About SPCA Fiji" copy on top */
+.hero-section.slideshow-hero.about-image-hero {
+  margin-bottom: 34px;
+  min-height: 380px;
+}
+
+.about-image-slide {
+  background-position: center 35%;
+}
+
+/* Soft light wash over the photo so the navy heading stays readable */
+.about-image-overlay {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.74) 0%,
+    rgba(255, 255, 255, 0.55) 55%,
+    rgba(255, 255, 255, 0.3) 100%
+  );
+}
+
+.slideshow-copy.about-image-copy {
+  max-width: 860px;
+  padding: 38px 24px;
+}
+
+.about-image-copy h1 {
   margin: 0;
-  font-size: clamp(2.4rem, 4vw, 3.4rem);
   letter-spacing: -0.05em;
-  color: var(--navy);
 }
 
-.about-hero .lead-copy {
-  max-width: 640px;
-  margin: 14px 0 0;
+.about-image-copy .about-metrics {
+  width: 100%;
+  max-width: 720px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 24px 0 0;
+}
+
+/* Compact stat cards inside the about hero */
+.about-image-copy .stat-item {
+  padding: 13px 16px;
+  border-radius: 14px;
+}
+
+.about-image-copy .stat-item strong {
+  font-size: clamp(1.3rem, 1.8vw, 1.7rem);
+}
+
+.about-image-copy .stat-item span {
+  margin-top: 5px;
+  font-size: 0.66rem;
 }
 
 .about-section {
@@ -2116,10 +2157,203 @@
   color: rgba(255, 255, 255, 0.8);
 }
 
+/* WANT TO HELP? banner, matching the SPCA Fiji about page */
+.about-help {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  background: linear-gradient(135deg, var(--navy) 0%, #1d2a38 100%);
+  border-radius: 24px;
+  padding: 30px 32px;
+  margin-bottom: 40px;
+  color: #fff;
+}
+
+.about-help h2 {
+  margin: 0;
+  max-width: 560px;
+  font-size: clamp(1.6rem, 2.5vw, 2.2rem);
+  letter-spacing: -0.04em;
+}
+
+.about-help p:last-child {
+  margin: 10px 0 0;
+  color: rgba(255, 255, 255, 0.9);
+  line-height: 1.7;
+  max-width: 620px;
+}
+
+/* Meet the team */
+.about-mission,
+.about-team,
+.about-committee,
+.about-location {
+  margin-bottom: 40px;
+}
+
+.about-mission {
+  max-width: 740px;
+}
+
+.about-section-head h2 {
+  margin: 0 0 22px;
+  font-size: clamp(2rem, 3vw, 2.6rem);
+  letter-spacing: -0.04em;
+  color: var(--navy);
+}
+
+.about-team-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.about-team-card {
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 22px 16px;
+  text-align: center;
+  box-shadow: 0 10px 24px rgba(15, 25, 34, 0.03);
+}
+
+.about-avatar {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--teal) 0%, var(--teal-dark) 100%);
+  color: #fff;
+  font-weight: 800;
+  font-size: 1.1rem;
+}
+
+.about-team-card h3 {
+  margin: 0 0 6px;
+  font-size: 1.05rem;
+  color: var(--navy);
+}
+
+.about-team-card p {
+  margin: 0;
+  color: var(--slate);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+/* Executive committee */
+.about-committee-intro {
+  margin: 14px 0 20px;
+  color: var(--slate);
+  line-height: 1.7;
+  max-width: 720px;
+}
+
+.about-committee-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.about-committee-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  background: var(--teal);
+  border: 1px solid var(--teal);
+  border-radius: 14px;
+  padding: 14px 18px;
+}
+
+.about-committee-row span {
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.72rem;
+}
+
+.about-committee-row strong {
+  color: #fff;
+  text-align: right;
+}
+
+/* Location + Google map */
+.about-location {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 28px;
+  align-items: stretch;
+}
+
+.about-location-info h2 {
+  margin: 0 0 14px;
+  font-size: clamp(2rem, 3vw, 2.6rem);
+  letter-spacing: -0.04em;
+  color: var(--navy);
+}
+
+.about-location-address {
+  margin: 0 0 16px;
+  color: var(--navy);
+  font-weight: 800;
+  font-size: 1.05rem;
+}
+
+.about-location-info ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 10px;
+}
+
+.about-location-info li {
+  color: var(--slate);
+  line-height: 1.5;
+}
+
+.about-location-info li strong {
+  color: var(--navy);
+}
+
+.about-map {
+  border-radius: 20px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  min-height: 320px;
+}
+
+.about-map iframe {
+  width: 100%;
+  height: 100%;
+  min-height: 320px;
+  border: 0;
+  display: block;
+}
+
 @media (max-width: 980px) {
   .about-section,
   .about-values-grid {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .about-team-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .about-location,
+  .about-help {
+    flex-direction: column;
+  }
+
+  .about-location {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -2131,6 +2365,16 @@
     grid-template-columns: 1fr;
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .about-team-grid,
+  .about-committee-list {
+    grid-template-columns: 1fr;
+  }
+
+  .about-help {
+    align-items: flex-start;
+    padding: 24px 22px;
   }
 }
 

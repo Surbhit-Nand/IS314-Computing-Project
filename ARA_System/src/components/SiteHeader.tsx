@@ -109,7 +109,11 @@ export function SiteHeader({
         >
           Adopt
         </button>
-<DonateButton className="nav-link">Donate</DonateButton>
+        {/* Staff, vets, and managers run the rescue operation, so the
+            public donate prompt is hidden for their accounts. */}
+        {!isStaff && !isAdmin && (
+          <DonateButton className="nav-link">Donate</DonateButton>
+        )}
       </nav>
 
       <div className="header-actions">
