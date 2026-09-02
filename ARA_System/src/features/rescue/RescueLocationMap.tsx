@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
-import { loadGoogleMaps } from "../../services/googleMaps";
+import { useCallback, useEffect, useRef, useState } from "react";
+import * as L from "leaflet";
+import { addOsmTileLayer, FIJI_CENTER, RESCUE_MARKER_ICON } from "../../utils/leaflet";
 
 type RescueLocationMapProps = {
   latitude: number | null;
@@ -7,26 +8,24 @@ type RescueLocationMapProps = {
   onLocationChange: (latitude: number, longitude: number) => void;
 };
 
-// Default view shown while no pin is placed: Suva, Fiji (SPCA Fiji's base).
-const SUVA_CENTER: google.maps.LatLngLiteral = { lat: -18.1248, lng: 178.4501 };
-
 function geolocationErrorMessage(error: GeolocationPositionError): string {
   switch (error.code) {
     case error.PERMISSION_DENIED:
-      return "Location access was denied. Allow your browser's location permission and try again, or pin the location on the map.";
+      return "Location access was denied. Allow your browser's location permission and try again, or click the map to drop a pin.";
     case error.POSITION_UNAVAILABLE:
-      return "Your current position could not be determined. Pin the location on the map instead.";
+      return "Your current position could not be determined. Click the map to drop a pin instead.";
     case error.TIMEOUT:
-      return "Finding your location timed out. Try again or pin the location on the map.";
+      return "Finding your location timed out. Try again or click the map to drop a pin.";
     default:
-      return "Your location could not be determined. Pin the location on the map instead.";
+      return "Your location could not be determined. Click the map to drop a pin instead.";
   }
 }
 
-// Interactive location picker for the rescue report form. The map loads
-// centred on Suva (or the current pin), the user clicks anywhere to place or
-// move a marker, and the "Use My Location" button drops a marker at their
-// browser-geolocated position. Both update the parent form state via
+// Interactive location picker for the rescue report form, powered by Leaflet +
+// OpenStreetMap (free, no API key). The map is centred on Suva, Fiji by
+// default. The user clicks anywhere to place (or move) a single marker, drags
+// the marker to fine-tune it, or uses "Use My Location" to pin their
+// browser-geolocated position. Every change is handed to the form via
 // onLocationChange so the coordinates are saved with the report.
 export function RescueLocationMap({
   latitude,
@@ -34,86 +33,77 @@ export function RescueLocationMap({
   onLocationChange,
 }: RescueLocationMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<google.maps.Map | null>(null);
-  const markerRef = useRef<google.maps.Marker | null>(null);
-  const googleMapsRef = useRef<typeof google.maps | null>(null);
-  // Coordinates the page first rendered with - the map is created once, so we
-  // only read these at mount rather than on every prop change.
-  const initialCoordinates = useRef<google.maps.LatLngLiteral | null>(
-    latitude != null && longitude != null ? { lat: latitude, lng: longitude } : null,
-  );
+  const mapRef = useRef<L.Map | null>(null);
+  const markerRef = useRef<L.Marker | null>(null);
 
-  const [mapError, setMapError] = useState("");
-  const [locationError, setLocationError] = useState("");
   const [isLocating, setIsLocating] = useState(false);
+  const [locationError, setLocationError] = useState("");
 
-  // Keeps the always-latest callback available inside the once-only map
-  // setup effect without recreating the map on every render.
+  // Keeps the always-latest callback available inside the once-only map setup
+  // and the marker drag handler without recreating them on every render.
   const onLocationChangeRef = useRef(onLocationChange);
   useEffect(() => {
     onLocationChangeRef.current = onLocationChange;
   }, [onLocationChange]);
 
-  // Places or moves the single marker and pulls the map over to it. Uses refs
-  // only, so it is safe to call from the map listener and the button.
-  function placeMarker(pinLatitude: number, pinLongitude: number) {
-    const maps = googleMapsRef.current;
+  // Places or moves the single marker and pans the map over to it. Uses refs
+  // only, so it is safe to call from the map listener, the drag handler, the
+  // geolocation handler, and the prop-sync effect.
+  const placeMarker = useCallback((pinLatitude: number, pinLongitude: number) => {
     const map = mapRef.current;
-    if (!maps || !map) return;
-    const position: google.maps.LatLngLiteral = { lat: pinLatitude, lng: pinLongitude };
-    if (!markerRef.current) {
-      markerRef.current = new maps.Marker({ map, position });
+    if (!map) return;
+    const position: L.LatLngExpression = [pinLatitude, pinLongitude];
+    if (markerRef.current) {
+      markerRef.current.setLatLng(position);
     } else {
-      markerRef.current.setPosition(position);
-    }
-    map.panTo(position);
-  }
-
-  useEffect(() => {
-    let cancelled = false;
-    loadGoogleMaps()
-      .then((maps) => {
-        if (cancelled || !containerRef.current) return;
-        googleMapsRef.current = maps;
-        mapRef.current = new maps.Map(containerRef.current, {
-          center: initialCoordinates.current ?? SUVA_CENTER,
-          zoom: 14,
-          fullscreenControl: false,
-          mapTypeControl: false,
-          streetViewControl: false,
-        });
-        mapRef.current.addListener("click", (event: google.maps.MapMouseEvent) => {
-          const pinLatitude = event.latLng?.lat();
-          const pinLongitude = event.latLng?.lng();
-          if (pinLatitude == null || pinLongitude == null) return;
-          placeMarker(pinLatitude, pinLongitude);
-          onLocationChangeRef.current(pinLatitude, pinLongitude);
-        });
-        if (initialCoordinates.current) {
-          placeMarker(initialCoordinates.current.lat, initialCoordinates.current.lng);
-        }
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          setMapError(
-            error instanceof Error ? error.message : "Google Maps failed to load.",
-          );
+      markerRef.current = L.marker(position, {
+        draggable: true,
+        icon: RESCUE_MARKER_ICON,
+      }).addTo(map);
+      markerRef.current.on("dragend", () => {
+        const markerPosition = markerRef.current?.getLatLng();
+        if (markerPosition) {
+          onLocationChangeRef.current(markerPosition.lat, markerPosition.lng);
         }
       });
+    }
+    map.panTo(position);
+  }, []);
+
+  // Creates the map exactly once, centred on Fiji. Clicking anywhere places
+  // or moves the marker and reports the coordinates.
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const map = L.map(container, { center: FIJI_CENTER, zoom: 12 });
+    mapRef.current = map;
+    addOsmTileLayer(map);
+    map.on("click", (event: L.LeafletMouseEvent) => {
+      const { lat, lng } = event.latlng;
+      placeMarker(lat, lng);
+      onLocationChangeRef.current(lat, lng);
+    });
     return () => {
-      cancelled = true;
-      markerRef.current?.setMap(null);
+      markerRef.current?.remove();
       markerRef.current = null;
+      map.remove();
       mapRef.current = null;
     };
-  }, []);
+  }, [placeMarker]);
+
+  // Keeps the map in sync with the form state (e.g. after "Use My Location"
+  // or a programmatic pin): move the marker to the latest coordinates.
+  useEffect(() => {
+    if (latitude == null || longitude == null) return;
+    placeMarker(latitude, longitude);
+  }, [latitude, longitude, placeMarker]);
 
   // Drops a marker at the browser's current position (with the user's
   // permission) and hands the coordinates back to the form.
   function handleUseMyLocation() {
     if (!("geolocation" in navigator)) {
       setLocationError(
-        "Geolocation is not supported by this browser. Pin the location on the map instead.",
+        "Geolocation is not supported by this browser. Click the map to drop a pin instead.",
       );
       return;
     }
@@ -123,6 +113,7 @@ export function RescueLocationMap({
       (position) => {
         setIsLocating(false);
         const { latitude: pinLatitude, longitude: pinLongitude } = position.coords;
+        mapRef.current?.setView([pinLatitude, pinLongitude], 14);
         placeMarker(pinLatitude, pinLongitude);
         onLocationChangeRef.current(pinLatitude, pinLongitude);
       },
@@ -137,7 +128,9 @@ export function RescueLocationMap({
   return (
     <div className="rescue-map-card">
       <div className="rescue-map-toolbar">
-        <span className="rescue-map-hint">Click the map to drop a pin</span>
+        <span className="rescue-map-hint">
+          Click the map to drop a pin, or drag the marker to fine-tune it
+        </span>
         <button
           type="button"
           className="teal-button small-button"
@@ -148,21 +141,14 @@ export function RescueLocationMap({
         </button>
       </div>
       {locationError && <p className="invite-feedback error">{locationError}</p>}
-      {mapError ? (
-        <div className="rescue-map-unavailable" role="status">
-          <p>Something went wrong loading the map.</p>
-          <p>You can still submit your report using the location description above.</p>
-        </div>
-      ) : (
-        <div
-          className="rescue-map"
-          ref={containerRef}
-          aria-label="Map - click to pin the animal's location"
-        />
-      )}
+      <div
+        className="rescue-map"
+        ref={containerRef}
+        aria-label="Map - click to pin the animal's location"
+      />
       {latitude != null && longitude != null && (
         <p className="rescue-map-coordinates">
-          Pinned location: {latitude.toFixed(5)}, {longitude.toFixed(5)}
+          Selected location: {latitude.toFixed(5)}, {longitude.toFixed(5)}
         </p>
       )}
     </div>

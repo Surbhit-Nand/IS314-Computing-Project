@@ -1,8 +1,9 @@
 import { UserButton, useAuth, useUser } from "@clerk/react";
-import { useRef, useState, type ChangeEvent, type DragEvent, type FormEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type DragEvent, type FormEvent } from "react";
 import spcaLogo from "../../assets/spca-logo.png";
 import { DonateButton } from "../donations/DonateButton";
 import { submitRescueReport, uploadRescuePhoto } from "../../services/rescueApi";
+import { reverseGeocodePlace, searchPlaces, type PlaceLookup } from "../../services/geocoding";
 import { RescueLocationMap } from "./RescueLocationMap";
 import type { RescueReportFormInput, RescueUrgency } from "../../types/rescue";
 
@@ -64,8 +65,146 @@ export function RescueReportForm({ variant, source, onNavigate, onShowMyReports 
   const [createdReference, setCreatedReference] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  // Place-name search state: a debounced forward search feeds the suggestions
+  // dropdown, and the "Find on map" button pins the first matched result.
+  const [placeQuery, setPlaceQuery] = useState("");
+  const [placeSuggestions, setPlaceSuggestions] = useState<PlaceLookup[]>([]);
+  const [isSearchingPlaces, setIsSearchingPlaces] = useState(false);
+  const [placeSearchError, setPlaceSearchError] = useState("");
+  // Set when a suggestion/geocode result is applied so the programmatic
+  // location update doesn't trigger another forward search of the new text.
+  const skipNextPlaceSearchRef = useRef(false);
+  // Reverse geocoding fills the Location box only when it's still empty, so we
+  // read the live text via a ref (the async response may arrive later).
+  const latestLocationRef = useRef("");
+  // Nominatim allows roughly one reverse request per second; queue a trailing
+  // call so dragging the marker won't hammer the API.
+  const lastReverseRequestAtRef = useRef(0);
+  const trailingReverseTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (trailingReverseTimerRef.current != null) {
+        window.clearTimeout(trailingReverseTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    latestLocationRef.current = form.location;
+  }, [form.location]);
+
   function setField<K extends keyof RescueReportFormInput>(key: K, fieldValue: RescueReportFormInput[K]) {
     setForm((previous) => ({ ...previous, [key]: fieldValue }));
+  }
+
+  // Debounced forward geocode of the typed location, feeding the dropdown.
+  // All state writes happen inside the timer callback so a single stale value
+  // mid-flight can never cascade a render storm after every keystroke.
+  useEffect(() => {
+    const query = placeQuery.trim();
+    if (skipNextPlaceSearchRef.current) {
+      skipNextPlaceSearchRef.current = false;
+      return;
+    }
+    if (query.length < 3) return;
+    const timer = window.setTimeout(async () => {
+      setIsSearchingPlaces(true);
+      try {
+        const results = await searchPlaces(query);
+        setPlaceSuggestions(results);
+        setPlaceSearchError(
+          results.length === 0
+            ? `No places found for "${query}". Try a town, village, or street landmark.`
+            : "",
+        );
+      } catch {
+        setPlaceSuggestions([]);
+        setPlaceSearchError(
+          "Place search is unavailable right now - type the location above and use the 'Find on map' button instead.",
+        );
+      } finally {
+        setIsSearchingPlaces(false);
+      }
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [placeQuery]);
+
+  // Reverse-geocodes a pin / "Use My Location" result and fills the Location
+  // box - but only when the reporter hasn't typed something there themselves.
+  function queueReverseGeocode(pinLatitude: number, pinLongitude: number) {
+    if (latestLocationRef.current.trim() !== "") return;
+    const runReverse = async () => {
+      try {
+        // Re-check before writing so a pin moved while we were looking up an
+        // earlier pin can't clobber a freshly typed description.
+        if (latestLocationRef.current.trim() !== "") return;
+        const place = await reverseGeocodePlace(pinLatitude, pinLongitude);
+        if (place && latestLocationRef.current.trim() === "") {
+          setField("location", place.displayName);
+        }
+      } catch {
+        // Geocoder unavailable - the field simply stays manual.
+      }
+    };
+    const now = Date.now();
+    const elapsed = now - lastReverseRequestAtRef.current;
+    if (elapsed >= 1_000) {
+      lastReverseRequestAtRef.current = now;
+      void runReverse();
+    } else {
+      if (trailingReverseTimerRef.current != null) {
+        window.clearTimeout(trailingReverseTimerRef.current);
+      }
+      trailingReverseTimerRef.current = window.setTimeout(() => {
+        lastReverseRequestAtRef.current = Date.now();
+        void runReverse();
+      }, 1_000 - elapsed);
+    }
+  }
+
+  // Pins the first match for the typed location and normalises the field text
+  // to the place name the geocoder resolved.
+  async function handleFindOnMap() {
+    const query = form.location.trim();
+    if (query.length < 3) {
+      setPlaceSearchError("Type a location name first (at least 3 characters).");
+      return;
+    }
+    setPlaceSearchError("");
+    setIsSearchingPlaces(true);
+    try {
+      const results = await searchPlaces(query);
+      const hit = results[0];
+      if (!hit) {
+        setPlaceSearchError(
+          `Couldn't find "${query}" on the map. Try a town, village, or street landmark.`,
+        );
+        return;
+      }
+      setField("location", hit.displayName);
+      setField("latitude", hit.latitude);
+      setField("longitude", hit.longitude);
+      setPlaceQuery(hit.displayName);
+      setPlaceSuggestions([]);
+      skipNextPlaceSearchRef.current = true;
+    } catch {
+      setPlaceSearchError(
+        "Place search is unavailable right now - please try again in a moment.",
+      );
+    } finally {
+      setIsSearchingPlaces(false);
+    }
+  }
+
+  function handleSuggestionPick(place: PlaceLookup) {
+    setField("location", place.displayName);
+    setField("latitude", place.latitude);
+    setField("longitude", place.longitude);
+    setPlaceQuery(place.displayName);
+    setPlaceSuggestions([]);
+    setPlaceSearchError("");
+    skipNextPlaceSearchRef.current = true;
   }
 
   // Uploads the chosen file to Cloudinary (via the backend) and appends its
@@ -191,23 +330,59 @@ export function RescueReportForm({ variant, source, onNavigate, onShowMyReports 
       </label>
 
       <div className="animal-form-full rescue-location-section">
-        <label>
-          <span className="form-label-text">Location of the animal</span>
-          <input
-            type="text"
-            placeholder="Town / village / street landmark"
-            value={form.location}
-            onChange={(event) => setField("location", event.target.value)}
-            required
-          />
-        </label>
-        <span className="animal-photo-label">Pin the exact location on the map (optional)</span>
+        <div className="rescue-location-field">
+          <label>
+            <span className="form-label-text">Location of the animal</span>
+            <div className="rescue-location-input-row">
+              <input
+                type="text"
+                placeholder="Town / village / street landmark"
+                value={form.location}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setField("location", value);
+                  setPlaceQuery(value);
+                  if (value.trim().length < 3) {
+                    setPlaceSuggestions([]);
+                    setPlaceSearchError("");
+                  }
+                }}
+                required
+              />
+              <button
+                type="button"
+                className="teal-button small-button"
+                onClick={handleFindOnMap}
+                disabled={isSearchingPlaces}
+              >
+                {isSearchingPlaces ? "Searching..." : "Find on map"}
+              </button>
+            </div>
+          </label>
+          {isSearchingPlaces && (
+            <p className="rescue-location-status">Searching for places...</p>
+          )}
+          {placeSearchError && <p className="invite-feedback error">{placeSearchError}</p>}
+          {placeSuggestions.length > 0 && (
+            <ul className="rescue-location-suggestions" role="listbox">
+              {placeSuggestions.map((place) => (
+                <li key={`${place.latitude},${place.longitude}`}>
+                  <button type="button" onClick={() => handleSuggestionPick(place)}>
+                    {place.displayName}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <span className="animal-photo-label">Mark the exact location on the map (optional)</span>
         <RescueLocationMap
           latitude={form.latitude}
           longitude={form.longitude}
           onLocationChange={(selectedLatitude, selectedLongitude) => {
             setField("latitude", selectedLatitude);
             setField("longitude", selectedLongitude);
+            queueReverseGeocode(selectedLatitude, selectedLongitude);
           }}
         />
       </div>
@@ -300,7 +475,7 @@ export function RescueReportForm({ variant, source, onNavigate, onShowMyReports 
           onDrop={handlePhotoDrop}
         >
           <span className="photo-upload-icon" aria-hidden="true">+</span>
-          <p className="photo-upload-title">Upload a photo of the animal</p>
+          <p className="photo-upload-title">Upload a photo of the animal and location</p>
           <p className="photo-upload-hint">Drag &amp; drop here, or click to choose a file</p>
         </div>
         <input

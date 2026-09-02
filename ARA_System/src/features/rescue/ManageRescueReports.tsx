@@ -4,7 +4,7 @@ import spcaLogo from "../../assets/spca-logo.png";
 import { fetchStaffAnimals } from "../../services/animalsApi";
 import { fetchAllRescueReports, updateRescueReport } from "../../services/rescueApi";
 import { rescueStatusClass, rescueUrgencyLabel } from "../../types/rescue";
-import type { RescueReport } from "../../types/rescue";
+import type { RescueReport, RescueUrgency } from "../../types/rescue";
 import type { Animal } from "../../types/animal";
 import { isDevBypassEnabled } from "../../utils/devBypass";
 
@@ -17,7 +17,22 @@ type ManageRescueReportsProps = {
 const REPORT_STATUSES = ["submitted", "assigned", "rescued", "closed"] as const;
 type ReportStatus = (typeof REPORT_STATUSES)[number];
 
-const STATUS_FILTERS = ["all", ...REPORT_STATUSES] as const;
+// The active queue only shows reports still being worked on - resolved
+// reports stay in the database (never deleted) but are excluded here and
+// from the status dropdown.
+const ACTIVE_STATUSES = REPORT_STATUSES.filter(
+  (status): status is Exclude<ReportStatus, "closed"> => status !== "closed",
+);
+
+const STATUS_FILTERS = ["all", ...ACTIVE_STATUSES] as const;
+
+// Urgency sort order for the queue: highest first.
+const URGENCY_RANK: Record<RescueUrgency, number> = {
+  critical: 0,
+  high: 1,
+  moderate: 2,
+  low: 3,
+};
 
 // Reporter-facing progress steps shown at the top of an expanded report. The
 // stored statuses sit on this timeline: "submitted" is received (so its
@@ -78,6 +93,9 @@ export function ManageRescueReports({ onNavigate }: ManageRescueReportsProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [savingMessage, setSavingMessage] = useState("");
   const [savingError, setSavingError] = useState("");
+  // Live "assign dispatcher" value for each open dispatch card - status options
+  // unlock as soon as a name is typed, before the report is saved.
+  const [pendingAssignment, setPendingAssignment] = useState<Record<string, string>>({});
 
   // Loads the rescue queue plus the animal list (for linking reports to an
   // intake profile) once the staff member's access is confirmed.
@@ -108,17 +126,27 @@ export function ManageRescueReports({ onNavigate }: ManageRescueReportsProps) {
     return value.trim() === "" ? undefined : value.trim();
   }
 
-  // Applies the text search and status filter client-side over the loaded queue.
+  // Applies the text search and status filter client-side over the loaded
+  // queue, hides resolved reports, and sorts by urgency (Critical first,
+  // oldest report first within the same urgency). Sorting runs over the
+  // filtered set, so it keeps working while searching or filtering.
   const visibleReports = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
-    return reports.filter((report) => {
-      if (statusFilter !== "all" && report.status !== statusFilter) return false;
-      if (!term) return true;
-      return [report.reference, report.location, report.reporterName, report.animalType ?? ""]
-        .join(" ")
-        .toLowerCase()
-        .includes(term);
-    });
+    return reports
+      .filter((report) => report.status !== "closed")
+      .filter((report) => {
+        if (statusFilter !== "all" && report.status !== statusFilter) return false;
+        if (!term) return true;
+        return [report.reference, report.location, report.reporterName, report.animalType ?? ""]
+          .join(" ")
+          .toLowerCase()
+          .includes(term);
+      })
+      .sort((a, b) => {
+        const urgencyDiff = URGENCY_RANK[a.urgency] - URGENCY_RANK[b.urgency];
+        if (urgencyDiff !== 0) return urgencyDiff;
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      });
   }, [reports, searchTerm, statusFilter]);
 
   async function handleDispatch(
@@ -131,6 +159,19 @@ export function ManageRescueReports({ onNavigate }: ManageRescueReportsProps) {
     const assignedTo = normalizeOptional(String(form.get("assignedTo") ?? ""));
     const officeNote = normalizeOptional(String(form.get("officeNote") ?? ""));
     const animalId = String(form.get("animalId") ?? "") || undefined;
+
+    // Moving past Under Review (to Assigned/In Progress/Resolved) requires a
+    // dispatcher. Mirrored server-side; this keeps the failure message clear.
+    const nextStatusIndex = REPORT_STATUSES.indexOf(nextStatus as ReportStatus);
+    const hasAssignedTo = Boolean(assignedTo) || Boolean(report.assignedTo);
+    if (
+      nextStatus !== report.status &&
+      nextStatusIndex > REPORT_STATUSES.indexOf("submitted") &&
+      !hasAssignedTo
+    ) {
+      setSavingError("Assign a dispatcher before moving the report past Under Review.");
+      return;
+    }
 
     setSavingMessage("");
     setSavingError("");
@@ -222,7 +263,7 @@ export function ManageRescueReports({ onNavigate }: ManageRescueReportsProps) {
       <section className="dashboard-panel">
         <div className="panel-heading">
           <div>
-            <p className="eyebrow">Rescue queue</p>
+            <p className="eyebrow">Rescue reports</p>
             <h2>{visibleReports.length} report{visibleReports.length === 1 ? "" : "s"}</h2>
           </div>
           <div className="rescue-queue-controls">
@@ -234,7 +275,9 @@ export function ManageRescueReports({ onNavigate }: ManageRescueReportsProps) {
             >
               {STATUS_FILTERS.map((status) => (
                 <option key={status} value={status}>
-                  {status === "all" ? "All statuses" : `Status: ${status}`}
+                  {status === "all"
+                    ? "All statuses"
+                    : `Status: ${STATUS_BADGE_LABEL[status as ReportStatus]}`}
                 </option>
               ))}
             </select>
@@ -262,6 +305,8 @@ export function ManageRescueReports({ onNavigate }: ManageRescueReportsProps) {
             {visibleReports.map((report) => {
               const isExpanded = expandedId === report.id;
               const currentStage = CURRENT_STAGE[report.status];
+              const hasDispatcher =
+                (pendingAssignment[report.id] ?? report.assignedTo ?? "").trim() !== "";
               return (
                 <div key={report.id} className={`rescue-card${isExpanded ? " expanded" : ""}`}>
                   <button
@@ -404,7 +449,13 @@ export function ManageRescueReports({ onNavigate }: ManageRescueReportsProps) {
                               type="text"
                               name="assignedTo"
                               placeholder="e.g. Jo Vatubua"
-                              defaultValue={report.assignedTo ?? ""}
+                              value={pendingAssignment[report.id] ?? report.assignedTo ?? ""}
+                              onChange={(event) =>
+                                setPendingAssignment((previous) => ({
+                                  ...previous,
+                                  [report.id]: event.target.value,
+                                }))
+                              }
                             />
                           </label>
 
@@ -426,12 +477,25 @@ export function ManageRescueReports({ onNavigate }: ManageRescueReportsProps) {
                               <option value={report.status}>
                                 {STATUS_BADGE_LABEL[report.status]}
                               </option>
-                              {nextStatusOptions(report.status).map((status) => (
-                                <option key={status} value={status}>
-                                  Move to: {STATUS_BADGE_LABEL[status]}
-                                </option>
-                              ))}
+                              {nextStatusOptions(report.status).map((status) => {
+                                const locked =
+                                  !hasDispatcher &&
+                                  REPORT_STATUSES.indexOf(status) >
+                                    REPORT_STATUSES.indexOf("submitted");
+                                return (
+                                  <option key={status} value={status} disabled={locked}>
+                                    {locked
+                                      ? "Assign a dispatcher first"
+                                      : `Move to: ${STATUS_BADGE_LABEL[status]}`}
+                                  </option>
+                                );
+                              })}
                             </select>
+                            {!hasDispatcher && nextStatusOptions(report.status).length > 0 && (
+                              <span className="dispatch-hint">
+                                Assign a dispatcher to unlock status changes.
+                              </span>
+                            )}
                           </label>
 
                           <label className="dispatch-field">

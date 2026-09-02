@@ -122,6 +122,21 @@ export async function dispatchRescueReport(
 		nextStatus = input.status;
 	}
 
+	// A report cannot be moved past "submitted" (to assigned/rescued/closed)
+	// until a dispatcher has been assigned. The UI disables those options; this
+	// enforces the same rule against a hand-crafted request. An assignment sent
+	// in the same update counts, so staff can assign + advance in one save.
+	const willHaveDispatcher =
+		input.assignedTo !== undefined ? Boolean(input.assignedTo) : Boolean(report.assignedTo);
+	if (
+		input.status &&
+		input.status !== report.status &&
+		RESCUE_REPORT_STATUSES.indexOf(input.status) > RESCUE_REPORT_STATUSES.indexOf("submitted") &&
+		!willHaveDispatcher
+	) {
+		throw new Error("Assign a dispatcher before moving the report past Under Review.");
+	}
+
 	// Only touch the fields the dispatcher actually changed, so a status-only
 	// update never wipes an existing assignment or handling note.
 	const changes: Partial<Parameters<typeof updateRescueReport>[1]> = {};
