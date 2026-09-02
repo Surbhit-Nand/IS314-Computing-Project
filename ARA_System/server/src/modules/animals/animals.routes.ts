@@ -34,6 +34,7 @@ const animalSchema = z.object({
 	rescueHistory: z.string().optional(),
 	photoUrls: z.array(z.string().url()).min(1),
 	vaccinationStatus: z.enum(["not_vaccinated", "vaccinated"]),
+	size: z.enum(["small", "medium", "large", "extra_large"]),
 });
 
 // Same shape, but every field is optional since an edit can touch just one

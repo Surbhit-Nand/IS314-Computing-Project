@@ -20,6 +20,9 @@ export function validateAnimalForm(input: AnimalFormInput): string | null {
   if (!input.colour.trim()) {
     return "Please enter the animal's colour.";
   }
+  if (!input.size) {
+    return "Please select the animal's size.";
+  }
   if (!input.description.trim()) {
     return "Please enter a description for the animal.";
   }

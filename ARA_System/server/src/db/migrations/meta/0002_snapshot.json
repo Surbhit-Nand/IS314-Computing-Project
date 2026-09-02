@@ -1,5 +1,5 @@
 {
-  "id": "04e30779-ca78-47b1-9fe8-953023b337ae",
+  "id": "f5af7bc5-8770-4fc8-8635-e019482beb8c",
   "prevId": "79c955f2-8396-42dc-81c0-94de71bc8a4e",
   "version": "7",
   "dialect": "postgresql",
@@ -181,6 +181,13 @@
           "notNull": true,
           "default": "'not_vaccinated'"
         },
+        "size": {
+          "name": "size",
+          "type": "animal_size",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
         "medically_cleared": {
           "name": "medically_cleared",
           "type": "boolean",
@@ -265,84 +272,6 @@
         "metadata": {
           "name": "metadata",
           "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.donations": {
-      "name": "donations",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "donor_clerk_user_id": {
-          "name": "donor_clerk_user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "donor_name": {
-          "name": "donor_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "donor_email": {
-          "name": "donor_email",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "amount_cents": {
-          "name": "amount_cents",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "currency": {
-          "name": "currency",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'USD'"
-        },
-        "status": {
-          "name": "status",
-          "type": "donation_status",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'completed'"
-        },
-        "message": {
-          "name": "message",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "stripe_checkout_session_id": {
-          "name": "stripe_checkout_session_id",
-          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
@@ -521,6 +450,16 @@
     }
   },
   "enums": {
+    "public.animal_size": {
+      "name": "animal_size",
+      "schema": "public",
+      "values": [
+        "small",
+        "medium",
+        "large",
+        "extra_large"
+      ]
+    },
     "public.animal_status": {
       "name": "animal_status",
       "schema": "public",
@@ -540,16 +479,6 @@
         "cat",
         "rabbit",
         "other"
-      ]
-    },
-    "public.donation_status": {
-      "name": "donation_status",
-      "schema": "public",
-      "values": [
-        "pending",
-        "completed",
-        "failed",
-        "refunded"
       ]
     },
     "public.vaccination_status": {

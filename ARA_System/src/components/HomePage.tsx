@@ -1,4 +1,8 @@
 import { useEffect, useState } from "react";
+import type { Animal } from "../types/animal";
+import { capitalize } from "../utils/format";
+import { useFavoriteAnimals } from "../utils/favorites";
+import { DonateModal } from "../features/donations/DonateModal";
 import { SiteFooter } from "./SiteFooter";
 import { SiteHeader } from "./SiteHeader";
 
@@ -17,19 +21,7 @@ type HomePageProps = {
       | "staff-dashboard"
       | "user-dashboard",
   ) => void;
-};
-
-type PublicAnimal = {
-  id: string;
-  publicId: string;
-  name: string;
-  type: "dog" | "cat" | "rabbit" | "other";
-  breed: string | null;
-  estimatedAge: string | null;
-  gender: string | null;
-  behaviour: string | null;
-  photoUrls: string[];
-  status: string;
+  onViewAnimal: (animal: Animal) => void;
 };
 
 const apiBaseUrl = import.meta.env.VITE_API_URL ?? "http://localhost:8787";
@@ -46,18 +38,20 @@ const HERO_SLIDES = [
   "https://images.squarespace-cdn.com/content/v1/66aa641d27420a233354078c/fec17ca8-40bb-4601-b965-b8210c03cafe/SPCA+Fiji_Tom+Vierus-820517.jpg",
 ];
 
-export function HomePage({ isLoaded, isSignedIn, currentPage, onNavigate }: HomePageProps) {
-  const [animals, setAnimals] = useState<PublicAnimal[]>([]);
+export function HomePage({ isLoaded, isSignedIn, currentPage, onNavigate, onViewAnimal }: HomePageProps) {
+  const [animals, setAnimals] = useState<Animal[]>([]);
   const [animalsLoading, setAnimalsLoading] = useState(true);
   const [animalsError, setAnimalsError] = useState("");
   const [heroSlide, setHeroSlide] = useState(0);
+  const [donateOpen, setDonateOpen] = useState(false);
+  const { isFavorite, toggle } = useFavoriteAnimals();
 
   useEffect(() => {
     void fetch(`${apiBaseUrl}/api/animals`)
       .then(async (response) => {
         if (!response.ok)
           throw new Error("Animal listings could not be loaded.");
-        return (await response.json()) as PublicAnimal[];
+        return (await response.json()) as Animal[];
       })
       .then(setAnimals)
       .catch((error: unknown) =>
@@ -128,7 +122,11 @@ export function HomePage({ isLoaded, isSignedIn, currentPage, onNavigate }: Home
               >
                 Meet the animals
               </button>
-              <button type="button" className="teal-button donate-button">
+              <button
+                type="button"
+                className="teal-button donate-button"
+                onClick={() => setDonateOpen(true)}
+              >
                 Donate & support
               </button>
             </div>
@@ -191,19 +189,21 @@ export function HomePage({ isLoaded, isSignedIn, currentPage, onNavigate }: Home
               </p>
             )}
             {animals.map((animal) => (
-              <article key={animal.id} className="animal-card">
-                <div className="animal-card-top">
-                  <span className="badge badge-primary">Available for adoption</span>
-                  <button
-                    type="button"
-                    className="save-button"
-                    aria-label={`Save ${animal.name}`}
-                  >
-                    ♡
-                  </button>
-                </div>
+              <article
+                key={animal.id}
+                className="pet-card"
+                role="link"
+                tabIndex={0}
+                onClick={() => onViewAnimal(animal)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    onViewAnimal(animal);
+                  }
+                }}
+              >
                 <div
-                  className="animal-image"
+                  className="pet-card-photo"
                   aria-label={`${animal.name} profile image`}
                   style={
                     animal.photoUrls[0]
@@ -211,30 +211,34 @@ export function HomePage({ isLoaded, isSignedIn, currentPage, onNavigate }: Home
                       : undefined
                   }
                 >
-                  <span className="animal-image-label">{animal.type}</span>
+                  {!animal.photoUrls[0] && (
+                    <span className="animal-image-label">{capitalize(animal.type)}</span>
+                  )}
+                  <button
+                    type="button"
+                    className={isFavorite(animal.id) ? "favorite-button active" : "favorite-button"}
+                    aria-label={
+                      isFavorite(animal.id)
+                        ? `Remove ${animal.name} from saved`
+                        : `Save ${animal.name}`
+                    }
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      toggle(animal.id);
+                    }}
+                  >
+                    {isFavorite(animal.id) ? "♥" : "♡"}
+                  </button>
                 </div>
-                <div className="animal-body">
-                  <div className="animal-topline">
-                    <div>
-                      <p className="animal-species">
-                        {animal.type} • {animal.breed ?? "Breed not recorded"}
-                      </p>
-                      <h3>{animal.name}</h3>
-                    </div>
-                  </div>
-                  <p className="animal-meta">
-                    {animal.estimatedAge ?? "Age not recorded"} •{" "}
-                    {animal.gender ?? "Gender not recorded"}
+                <div className="pet-card-body">
+                  <h3 className="pet-card-name">{animal.name}</h3>
+                  <p className="pet-card-breed">{animal.breed ?? "Breed not recorded"}</p>
+                  {animal.behaviour && <p className="pet-card-blurb">{animal.behaviour}</p>}
+                  <p className="pet-card-line">
+                    <span aria-hidden="true">🐾</span>
+                    {animal.gender ?? "Gender unknown"} • {animal.estimatedAge ?? "Age unknown"}
                   </p>
-                  <div className="animal-tags">
-                    {animal.behaviour && <span>{animal.behaviour}</span>}
-                  </div>
-                  <div className="animal-footer">
-                    <span className="status-badge">Available for adoption</span>
-                    <button type="button" className="text-button">
-                      View full profile
-                    </button>
-                  </div>
+                  <p className="pet-card-check">✓ Available for adoption</p>
                 </div>
               </article>
             ))}
@@ -283,12 +287,17 @@ export function HomePage({ isLoaded, isSignedIn, currentPage, onNavigate }: Home
             <button type="button" className="teal-button">
               Submit rescue report
             </button>
-            <button type="button" className="ghost-button light">
+            <button
+              type="button"
+              className="ghost-button light"
+              onClick={() => setDonateOpen(true)}
+            >
               Donate
             </button>
           </div>
         </section>
       </main>
+      <DonateModal open={donateOpen} onClose={() => setDonateOpen(false)} />
       <SiteFooter />
     </div>
   );

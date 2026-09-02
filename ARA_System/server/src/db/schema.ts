@@ -1,6 +1,7 @@
 import {
 	boolean,
 	date,
+	integer,
 	jsonb,
 	pgEnum,
 	pgTable,
@@ -27,6 +28,12 @@ export const vaccinationStatus = pgEnum("vaccination_status", [
 	"vaccinated",
 ]);
 
+// Weight-based size bucket, required going forward on new registrations but
+// left nullable at the DB level so animals registered before this field
+// existed keep working (their `size` is simply null) instead of breaking a
+// migration that would otherwise need a value for every existing row.
+export const animalSize = pgEnum("animal_size", ["small", "medium", "large", "extra_large"]);
+
 export const animals = pgTable("animals", {
 	id: uuid("id").defaultRandom().primaryKey(),
 	publicId: text("public_id").notNull().unique(),
@@ -42,6 +49,7 @@ export const animals = pgTable("animals", {
 	rescueHistory: text("rescue_history"),
 	photoUrls: jsonb("photo_urls").$type<string[]>().notNull().default([]),
 	vaccinationStatus: vaccinationStatus("vaccination_status").notNull().default("not_vaccinated"),
+	size: animalSize("size"),
 	medicallyCleared: boolean("medically_cleared").notNull().default(false),
 	status: animalStatus("status").notNull().default("intake"),
 	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -89,5 +97,30 @@ export const auditLogs = pgTable("audit_logs", {
 	entityType: text("entity_type").notNull(),
 	entityId: text("entity_id").notNull(),
 	metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Donations are cross-cutting: any visitor can give anonymously, so the
+// donor identity is optional (filled in from the Clerk session when present).
+// `currency`/`status` have DB defaults so an insert never needs them, and
+// `stripeCheckoutSessionId` is reserved for the Stripe hosted-checkout
+// integration planned in AGENTS.md (see the Payments section).
+export const donationStatus = pgEnum("donation_status", [
+	"pending",
+	"completed",
+	"failed",
+	"refunded",
+]);
+
+export const donations = pgTable("donations", {
+	id: uuid("id").defaultRandom().primaryKey(),
+	donorClerkUserId: text("donor_clerk_user_id"),
+	donorName: text("donor_name"),
+	donorEmail: text("donor_email"),
+	amountCents: integer("amount_cents").notNull(),
+	currency: text("currency").notNull().default("USD"),
+	status: donationStatus("status").notNull().default("completed"),
+	message: text("message"),
+	stripeCheckoutSessionId: text("stripe_checkout_session_id"),
 	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

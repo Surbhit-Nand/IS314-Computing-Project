@@ -1,12 +1,12 @@
-import { SignInButton, UserButton, useAuth, useUser } from "@clerk/react";
+import { SignInButton, useAuth, useUser } from "@clerk/react";
 import { useEffect, useMemo, useState } from "react";
-import spcaLogo from "../../assets/spca-logo.png";
+import { SiteHeader, type SiteHeaderView } from "../../components/SiteHeader";
 import { fetchStaffAnimals } from "../../services/animalsApi";
 import { adoptionStatusLabel, vaccinationStatusLabel, type Animal } from "../../types/animal";
 import { isDevBypassEnabled } from "../../utils/devBypass";
 
 type ManageAnimalProfilesProps = {
-  onNavigate: (view: "home" | "staff-dashboard" | "register-animal") => void;
+  onNavigate: (view: SiteHeaderView | "staff-dashboard" | "register-animal") => void;
   onSelectAnimal: (animalId: string) => void;
 };
 
@@ -88,28 +88,12 @@ export function ManageAnimalProfiles({ onNavigate, onSelectAnimal }: ManageAnima
 
   return (
     <main className="dashboard-page">
-      <header className="dashboard-header">
-        <div className="dashboard-brand">
-          <button type="button" className="brand-button" onClick={() => onNavigate("home")}>
-            <img src={spcaLogo} alt="SPCA Fiji logo" className="brand-logo" />
-          </button>
-          <div>
-            <p className="eyebrow">ARA operations</p>
-            <h1>Manage animal profiles</h1>
-          </div>
-        </div>
-        <div className="dashboard-header-actions">
-          <button type="button" className="teal-button" onClick={() => onNavigate("register-animal")}>
-            Register animal
-          </button>
-          <button type="button" className="ghost-button" onClick={() => onNavigate("staff-dashboard")}>
-            Back to dashboard
-          </button>
-          <div className="user-avatar-circle">
-            <UserButton />
-          </div>
-        </div>
-      </header>
+      <SiteHeader
+        isLoaded={isLoaded}
+        isSignedIn={isSignedIn}
+        currentPage="manage-animals"
+        onNavigate={onNavigate}
+      />
 
       <section className="dashboard-panel">
         <div className="panel-heading">

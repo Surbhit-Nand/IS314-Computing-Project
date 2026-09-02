@@ -1,6 +1,6 @@
-import { SignInButton, UserButton, useAuth, useUser } from "@clerk/react";
+import { SignInButton, useAuth, useUser } from "@clerk/react";
 import { useState, type FormEvent } from "react";
-import spcaLogo from "../../assets/spca-logo.png";
+import { SiteHeader, type SiteHeaderView } from "../../components/SiteHeader";
 import { createAnimal } from "../../services/animalsApi";
 import type { AnimalFormInput } from "../../types/animal";
 import { isDevBypassEnabled } from "../../utils/devBypass";
@@ -8,7 +8,7 @@ import { AnimalProfileFields } from "./AnimalProfileFields";
 import { validateAnimalForm } from "./validateAnimalForm";
 
 type AnimalRegistrationFormProps = {
-  onNavigate: (view: "home" | "staff-dashboard") => void;
+  onNavigate: (view: SiteHeaderView | "staff-dashboard") => void;
 };
 
 const emptyForm: AnimalFormInput = {
@@ -24,6 +24,7 @@ const emptyForm: AnimalFormInput = {
   rescueHistory: "",
   photoUrls: [],
   vaccinationStatus: "not_vaccinated",
+  size: "",
 };
 
 // Staff-only page: registers a brand-new animal profile. The unique Animal
@@ -105,25 +106,12 @@ export function AnimalRegistrationForm({ onNavigate }: AnimalRegistrationFormPro
 
   return (
     <main className="dashboard-page">
-      <header className="dashboard-header">
-        <div className="dashboard-brand">
-          <button type="button" className="brand-button" onClick={() => onNavigate("home")}>
-            <img src={spcaLogo} alt="SPCA Fiji logo" className="brand-logo" />
-          </button>
-          <div>
-            <p className="eyebrow">ARA operations</p>
-            <h1>Register a new animal</h1>
-          </div>
-        </div>
-        <div className="dashboard-header-actions">
-          <button type="button" className="ghost-button" onClick={() => onNavigate("staff-dashboard")}>
-            Back to dashboard
-          </button>
-          <div className="user-avatar-circle">
-            <UserButton />
-          </div>
-        </div>
-      </header>
+      <SiteHeader
+        isLoaded={isLoaded}
+        isSignedIn={isSignedIn}
+        currentPage="register-animal"
+        onNavigate={onNavigate}
+      />
 
       <section className="dashboard-panel">
         {createdPublicId && (
