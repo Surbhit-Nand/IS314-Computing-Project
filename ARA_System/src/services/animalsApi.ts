@@ -91,3 +91,18 @@ export async function updateAnimal(
   }
   return result as Animal;
 }
+
+// Soft-deletes an animal profile (passed away, transferred elsewhere, etc).
+// The record stays in the database - see the `deletedAt` comment in
+// server/src/db/schema.ts - it's just removed from every listing.
+export async function deleteAnimal(token: string, id: string): Promise<Animal> {
+  const response = await fetch(`${apiBaseUrl}/api/animals/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
+  });
+  const result = await readApiResponse<Animal | { error?: string }>(response);
+  if (!response.ok) {
+    throw new Error((result as { error?: string }).error ?? "The animal profile could not be deleted.");
+  }
+  return result as Animal;
+}
