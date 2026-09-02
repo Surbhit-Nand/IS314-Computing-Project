@@ -36,11 +36,11 @@ function initials(name: string) {
 
 // Placeholder team members - replace with real SPCA Fiji team details.
 const TEAM = [
-  { name: "A. Sharma", role: "Shelter Manager" },
-  { name: "Dr. B. Kumar", role: "Veterinarian" },
-  { name: "C. Nand", role: "Finance Officer" },
-  { name: "D. Prasad", role: "Shelter Attendant" },
-  { name: "E. Singh", role: "Junior Intern" },
+  { name: "Surbhit S. Nand", role: "Admin", photo: "/images/surbhit.jpg", phone: "+679 7598409" },
+  { name: "Kara A. Vergara", role: "Staff", photo: "/images/kara.jpg", phone: "+679 7695159" },
+  { name: "Jasprit J. Singh", role: "Veterinarian", photo: "/images/jasprit.jpg", phone: "+679 9360148" },
+  { name: "Dante Tafilagi", role: "Registered User", photo: "/images/dante.jpg", phone: "+679 9449458" },
+  { name: "Alvin Kumar", role: "Unregistered User", photo: "/images/alvin.jpg", phone: "+679 9496759" },
 ];
 
 const COMMITTEE = [
@@ -146,9 +146,18 @@ export function AboutUs({ isLoaded, isSignedIn, currentPage, onNavigate }: About
           <div className="about-team-grid">
             {TEAM.map((member) => (
               <div className="about-team-card" key={member.name}>
-                <div className="about-avatar">{initials(member.name)}</div>
+                {member.photo ? (
+                  <img
+                    className="about-team-photo"
+                    src={member.photo}
+                    alt={`${member.name} photo`}
+                  />
+                ) : (
+                  <div className="about-avatar">{initials(member.name)}</div>
+                )}
                 <h3>{member.name}</h3>
                 <p>{member.role}</p>
+                <p className="about-team-phone">{member.phone}</p>
               </div>
             ))}
           </div>
