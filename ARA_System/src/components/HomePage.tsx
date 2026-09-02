@@ -1,8 +1,4 @@
 import { useEffect, useState } from "react";
-import featureHero from "../assets/spca-hero.webp";
-import type { Animal } from "../types/animal";
-import { useFavoriteAnimals } from "../utils/favorites";
-import { capitalize } from "../utils/format";
 import { SiteFooter } from "./SiteFooter";
 import { SiteHeader } from "./SiteHeader";
 
@@ -21,23 +17,47 @@ type HomePageProps = {
       | "staff-dashboard"
       | "user-dashboard",
   ) => void;
-  onViewAnimal: (animal: Animal) => void;
+};
+
+type PublicAnimal = {
+  id: string;
+  publicId: string;
+  name: string;
+  type: "dog" | "cat" | "rabbit" | "other";
+  breed: string | null;
+  estimatedAge: string | null;
+  gender: string | null;
+  behaviour: string | null;
+  photoUrls: string[];
+  status: string;
 };
 
 const apiBaseUrl = import.meta.env.VITE_API_URL ?? "http://localhost:8787";
 
-export function HomePage({ isLoaded, isSignedIn, currentPage, onNavigate, onViewAnimal }: HomePageProps) {
-  const [animals, setAnimals] = useState<Animal[]>([]);
+// Homepage hero slideshow images (rotating full-bleed backgrounds).
+const HERO_SLIDES = [
+  "https://images.squarespace-cdn.com/content/v1/66aa641d27420a233354078c/ebc79d4b-d939-4cfc-957f-617327910148/TOM_3732.jpg",
+  "https://images.squarespace-cdn.com/content/v1/66aa641d27420a233354078c/53b69e63-47f1-43c8-b985-c4ebc296edc2/SPCA+Fiji+Islands-03532.jpg",
+  "https://images.squarespace-cdn.com/content/v1/66aa641d27420a233354078c/0b4e7858-1444-46cc-8a33-75ffe2bddece/SPCA+Fiji+Islands-5836.jpg",
+  "https://images.squarespace-cdn.com/content/v1/66aa641d27420a233354078c/260cc2c2-578c-4da8-be5f-0f395225d786/SPCA+Fiji_Tom+Vierus-80929.jpg",
+  "https://images.squarespace-cdn.com/content/v1/66aa641d27420a233354078c/ddacfc9d-701c-4827-b913-394995b72b7a/SPCA+Fiji+Islands-826131.jpg",
+  "https://images.squarespace-cdn.com/content/v1/66aa641d27420a233354078c/545a02d7-50b1-45d4-82c7-124d132a4338/Puppy+in+Suva-03646.jpg",
+  "https://images.squarespace-cdn.com/content/v1/66aa641d27420a233354078c/b55b2c5c-c8fa-4177-971f-373c0eced0d1/SPCA+Fiji+Islands-03654.jpg",
+  "https://images.squarespace-cdn.com/content/v1/66aa641d27420a233354078c/fec17ca8-40bb-4601-b965-b8210c03cafe/SPCA+Fiji_Tom+Vierus-820517.jpg",
+];
+
+export function HomePage({ isLoaded, isSignedIn, currentPage, onNavigate }: HomePageProps) {
+  const [animals, setAnimals] = useState<PublicAnimal[]>([]);
   const [animalsLoading, setAnimalsLoading] = useState(true);
   const [animalsError, setAnimalsError] = useState("");
-  const { isFavorite, toggle } = useFavoriteAnimals();
+  const [heroSlide, setHeroSlide] = useState(0);
 
   useEffect(() => {
     void fetch(`${apiBaseUrl}/api/animals`)
       .then(async (response) => {
         if (!response.ok)
           throw new Error("Animal listings could not be loaded.");
-        return (await response.json()) as Animal[];
+        return (await response.json()) as PublicAnimal[];
       })
       .then(setAnimals)
       .catch((error: unknown) =>
@@ -48,6 +68,14 @@ export function HomePage({ isLoaded, isSignedIn, currentPage, onNavigate, onView
         ),
       )
       .finally(() => setAnimalsLoading(false));
+  }, []);
+
+  useEffect(() => {
+    const timer = setInterval(
+      () => setHeroSlide((current) => (current + 1) % HERO_SLIDES.length),
+      5000,
+    );
+    return () => clearInterval(timer);
   }, []);
 
   const availableDogs = animals.filter(
@@ -68,8 +96,21 @@ export function HomePage({ isLoaded, isSignedIn, currentPage, onNavigate, onView
       />
 
       <main className="page-shell">
-        <section className="hero-section">
-          <div className="hero-copy">
+        <section
+          className="hero-section slideshow-hero"
+          aria-label="Featured rescue animals"
+        >
+          <div className="slideshow-window" aria-hidden="true">
+            {HERO_SLIDES.map((src, index) => (
+              <div
+                key={src}
+                className={`slideshow-slide${index === heroSlide ? " active" : ""}`}
+                style={{ backgroundImage: `url(${src})` }}
+              />
+            ))}
+          </div>
+          <div className="slideshow-overlay" aria-hidden="true" />
+          <div className="slideshow-copy">
             <p className="eyebrow">Fiji Islands • Est. 1964</p>
             <h1>
               Every animal deserves a <span>home</span>.
@@ -87,48 +128,11 @@ export function HomePage({ isLoaded, isSignedIn, currentPage, onNavigate, onView
               >
                 Meet the animals
               </button>
-              <button type="button" className="ghost-button">
+              <button type="button" className="teal-button donate-button">
                 Donate & support
               </button>
             </div>
-            <div className="search-card">
-              <label htmlFor="homepage-search">
-                Search by personality or type
-              </label>
-              <div className="search-row">
-                <input
-                  id="homepage-search"
-                  type="text"
-                  placeholder="Small, calm dog good with children"
-                />
-                <button type="button" className="teal-button small-button">
-                  Search
-                </button>
-              </div>
-            </div>
           </div>
-          <aside className="hero-panel" aria-label="Featured animal">
-            <div className="pet-visual" aria-hidden="true">
-              <img
-                src={featureHero}
-                alt="Featured animal"
-                className="hero-visual-image"
-              />
-              <span className="pet-badge">Ready to adopt</span>
-            </div>
-            <div className="panel-copy">
-              <p className="eyebrow light">Featured companion</p>
-              <h2>Milo</h2>
-              <p>
-                Gentle cattle dog • 2 years • House-trained • Great with
-                families
-              </p>
-              <div className="meta-pills">
-                <span>Available</span>
-                <span>Medium</span>
-              </div>
-            </div>
-          </aside>
         </section>
 
         <section className="stats-strip" aria-label="Available animal counts">
@@ -145,14 +149,14 @@ export function HomePage({ isLoaded, isSignedIn, currentPage, onNavigate, onView
           ))}
         </section>
         <section className="animals-section" id="adopt">
+          <p className="eyebrow adopt-eyebrow">Adopt a friend</p>
           <div className="section-head">
-            <div>
-              <p className="eyebrow">Adopt a friend</p>
+            <div className="section-head-copy">
               <h2>Animals looking for homes</h2>
             </div>
             <button
               type="button"
-              className="ghost-button"
+              className="teal-button"
               onClick={() => onNavigate("animal-listings")}
             >
               Browse all animals
@@ -187,21 +191,19 @@ export function HomePage({ isLoaded, isSignedIn, currentPage, onNavigate, onView
               </p>
             )}
             {animals.map((animal) => (
-              <article
-                key={animal.id}
-                className="pet-card"
-                role="link"
-                tabIndex={0}
-                onClick={() => onViewAnimal(animal)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    onViewAnimal(animal);
-                  }
-                }}
-              >
+              <article key={animal.id} className="animal-card">
+                <div className="animal-card-top">
+                  <span className="badge badge-primary">Available for adoption</span>
+                  <button
+                    type="button"
+                    className="save-button"
+                    aria-label={`Save ${animal.name}`}
+                  >
+                    ♡
+                  </button>
+                </div>
                 <div
-                  className="pet-card-photo"
+                  className="animal-image"
                   aria-label={`${animal.name} profile image`}
                   style={
                     animal.photoUrls[0]
@@ -209,34 +211,30 @@ export function HomePage({ isLoaded, isSignedIn, currentPage, onNavigate, onView
                       : undefined
                   }
                 >
-                  {!animal.photoUrls[0] && (
-                    <span className="animal-image-label">{capitalize(animal.type)}</span>
-                  )}
-                  <button
-                    type="button"
-                    className={isFavorite(animal.id) ? "favorite-button active" : "favorite-button"}
-                    aria-label={
-                      isFavorite(animal.id)
-                        ? `Remove ${animal.name} from saved`
-                        : `Save ${animal.name}`
-                    }
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      toggle(animal.id);
-                    }}
-                  >
-                    {isFavorite(animal.id) ? "♥" : "♡"}
-                  </button>
+                  <span className="animal-image-label">{animal.type}</span>
                 </div>
-                <div className="pet-card-body">
-                  <h3 className="pet-card-name">{animal.name}</h3>
-                  <p className="pet-card-breed">{animal.breed ?? "Breed not recorded"}</p>
-                  {animal.behaviour && <p className="pet-card-blurb">{animal.behaviour}</p>}
-                  <p className="pet-card-line">
-                    <span aria-hidden="true">🐾</span>
-                    {animal.gender ?? "Gender unknown"} • {animal.estimatedAge ?? "Age unknown"}
+                <div className="animal-body">
+                  <div className="animal-topline">
+                    <div>
+                      <p className="animal-species">
+                        {animal.type} • {animal.breed ?? "Breed not recorded"}
+                      </p>
+                      <h3>{animal.name}</h3>
+                    </div>
+                  </div>
+                  <p className="animal-meta">
+                    {animal.estimatedAge ?? "Age not recorded"} •{" "}
+                    {animal.gender ?? "Gender not recorded"}
                   </p>
-                  <p className="pet-card-check">✓ Available for adoption</p>
+                  <div className="animal-tags">
+                    {animal.behaviour && <span>{animal.behaviour}</span>}
+                  </div>
+                  <div className="animal-footer">
+                    <span className="status-badge">Available for adoption</span>
+                    <button type="button" className="text-button">
+                      View full profile
+                    </button>
+                  </div>
                 </div>
               </article>
             ))}
