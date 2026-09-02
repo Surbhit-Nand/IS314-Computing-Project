@@ -1,6 +1,6 @@
-import { SignInButton, UserButton, useAuth, useUser } from "@clerk/react";
+import { SignInButton, useAuth, useUser } from "@clerk/react";
 import { useEffect, useState, type FormEvent } from "react";
-import spcaLogo from "../../assets/spca-logo.png";
+import { SiteHeader, type SiteHeaderView } from "../../components/SiteHeader";
 import { fetchAnimalById, updateAnimal } from "../../services/animalsApi";
 import type { Animal, AnimalFormInput } from "../../types/animal";
 import { isDevBypassEnabled } from "../../utils/devBypass";
@@ -9,7 +9,7 @@ import { validateAnimalForm } from "./validateAnimalForm";
 
 type EditAnimalProfileProps = {
   animalId: string;
-  onNavigate: (view: "home" | "manage-animals") => void;
+  onNavigate: (view: SiteHeaderView | "manage-animals") => void;
 };
 
 // Converts the API's Animal record (with nullable fields) into the plain
@@ -43,7 +43,6 @@ export function EditAnimalProfile({ animalId, onNavigate }: EditAnimalProfilePro
   const hasStaffAccess =
     isDevBypassEnabled || role === "staff" || role === "veterinarian" || role === "manager" || role === "admin";
 
-  const [publicId, setPublicId] = useState("");
   const [form, setForm] = useState<AnimalFormInput | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -60,7 +59,6 @@ export function EditAnimalProfile({ animalId, onNavigate }: EditAnimalProfilePro
         const token = await getToken();
         if (!token) throw new Error("Your Clerk session has expired.");
         const animal = await fetchAnimalById(token, animalId);
-        setPublicId(animal.publicId);
         setForm(toFormInput(animal));
       } catch (error) {
         setLoadError(error instanceof Error ? error.message : "Animal profile could not be loaded.");
@@ -134,25 +132,12 @@ export function EditAnimalProfile({ animalId, onNavigate }: EditAnimalProfilePro
 
   return (
     <main className="dashboard-page">
-      <header className="dashboard-header">
-        <div className="dashboard-brand">
-          <button type="button" className="brand-button" onClick={() => onNavigate("home")}>
-            <img src={spcaLogo} alt="SPCA Fiji logo" className="brand-logo" />
-          </button>
-          <div>
-            <p className="eyebrow">ARA operations</p>
-            <h1>Edit animal profile{publicId ? ` - ${publicId}` : ""}</h1>
-          </div>
-        </div>
-        <div className="dashboard-header-actions">
-          <button type="button" className="ghost-button" onClick={() => onNavigate("manage-animals")}>
-            Back to manage profiles
-          </button>
-          <div className="user-avatar-circle">
-            <UserButton />
-          </div>
-        </div>
-      </header>
+      <SiteHeader
+        isLoaded={isLoaded}
+        isSignedIn={isSignedIn}
+        currentPage="edit-animal"
+        onNavigate={onNavigate}
+      />
 
       <section className="dashboard-panel">
         {isLoading && <p className="dashboard-data-state">Loading animal profile...</p>}

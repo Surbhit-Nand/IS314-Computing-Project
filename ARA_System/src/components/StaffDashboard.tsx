@@ -1,9 +1,9 @@
-import { SignInButton, UserButton, useAuth, useUser } from "@clerk/react";
-import spcaLogo from "../assets/spca-logo.png";
+import { SignInButton, useAuth, useUser } from "@clerk/react";
 import { isDevBypassEnabled } from "../utils/devBypass";
+import { SiteHeader, type SiteHeaderView } from "./SiteHeader";
 
 type StaffDashboardProps = {
-  onNavigate: (view: "home" | "register-animal" | "manage-animals") => void;
+  onNavigate: (view: SiteHeaderView | "register-animal" | "manage-animals") => void;
 };
 
 type StaffRole = "staff" | "veterinarian";
@@ -67,30 +67,16 @@ export function StaffDashboard({ onNavigate }: StaffDashboardProps) {
 
   return (
     <main className="dashboard-page">
-      <header className="dashboard-header">
-        <div className="dashboard-brand">
-          <button
-            type="button"
-            className="brand-button"
-            onClick={() => onNavigate("home")}
-          >
-            <img src={spcaLogo} alt="SPCA Fiji logo" className="brand-logo" />
-          </button>
-          <div>
-            <p className="eyebrow">ARA operations</p>
-            <h1>Staff dashboard</h1>
-          </div>
-        </div>
-        <div className="dashboard-header-actions">
-          <span className="role-pill teal-pill">{currentRole}</span>
-          <div className="user-avatar-circle">
-            <UserButton />
-          </div>
-        </div>
-      </header>
+      <SiteHeader
+        isLoaded={isLoaded}
+        isSignedIn={isSignedIn}
+        currentPage="staff-dashboard"
+        onNavigate={onNavigate}
+      />
 
       <section className="dashboard-welcome">
         <div>
+          <span className="role-pill teal-pill">{currentRole}</span>
           <p className="eyebrow">Today&apos;s priorities</p>
           <h2>Keep every animal moving toward care.</h2>
           <p>

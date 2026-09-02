@@ -85,7 +85,10 @@ function App() {
     return (
       <AnimalProfilePage
         animal={viewedAnimal}
-        onBack={() => setView("animal-listings")}
+        isLoaded={isLoaded}
+        isSignedIn={isSignedIn}
+        currentPage="animal-listings"
+        onNavigate={setView}
       />
     );
   }

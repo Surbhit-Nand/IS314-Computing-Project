@@ -1,8 +1,8 @@
-import { SignInButton, UserButton, useAuth, useUser } from "@clerk/react";
+import { SignInButton, useAuth, useUser } from "@clerk/react";
 import { useEffect, useState, type FormEvent } from "react";
-import spcaLogo from "../assets/spca-logo.png";
+import { SiteHeader, type SiteHeaderView } from "./SiteHeader";
 
-type ManagerDashboardProps = { onNavigate: (view: "home") => void };
+type ManagerDashboardProps = { onNavigate: (view: SiteHeaderView) => void };
 
 type StaffMember = {
   id: string;
@@ -166,29 +166,15 @@ export function ManagerDashboard({ onNavigate }: ManagerDashboardProps) {
 
   return (
     <main className="dashboard-page">
-      <header className="dashboard-header">
-        <div className="dashboard-brand">
-          <button
-            type="button"
-            className="brand-button"
-            onClick={() => onNavigate("home")}
-          >
-            <img src={spcaLogo} alt="SPCA Fiji logo" className="brand-logo" />
-          </button>
-          <div>
-            <p className="eyebrow">Operations centre</p>
-            <h1>Manager dashboard</h1>
-          </div>
-        </div>
-        <div className="dashboard-header-actions">
-          <span className="role-pill teal-pill">Manager / Admin</span>
-          <div className="user-avatar-circle">
-            <UserButton />
-          </div>
-        </div>
-      </header>
+      <SiteHeader
+        isLoaded={isLoaded}
+        isSignedIn={isSignedIn}
+        currentPage="dashboard"
+        onNavigate={onNavigate}
+      />
       <section className="dashboard-welcome">
         <div>
+          <span className="role-pill teal-pill">Manager / Admin</span>
           <p className="eyebrow">Good to see you</p>
           <h2>Keep the rescue network moving.</h2>
           <p>

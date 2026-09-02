@@ -1,7 +1,7 @@
-import { SignInButton, UserButton, useAuth, useUser } from "@clerk/react";
-import spcaLogo from "../assets/spca-logo.png";
+import { SignInButton, useAuth, useUser } from "@clerk/react";
+import { SiteHeader, type SiteHeaderView } from "./SiteHeader";
 
-type UserDashboardProps = { onNavigate: (view: "home") => void };
+type UserDashboardProps = { onNavigate: (view: SiteHeaderView) => void };
 
 const activity = [
   [
@@ -45,30 +45,16 @@ export function UserDashboard({ onNavigate }: UserDashboardProps) {
 
   return (
     <main className="user-dashboard-page">
-      <header className="dashboard-header">
-        <div className="dashboard-brand">
-          <button
-            type="button"
-            className="brand-button"
-            onClick={() => onNavigate("home")}
-          >
-            <img src={spcaLogo} alt="SPCA Fiji logo" className="brand-logo" />
-          </button>
-          <div>
-            <p className="eyebrow">My ARA account</p>
-            <h1>User dashboard</h1>
-          </div>
-        </div>
-        <div className="dashboard-header-actions">
-          <span className="role-pill teal-pill">Registered user</span>
-          <div className="user-avatar-circle">
-            <UserButton />
-          </div>
-        </div>
-      </header>
+      <SiteHeader
+        isLoaded={isLoaded}
+        isSignedIn={isSignedIn}
+        currentPage="user-dashboard"
+        onNavigate={onNavigate}
+      />
 
       <section className="user-welcome dashboard-welcome">
         <div>
+          <span className="role-pill teal-pill">Registered user</span>
           <p className="eyebrow">Welcome back</p>
           <h2>{user?.firstName ?? "Friend"}, follow your ARA journey.</h2>
           <p>
