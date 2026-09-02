@@ -100,17 +100,19 @@ export function SiteHeader({
         >
           Rescue Report
         </button>
-        <button
-          type="button"
-          className={
-            currentPage === "animal-listings" ? "nav-link active" : "nav-link"
-          }
-          onClick={() => navigate("animal-listings")}
-        >
-          Adopt
-        </button>
         {/* Staff, vets, and managers run the rescue operation, so the
-            public donate prompt is hidden for their accounts. */}
+            public adopt and donate prompts are hidden for their accounts. */}
+        {!isStaff && !isAdmin && (
+          <button
+            type="button"
+            className={
+              currentPage === "animal-listings" ? "nav-link active" : "nav-link"
+            }
+            onClick={() => navigate("animal-listings")}
+          >
+            Adopt
+          </button>
+        )}
         {!isStaff && !isAdmin && (
           <button
             type="button"
