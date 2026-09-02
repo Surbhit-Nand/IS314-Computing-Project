@@ -4,6 +4,7 @@ import { z } from "zod";
 import { requireClerkSession } from "../../middleware/auth.js";
 import { requireStaffOrAbove } from "../../middleware/rbac.js";
 import {
+	deleteAnimal,
 	getAnimalById,
 	listAllAnimals,
 	listPublicAnimals,
@@ -158,6 +159,27 @@ animalsRouter.patch(
 
 		try {
 			const animal = await updateAnimalProfile(getIdParam(request.params.id), parsed.data);
+			if (!animal) {
+				response.status(404).json({ error: "Animal not found" });
+				return;
+			}
+			response.json(animal);
+		} catch (error) {
+			next(error);
+		}
+	},
+);
+
+// Staff-only: soft-delete an animal profile (passed away, transferred
+// elsewhere, etc). The row and its history stay in the database - see the
+// `deletedAt` comment in schema.ts - it's just excluded from every listing.
+animalsRouter.delete(
+	"/:id",
+	requireClerkSession,
+	requireStaffOrAbove,
+	async (request, response, next) => {
+		try {
+			const animal = await deleteAnimal(getIdParam(request.params.id));
 			if (!animal) {
 				response.status(404).json({ error: "Animal not found" });
 				return;

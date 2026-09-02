@@ -96,11 +96,17 @@ export function EditAnimalProfile({ animalId, onNavigate }: EditAnimalProfilePro
       await updateAnimal(token, animalId, form);
       setSaveMessage("Animal profile updated.");
       setSuccessToastMessage(`✓ ${form.name} updated successfully!`);
+      // Give staff a moment to actually see the toast before the page
+      // changes out from under it - navigating immediately would unmount
+      // this component (and the toast with it) before it ever painted.
+      // isSubmitting deliberately stays true here (not reset in a finally)
+      // so "Save changes" stays disabled for this brief window rather than
+      // becoming re-clickable right before navigating away.
+      window.setTimeout(() => onNavigate("manage-animals"), 1200);
     } catch (error) {
       const message = error instanceof Error ? error.message : "The animal profile could not be updated.";
       window.alert(message);
       setSaveError(message);
-    } finally {
       setIsSubmitting(false);
     }
   }
@@ -164,9 +170,22 @@ export function EditAnimalProfile({ animalId, onNavigate }: EditAnimalProfilePro
 
             <form className="animal-form" onSubmit={handleSubmit}>
               <AnimalProfileFields value={form} onChange={setForm} getToken={getToken} />
-              <button type="submit" className="teal-button submit-button" disabled={isSubmitting}>
-                {isSubmitting ? "Saving..." : "Save changes"}
-              </button>
+              <div className="animal-form-actions">
+                {/* No confirmation - the form has no persisted draft to lose
+                    (nothing is saved until "Save changes" succeeds), so
+                    discarding on navigate-away is exactly what staff expect
+                    from "Cancel". */}
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={() => onNavigate("manage-animals")}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="teal-button submit-button" disabled={isSubmitting}>
+                  {isSubmitting ? "Saving..." : "Save changes"}
+                </button>
+              </div>
             </form>
           </>
         )}

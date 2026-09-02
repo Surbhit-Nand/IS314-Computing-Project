@@ -5,6 +5,7 @@ import {
 	findAnimalById,
 	findAnimalByPublicId,
 	findPublicAnimals,
+	softDeleteAnimal,
 	updateAnimal,
 } from "./animals.repository.js";
 
@@ -55,6 +56,11 @@ export async function updateAnimalProfile(
 	input: Partial<Parameters<typeof updateAnimal>[1]>,
 ) {
 	return updateAnimal(id, input);
+}
+
+// Soft-deletes an animal profile (passed away, transferred elsewhere, etc).
+export async function deleteAnimal(id: string) {
+	return softDeleteAnimal(id);
 }
 
 // Streams an uploaded photo buffer straight to Cloudinary (never touching

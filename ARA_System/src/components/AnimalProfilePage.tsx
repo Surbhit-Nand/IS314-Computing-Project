@@ -148,9 +148,18 @@ export function AnimalProfilePage({ animal, isLoaded, isSignedIn, currentPage, o
               <p className="pet-card-check profile-check">
                 ✓ {adoptionStatusLabel(animal.status)}
               </p>
-              {animal.vaccinationStatus === "vaccinated" && (
+              {/* Always shown, not just when vaccinated - "not yet vaccinated"
+                  is information adopters need too, not something to hide.
+                  Visually distinct (slate/neutral, open-circle marker) from
+                  the teal checkmark states so the two are easy to tell apart
+                  at a glance, without reading as an alarm/warning. */}
+              {animal.vaccinationStatus === "vaccinated" ? (
                 <p className="pet-card-check profile-check">
                   ✓ {vaccinationStatusLabel(animal.vaccinationStatus)}
+                </p>
+              ) : (
+                <p className="profile-check-muted profile-check">
+                  ○ {vaccinationStatusLabel(animal.vaccinationStatus)}
                 </p>
               )}
 

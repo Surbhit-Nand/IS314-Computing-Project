@@ -52,6 +52,16 @@ export const animals = pgTable("animals", {
 	size: animalSize("size"),
 	medicallyCleared: boolean("medically_cleared").notNull().default(false),
 	status: animalStatus("status").notNull().default("intake"),
+	// Soft delete: set when staff remove a profile (animal passed away,
+	// transferred elsewhere, etc). Deliberately NOT reusing the "closed"
+	// status value above - that's part of the adoption/vet lifecycle and
+	// likely means something different (e.g. case closed after adoption),
+	// so overloading it for deletion risks a future collision. A hard
+	// DELETE isn't safe here anyway: rescue_reports, adoption_applications,
+	// and vet_appointments all have a NOT-ACTION foreign key to animals.id,
+	// so deleting a row with any history would fail with a raw DB
+	// constraint error, and would destroy the audit trail for rows with none.
+	deletedAt: timestamp("deleted_at", { withTimezone: true }),
 	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 	updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
