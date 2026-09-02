@@ -2167,22 +2167,22 @@
 .about-team-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 18px;
+  gap: 20px;
 }
 
 .about-team-card {
   background: rgba(255, 255, 255, 0.8);
   border: 1px solid var(--line);
   border-radius: 20px;
-  padding: 22px 16px;
+  padding: 30px 20px;
   text-align: center;
   box-shadow: 0 10px 24px rgba(15, 25, 34, 0.03);
 }
 
 .about-avatar {
-  width: 64px;
-  height: 64px;
-  margin: 0 auto 12px;
+  width: 132px;
+  height: 132px;
+  margin: 0 auto 14px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2190,21 +2190,38 @@
   background: linear-gradient(135deg, var(--teal) 0%, var(--teal-dark) 100%);
   color: #fff;
   font-weight: 800;
-  font-size: 1.1rem;
+  font-size: 1.5rem;
+}
+
+.about-team-photo {
+  width: 200px;
+  height: 200px;
+  margin: 0 auto 14px;
+  object-fit: cover;
+  border-radius: 50%;
+  border: 3px solid var(--teal);
 }
 
 .about-team-card h3 {
   margin: 0 0 6px;
-  font-size: 1.05rem;
+  font-size: 1.15rem;
   color: var(--navy);
 }
 
 .about-team-card p {
   margin: 0;
   color: var(--slate);
-  font-size: 0.85rem;
+  font-size: 0.95rem;
   font-weight: 700;
 }
+
+.about-team-phone {
+  margin: 8px 0 0;
+  font-weight: 800;
+  color: var(--teal);
+}
+
+/* Executive committee */
 
 /* Executive committee */
 .about-committee-intro {
@@ -2225,14 +2242,14 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 16px;
-  background: var(--teal);
-  border: 1px solid var(--teal);
+  background: var(--aqua);
+  border: 1px solid var(--aqua);
   border-radius: 14px;
   padding: 14px 18px;
 }
 
 .about-committee-row span {
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--navy);
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.06em;

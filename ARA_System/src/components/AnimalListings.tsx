@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { Animal } from "../types/animal";
+import type { Animal, AnimalSize } from "../types/animal";
 import { capitalize } from "../utils/format";
 import { useFavoriteAnimals } from "../utils/favorites";
 import { SiteFooter } from "./SiteFooter";
@@ -31,6 +31,8 @@ type Filters = {
   breed: string;
   behaviour: string;
   size: string;
+  colour: string;
+  vaccination: string;
 };
 
 const EMPTY_FILTERS: Filters = {
@@ -39,19 +41,9 @@ const EMPTY_FILTERS: Filters = {
   breed: "all",
   behaviour: "all",
   size: "all",
+  colour: "all",
+  vaccination: "all",
 };
-
-// Rough size buckets inferred from the free-text estimated age. The system
-// stores age as text (e.g. "2 years", "3 months"), so we map that onto three
-// coarse size categories rather than pretending to have exact weights.
-function sizeBucket(age: string | null): string {
-  if (!age) return "";
-  const lower = age.toLowerCase();
-  if (/\d+\s*(weeks|week|days|day)/.test(lower)) return "baby";
-  if (/\d+\s*(months|month)/.test(lower)) return "young";
-  if (/\d+\s*(years?)/.test(lower) && !/(week|month)/.test(lower)) return "adult";
-  return "";
-}
 
 function behaviourKey(behaviour: string | null): string {
   if (!behaviour) return "";
@@ -97,17 +89,26 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
     return ["all", ...[...set].sort()];
   }, [animals]);
 
+  // Unique colour list derived from the loaded animals, same idea as breeds.
+  const colours = useMemo(() => {
+    const set = new Set<string>();
+    for (const animal of animals) {
+      if (animal.colour && animal.colour.trim()) set.add(animal.colour.trim());
+    }
+    return ["all", ...[...set].sort()];
+  }, [animals]);
+
   function setFilter<F extends keyof Filters>(key: F, value: Filters[F]) {
     setFilters((previous) => ({ ...previous, [key]: value }));
   }
 
   // Applies the free-text description search followed by each characteristic
   // filter. Any search matches on name, breed, colour, behaviour, description,
-  // and the coarsened size bucket so a natural-language phrase like "small
-  // calm dog" finds the right profiles.
+  // and size so a natural-language phrase like "small calm dog" finds the
+  // right profiles. Size, colour and vaccination come straight off the
+  // profile's structured fields rather than being inferred from free text.
   const visible = useMemo(() => {
     const query = searchText.trim().toLowerCase();
-    const size = filters.size !== "all" ? sizeBucket(filters.size) : "";
 
     return animals.filter((animal) => {
       if (query) {
@@ -119,7 +120,7 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
           animal.behaviour,
           animal.description,
           animal.gender,
-          sizeBucket(animal.estimatedAge),
+          animal.size ?? "",
         ]
           .filter(Boolean)
           .join(" ")
@@ -127,12 +128,20 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
         if (!haystack.includes(query)) return false;
       }
 
-      if (filters.type !== "all" && animal.type !== filters.type) return false;
+      if (filters.type !== "all") {
+        // "Other" groups anything that isn't a dog or cat (rabbits, birds,
+        // etc.) so those profiles show under a single species option.
+        const isOther = filters.type === "other" && animal.type !== "dog" && animal.type !== "cat";
+        if (!isOther && animal.type !== filters.type) return false;
+      }
       if (filters.gender !== "all" && (animal.gender ?? "").toLowerCase() !== filters.gender) return false;
       if (filters.breed !== "all" && (animal.breed ?? "").trim().toLowerCase() !== filters.breed.toLowerCase())
         return false;
       if (filters.behaviour !== "all" && behaviourKey(animal.behaviour) !== filters.behaviour) return false;
-      if (size && sizeBucket(animal.estimatedAge) !== size) return false;
+      if (filters.size !== "all" && animal.size !== filters.size) return false;
+      if (filters.colour !== "all" && (animal.colour ?? "").trim().toLowerCase() !== filters.colour.toLowerCase())
+        return false;
+      if (filters.vaccination !== "all" && animal.vaccinationStatus !== filters.vaccination) return false;
 
       return true;
     });
@@ -143,7 +152,9 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
     (filters.gender !== "all" ? 1 : 0) +
     (filters.breed !== "all" ? 1 : 0) +
     (filters.behaviour !== "all" ? 1 : 0) +
-    (filters.size !== "all" ? 1 : 0);
+    (filters.size !== "all" ? 1 : 0) +
+    (filters.colour !== "all" ? 1 : 0) +
+    (filters.vaccination !== "all" ? 1 : 0);
 
   function clearFilters() {
     setFilters(EMPTY_FILTERS);
@@ -204,8 +215,7 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
                 ["all", "All"],
                 ["dog", "Dogs"],
                 ["cat", "Cats"],
-                ["rabbit", "Rabbits"],
-                ["other", "Other"],
+                ["other", "Other Pets"],
               ].map(([value, label]) => (
                 <label key={value} className="filter-option">
                   <input
@@ -258,18 +268,58 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
 
             <div className="filter-group">
               <h3>Size</h3>
-              {[
-                ["all", "Any"],
-                ["baby", "Baby"],
-                ["young", "Young"],
-                ["adult", "Adult"],
-              ].map(([value, label]) => (
+              {(
+                [
+                  ["all", "Any"],
+                  ["small", "Small"],
+                  ["medium", "Medium"],
+                  ["large", "Large"],
+                  ["extra_large", "Extra large"],
+                ] as [AnimalSize | "all", string][]
+              ).map(([value, label]) => (
                 <label key={value} className="filter-option">
                   <input
                     type="radio"
                     name="size"
                     checked={filters.size === value}
                     onChange={() => setFilter("size", value)}
+                  />
+                  <span>{label}</span>
+                </label>
+              ))}
+            </div>
+
+            <div className="filter-group">
+              <h3>Colour</h3>
+              <select
+                className="animal-search-input filter-select"
+                value={filters.colour}
+                onChange={(event) => setFilter("colour", event.target.value)}
+              >
+                <option value="all">Any colour</option>
+                {colours
+                  .filter((colour) => colour !== "all")
+                  .map((colour) => (
+                    <option key={colour} value={colour}>
+                      {capitalize(colour)}
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            <div className="filter-group">
+              <h3>Vaccination</h3>
+              {[
+                ["all", "Any"],
+                ["vaccinated", "Vaccinated"],
+                ["not_vaccinated", "Not vaccinated"],
+              ].map(([value, label]) => (
+                <label key={value} className="filter-option">
+                  <input
+                    type="radio"
+                    name="vaccination"
+                    checked={filters.vaccination === value}
+                    onChange={() => setFilter("vaccination", value)}
                   />
                   <span>{label}</span>
                 </label>
