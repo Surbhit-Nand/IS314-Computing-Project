@@ -1,30 +1,18 @@
 import { useState } from "react";
 import { DonateModal } from "../features/donations/DonateModal";
 import { SiteFooter } from "./SiteFooter";
-import { SiteHeader } from "./SiteHeader";
+import { SiteHeader, type SiteHeaderView } from "./SiteHeader";
 
 // About page hero background - a single static image, full-width and sized
 // to match the homepage slideshow banner.
 const ABOUT_HERO_IMAGE =
   "https://t4.ftcdn.net/jpg/02/17/89/41/360_F_217894165_H4jRalQ4eg9Kp8XUVGEa7XFDEPtTQ9PY.jpg";
 
-type View =
-  | "home"
-  | "animal-listings"
-  | "about"
-  | "login"
-  | "register"
-  | "dashboard"
-  | "staff-dashboard"
-  | "user-dashboard"
-  | "rescue-report"
-  | "my-reports";
-
 type AboutUsProps = {
   isLoaded: boolean;
   isSignedIn: boolean | undefined;
   currentPage: "home" | "animal-listings" | "about";
-  onNavigate: (view: View) => void;
+  onNavigate: (view: SiteHeaderView) => void;
 };
 
 function initials(name: string) {

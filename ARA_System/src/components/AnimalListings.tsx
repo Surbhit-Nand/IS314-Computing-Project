@@ -3,25 +3,13 @@ import type { Animal, AnimalSize } from "../types/animal";
 import { capitalize } from "../utils/format";
 import { useFavoriteAnimals } from "../utils/favorites";
 import { SiteFooter } from "./SiteFooter";
-import { SiteHeader } from "./SiteHeader";
-
-type View =
-  | "home"
-  | "animal-listings"
-  | "about"
-  | "login"
-  | "register"
-  | "dashboard"
-  | "staff-dashboard"
-  | "user-dashboard"
-  | "rescue-report"
-  | "my-reports";
+import { SiteHeader, type SiteHeaderView } from "./SiteHeader";
 
 type AnimalListingsProps = {
   isLoaded: boolean;
   isSignedIn: boolean | undefined;
   currentPage: "home" | "animal-listings" | "about";
-  onNavigate: (view: View) => void;
+  onNavigate: (view: SiteHeaderView) => void;
   onViewAnimal: (animal: Animal) => void;
 };
 

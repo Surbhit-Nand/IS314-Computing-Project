@@ -4,25 +4,13 @@ import { capitalize } from "../utils/format";
 import { useFavoriteAnimals } from "../utils/favorites";
 import { DonateModal } from "../features/donations/DonateModal";
 import { SiteFooter } from "./SiteFooter";
-import { SiteHeader } from "./SiteHeader";
+import { SiteHeader, type SiteHeaderView } from "./SiteHeader";
 
 type HomePageProps = {
   isLoaded: boolean;
   isSignedIn: boolean | undefined;
   currentPage: string;
-  onNavigate: (
-    view:
-      | "home"
-      | "animal-listings"
-      | "about"
-      | "login"
-      | "register"
-      | "dashboard"
-      | "staff-dashboard"
-      | "user-dashboard"
-      | "rescue-report"
-      | "my-reports",
-  ) => void;
+  onNavigate: (view: SiteHeaderView) => void;
   onViewAnimal: (animal: Animal) => void;
 };
 

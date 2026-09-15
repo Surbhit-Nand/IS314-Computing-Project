@@ -12,6 +12,9 @@ import { UserDashboard } from "./components/UserDashboard";
 import { AnimalRegistrationForm } from "./features/animals/AnimalRegistrationForm";
 import { EditAnimalProfile } from "./features/animals/EditAnimalProfile";
 import { ManageAnimalProfiles } from "./features/animals/ManageAnimalProfiles";
+import { AdoptionApplicationForm } from "./features/adoptions/AdoptionApplicationForm";
+import { ManageAdoptionApplications } from "./features/adoptions/ManageAdoptionApplications";
+import { MyApplications } from "./features/adoptions/MyApplications";
 import { ManageRescueReports } from "./features/rescue/ManageRescueReports";
 import { MyReports } from "./features/rescue/MyReports";
 import { RescueReportForm } from "./features/rescue/RescueReportForm";
@@ -33,7 +36,10 @@ export type View =
   | "rescue-report"
   | "rescue-report-phone"
   | "my-reports"
-  | "manage-rescue-reports";
+  | "manage-rescue-reports"
+  | "adoption-apply"
+  | "my-applications"
+  | "manage-adoption-applications";
 
 function App() {
   const [view, setView] = useState<View>("home");
@@ -55,6 +61,10 @@ function App() {
 
   function openMyReports() {
     setView("my-reports");
+  }
+
+  function openMyApplications() {
+    setView("my-applications");
   }
 
   if (view === "dashboard") {
@@ -158,6 +168,32 @@ function App() {
 
   if (view === "manage-rescue-reports") {
     return <ManageRescueReports onNavigate={setView} />;
+  }
+
+  if (view === "adoption-apply") {
+    return (
+      <AdoptionApplicationForm
+        animal={viewedAnimal}
+        isLoaded={isLoaded}
+        isSignedIn={isSignedIn}
+        onShowMyApplications={openMyApplications}
+        onNavigate={setView}
+      />
+    );
+  }
+
+  if (view === "my-applications") {
+    return (
+      <MyApplications
+        isLoaded={isLoaded}
+        isSignedIn={isSignedIn}
+        onNavigate={setView}
+      />
+    );
+  }
+
+  if (view === "manage-adoption-applications") {
+    return <ManageAdoptionApplications onNavigate={setView} />;
   }
 
   if (view === "login" || view === "register") {

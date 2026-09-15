@@ -13,7 +13,10 @@ export type SiteHeaderView =
   | "dashboard"
   | "staff-dashboard"
   | "user-dashboard"
-  | "rescue-report";
+  | "rescue-report"
+  | "adoption-apply"
+  | "my-applications"
+  | "manage-adoption-applications";
 
 type SiteHeaderProps = {
   isLoaded: boolean;
