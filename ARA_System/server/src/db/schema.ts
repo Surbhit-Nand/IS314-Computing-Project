@@ -8,8 +8,10 @@ import {
 	pgTable,
 	text,
 	timestamp,
+	uniqueIndex,
 	uuid,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 export const animalStatus = pgEnum("animal_status", [
 	"intake",
@@ -108,15 +110,42 @@ export const rescueReports = pgTable("rescue_reports", {
 	updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const adoptionApplications = pgTable("adoption_applications", {
+export const adoptionApplications = pgTable(
+	"adoption_applications",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		animalId: uuid("animal_id").notNull().references(() => animals.id),
+		applicantClerkUserId: text("applicant_clerk_user_id").notNull(),
+		homeDetails: text("home_details").notNull(),
+		familyDetails: text("family_details").notNull(),
+		existingPets: text("existing_pets"),
+		animalExperience: text("animal_experience"),
+		status: text("status").notNull().default("submitted"),
+		reviewNotes: text("review_notes"),
+		createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+		updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+	},
+	// Partial unique index: only one application per animal can ever reach
+	// "approved" or "completed". Any concurrent UPDATE that tries to move a
+	// second application for the same animal into one of those statuses will
+	// hit a unique-violation (23505), which the service layer translates into
+	// a 409 Conflict. Works over the stateless neon-http driver because the
+	// guarantee is a single-statement DB constraint, not a multi-statement lock.
+	(table) => [
+		uniqueIndex("adoption_animal_unique_active")
+			.on(table.animalId)
+			.where(sql`${table.status} IN ('approved', 'completed')`),
+	],
+);
+
+export const adoptionStatusHistory = pgTable("adoption_status_history", {
 	id: uuid("id").defaultRandom().primaryKey(),
-	 animalId: uuid("animal_id").notNull().references(() => animals.id),
-	applicantClerkUserId: text("applicant_clerk_user_id").notNull(),
-	homeDetails: text("home_details").notNull(),
-	familyDetails: text("family_details").notNull(),
-	existingPets: text("existing_pets"),
-	 animalExperience: text("animal_experience"),
-	status: text("status").notNull().default("submitted"),
+	applicationId: uuid("application_id")
+		.notNull()
+		.references(() => adoptionApplications.id),
+	status: text("status").notNull(),
+	changedByClerkUserId: text("changed_by_clerk_user_id"),
+	note: text("note"),
 	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
