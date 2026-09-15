@@ -217,7 +217,7 @@ export function MyApplications({ isLoaded, isSignedIn, onNavigate }: MyApplicati
         const token = await getToken();
         if (!token) throw new Error("Your Clerk session has expired.");
         setApplications(await fetchMyAdoptionApplications(token));
-      } catch (error) {
+} catch (error) {
         setApplicationsError(
           error instanceof Error ? error.message : "Your adoption applications could not be loaded.",
         );
@@ -235,7 +235,7 @@ export function MyApplications({ isLoaded, isSignedIn, onNavigate }: MyApplicati
       if (!token) throw new Error("Your Clerk session has expired.");
       const detail = await fetchAdoptionApplicationDetail(token, id);
       setSelectedDetail(detail);
-    } catch (error) {
+    } catch {
       // Keep the modal usable from the list row's data if the detail fetch
       // fails; the stepper/history just won't have timestamps.
       setSelectedDetail(applications.find((item) => item.id === id) ?? null);

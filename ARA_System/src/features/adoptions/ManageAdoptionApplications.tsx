@@ -393,7 +393,7 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
 
                           <label className="dispatch-field">
                             <span className="dispatch-label">
-                              Review note {application.status !== "submitted" || true ? "" : ""}
+                              Review note
                               <em className="optional-hint">(shown to the applicant)</em>
                             </span>
                             <textarea
