@@ -1,276 +1,286 @@
 # AGENTS.md — ARA (Animal Rescue & Adoption Management System)
 
-Guidance for any AI coding agent (Claude Code, Copilot, etc.) working in this
-repository. This project is SPCA Fiji's Animal Rescue and Adoption Management
-System, proposed by Group 7 (USP). Read this before generating or editing code.
+Guidance for any AI coding agent working in this repository. This is SPCA
+Fiji's Animal Rescue and Adoption Management System, Group 7 (USP). Read this
+(plus `Adoption.md` for the adoption module) before generating or editing
+code.
+
+> **Source-of-truth note**: three docs in this repo contradict the actual
+> codebase and should not be trusted: `STYLE_FORMAT.md` (describes Tailwind /
+> `app/globals.css` — neither exists), `ARCHITECTURE.md` ("all server files are
+> placeholders" — most server modules are fully implemented), and `Adoption.md`
+> (says "Next.js" — it's not). Trust this file and the code itself.
 
 ## What this system is
 
-ARA connects an animal's entire journey — rescue → intake → medical care →
-adoption — into a single record, replacing SPCA Fiji's current phone/email/
-in-person process. The three modules below are the whole system; don't build
-features outside this scope unless asked.
+ARA connects an animal's journey — rescue → intake → medical care → adoption —
+into a single record. Three modules, plus cross-cutting donations:
 
-1. **Animal Profile Management & Search Listings** — staff register a rescued
-   animal with a permanent profile and unique ID (photos, species, breed, age,
-   sex, colour, rescue history). Other modules attach data to the same profile.
-   Once medically cleared, the animal is searchable/filterable publicly,
-   including via natural-language AI search (e.g. "a small, calm dog that's
-   good with children").
-2. **Adoption Application & Rescue Reporting** — public users submit rescue
-   reports (photos, location, condition, urgency) online or by phone; staff
-   assign a rescuer and the reporter can track status. Registered users submit
-   adoption applications; staff approve/reject; the animal listing closes on
-   adoption.
-3. **Veterinary & Health Management** — vets record treatment, vaccinations,
-   and prescriptions against an animal's profile, and issue medical clearance
-   — a precondition for the animal appearing in public listings. Users can
-   book follow-up vet appointments online or by phone.
+1. **Animal Profile Management & Search Listings** — staff register animals
+   with a unique ID and profile; once medically cleared the animal is
+   publicly searchable/filterable.
+2. **Adoption Application & Rescue Reporting** — public rescue reports
+   (online or phone), staff dispatch, reporter tracking; registered users
+   submit adoption applications, staff approve/reject.
+3. **Veterinary & Health Management** — vets record treatments/vaccinations/
+   prescriptions and issue medical clearance (precondition for public
+   listings).
 
-## Core functionalities checklist
+## Repo layout & verified stack
 
-Discrete features pulled from proposal §2.3 and §4.1, by module. Treat this as
-the build/test checklist — a module isn't done until its items work.
+| Layer | Reality (verified) |
+|---|---|
+| Frontend | **Vite 8 + React 19 SPA** in `src/` (NOT Next.js, no router) |
+| Backend | **Express 5 + TypeScript** in `server/src/`, Drizzle ORM |
+| Data | PostgreSQL on Neon, schema `server/src/db/schema.ts` |
+| Auth | Clerk (`@clerk/react` frontend; `@clerk/backend` verifies Bearer tokens) |
+| Other | Cloudinary (photo uploads), Leaflet (rescue map) |
+| NOT present | Next.js, Tailwind, Stripe (see checklist), plain `.js` when TS works |
+
+- **Backend module pattern**: `server/src/modules/<module>/{routes,service,repository}.ts`.
+  Routes validate with **zod** before hitting the service; services hold
+  business rules; repositories access the DB. Routes handle HTTP, nothing else.
+- **Mounted routers** (`server/src/app.ts`): `/api/animals`, `/api/admin`
+  (staff), `/api/rescue`, `/api/adoptions`, `/api/donations`. **Only the
+  `veterinary` router is NOT mounted** — that module is still a placeholder.
+- **No frontend router**: `src/App.tsx` switches on a `view` string in local
+  state and threads `onNavigate={setView}` into every page. To add a page:
+  extend the `View` union + add a branch in `App.tsx`. There are no URL params.
+- **Auth middleware**: `requireClerkSession` (`server/src/middleware/auth.ts`)
+  resolves the token into `request.clerkUserId`; `requireStaffOrAbove` /
+  `requireManagerOrAdmin` (`middleware/rbac.ts`) check Clerk
+  `publicMetadata.role` = `staff | veterinarian | manager | admin`
+  (`shared/types/roles.ts`). Public endpoints use `resolveOptionalClerkUserId`
+  so anonymous visitors still work (rescue reports).
+
+## Commands (all verified)
+
+```sh
+npm run dev           # Vite frontend only (port 5173)
+npm run server:dev    # Express API only (tsx, port 8787) — needs env (below)
+npm run server:check  # typecheck the server package only
+npm run db:generate   # create a Drizzle migration from schema.ts
+npm run db:migrate    # apply migrations — run AFTER every pull, BEFORE server:dev
+npm run build         # tsc -b && vite build (typechecks frontend+server)
+npm run lint          # eslint .
+```
+
+- **Tests**: no `npm test` script exists. The only test is a `node:test`
+  file: `npx tsx --test server/src/modules/donations/donations.service.test.ts`.
+- **Required order**: `db:migrate` → `server:dev`. A missing column is the #1
+  cause of `column "xxx" of relation "animals" does not exist` crashes.
+- `npm run dev` does NOT start the API — run both `dev` and `server:dev`.
+
+## Environment & secrets
+
+- `server/src/config/env.ts` loads root **`.env.local` first, then
+  `server/.env`** — dotenv first-load wins, so root `.env.local` overrides
+  `server/.env` for `DATABASE_URL` / `CLERK_SECRET_KEY`. `drizzle.config.ts`
+  reads only `.env.local`.
+- Frontend vars are `VITE_*` in `.env.local` (`VITE_CLERK_PUBLISHABLE_KEY`,
+  `VITE_DEV_BYPASS_AUTH`). Server vars in `server/.env` (`CLERK_SECRET_KEY`,
+  `API_PORT`, `DATABASE_URL`, Cloudinary, `stripe`…).
+- **`DEV_BYPASS_AUTH=true`** (server env) skips ONLY the role check — a Clerk
+  session is still required. Mirror flag `VITE_DEV_BYPASS_AUTH` in `src/utils/devBypass.ts`
+  for the UI. Never enable outside local dev.
+- Never commit `.env.local` / `server/.env` (gitignored).
+
+## Database / Neon gotchas
+
+- Shared Neon DB across branches — extra columns/tables from other branches
+  are normal and benign. Migrations currently have **two `0004_*` entries**
+  (idx 4 and 5) in the journal; when you `db:generate`, make sure you don't
+  collide with an existing migration name/index.
+- The API prints a **non-fatal** schema-drift warning at boot if `schema.ts`
+  columns are missing on the live DB (`server/src/db/drift-check.ts`) — warns,
+  never crashes.
+- One person should own applying migrations so the journal stays consistent.
+
+## Core functionality status (build/test checklist)
+
+`[x]` done · `[~]` partial · `[ ]` not started. Paths are where to look/verify.
 
 **Animal Profile Management & Search Listings**
-- [ ] Staff can register a new animal, creating a profile with a unique ID
-- [ ] Profile fields: photos, animal type, breed, estimated age, gender,
-      colour, rescue date, behaviour, rescue history
-- [ ] Staff/vet can view and update an existing profile
-- [ ] Public animal listing page, but only for medically cleared animals
-- [ ] Search bar with filters (species, breed, age, size, etc.)
-- [ ] Natural-language AI search (e.g. "a small, calm dog good with children")
-      that maps to the same filters — assistive only, never auto-decides
+- [x] Register animal with unique ID — `animals.service.ts`
+  (`generateUniquePublicId`)
+- [x] Profile fields (photos, type, breed, age, gender, colour, rescue date,
+      behaviour, rescue history) — `schema.ts` `animals`
+- [x] Staff/vet view & update — `updateAnimalProfile`, `EditAnimalProfile.tsx`
+- [~] Public listing page — `findPublicAnimals` (`animals.repository.ts:14`)
+      filters `status != adopted` + not soft-deleted; **medical-clearance gate
+      is intentionally OFF** — see Data model guardrails
+- [x] Search + filters (type, gender, breed, behaviour, size, colour, vaccination)
+- [~] Natural-language search — client-side free-text match over name/breed/
+      colour/behaviour/description/size (`AnimalListings.tsx`). Assistive
+      filter only — no AI provider, never auto-decides.
 
 **Adoption Application & Rescue Reporting**
-- [ ] Public rescue report form: photos, location, condition description,
-      urgency
-- [ ] Phone-in rescue reports logged by staff through the *same* form/schema
-- [ ] Staff review a report and assign a rescuer
-- [ ] Reporter can track their rescue report's status
-- [ ] Registered user can submit an adoption application (home, family,
-      existing pets, experience with animals)
-- [ ] Staff review, approve, or reject an adoption application
-- [ ] Applicant can track their application's status
-- [ ] Accepted application removes the animal from public listings
+- [x] Public rescue report form (photos, location, condition, urgency) —
+      `RescueReportForm.tsx`
+- [x] Phone-in reports through the *same* form/schema (`source: "phone"`,
+      staff variant of the same component)
+- [x] Staff review + assign rescuer — `ManageRescueReports.tsx`, `rescue.service.ts`
+- [x] Reporter tracks status — `MyReports.tsx`, `GET /api/rescue/mine`
+- [x] Registered user submits adoption application — `AdoptionApplicationForm.tsx`, `POST /api/adoptions`
+- [x] Staff review/approve/reject — `ManageAdoptionApplications.tsx`, `PATCH /api/adoptions/:id`
+- [x] Applicant tracks application status — `MyApplications.tsx`, `GET /api/adoptions/mine`
+- [x] Accepted application removes animal from public listings — partial unique index `adoption_animal_unique_active` on `(animal_id) WHERE status IN ('approved','completed')` + DB-level 23505 check in service
 
-**Veterinary & Health Management**
-- [ ] Animal is routed to a vet for medical clearance after intake
-- [ ] User can book a vet appointment online, for follow-ups on a rescued pet
-- [ ] Staff can log a phone-booked vet appointment through the same form
-- [ ] Vet can record treatments, vaccinations, and prescribed medications
-- [ ] Vet can view an animal's full medical history on repeat visits
-- [ ] Vet can mark an animal as medically cleared for adoption
+**Veterinary & Health Management** — **NOT BUILT** (`veterinary` module is
+scaffolded service/routes/repository but never mounted in `app.ts`; no UI).
+- [ ] Vet clearance routing after intake — not built
+- [ ] Vet appointments (online + phone) — not built
+- [ ] Treatments / vaccinations / prescriptions — not built
+- [ ] Full medical history on repeat visits — not built
+- [ ] Mark animal medically cleared — not built
 
 **Donations (cross-cutting)**
-- [ ] Donor can make a financial donation via Stripe hosted checkout
+- [~] Donation flow works as **card/QR data-entry** (validate + insert,
+      `donations.service.ts`); **no Stripe SDK / hosted checkout exists** —
+      `stripe_checkout_session_id` is a reserved column only.
 
-## Frontend styling & design system
+## Adoption module (spec: `Adoption.md`)
 
-Full detail lives in `STYLE_FORMAT.md` at the repo root — read it before
-writing or editing any component. Summary:
+`Adoption.md` is the working scoping doc for this module — honor it, but its
+*draft* schema names differ from reality:
 
-- **Stack**: Tailwind CSS v4 via the `@tailwindcss/postcss` plugin (no
-  separate Tailwind config file), imported with `@import "tailwindcss";` at
-  the top of `app/globals.css`. Vite (Cloudflare plugin) is the bundler.
-- **Styling approach**: utility-first Tailwind classes for layout/spacing,
-  combined with named component classes (`.teal-button`, `.animal-status`,
-  `.modal`, etc.) built on CSS custom properties — not inline styles, not
-  CSS-in-JS. `app/globals.css` is intentionally minified; don't reformat it,
-  add new rules following the same compact style with a `/* section */`
-  comment marker.
-- **Design tokens live in `:root`** as CSS custom properties — always
-  reference `var(--teal)`, `var(--navy)`, etc. rather than hard-coding hex
-  values in new CSS. Core palette: `--navy #111820`, `--teal #1587c3`
-  (primary accent/buttons), `--teal-dark #0d6da2` (hover), `--aqua #55b8e7`,
-  `--bg #f3f6f9`, `--slate #657385` (secondary text), `--line #d7e0e8`
-  (borders), `--red #d95050` (urgent/alerts), `--green #147fb8` (success/
-  availability), `--shadow 0 18px 45px rgba(15,25,34,.1)`.
-- **Font**: Arial/Helvetica system stack, not a custom webfont. Weights are
-  400 (regular) or 800 (bold — buttons, headings, labels); nothing in between.
-- **Status/urgency colors are semantic, not decorative** — `.animal-status`
-  reads its class from `statusClass()` (lowercases + hyphenates the status
-  string, e.g. `"In Treatment"` → `in-treatment`); urgency dots map
-  critical→`--red`, high→`#ff9500`, moderate→`--gold`, low→`--green`. Reuse
-  these mappings rather than inventing new status colors per component.
-- **⚠️ Known bug — color variables don't match their names.** In
-  `STYLE_FORMAT.md`'s `:root` palette: `--orange` is `#1587c3`, the exact
-  same hex as `--teal` (looks like a copy-paste error, not actually orange);
-  `--gold` is `#6daed4` and `--green` is `#147fb8` — both are shades of
-  **blue**, not gold or green. This means the "moderate" and "low" urgency
-  dots above will render as two similar-looking blues, not the
-  gold/green distinction the naming implies. Don't assume `var(--green)`
-  looks green or `var(--gold)` looks gold when reading or writing code —
-  check the actual rendered color, and flag this to the team as a
-  design-token bug worth fixing at the source rather than working around
-  it per-component.
-- **Layout grids to reuse rather than reinvent**: public nav
-  (`250px 1fr 250px`), catalog page (`310px 1fr` sidebar + content), staff
-  metric grid (`repeat(4, 1fr)`), animal grid (`1fr 1fr 1fr`, dropping to 2
-  columns at 1180px and 1 column at 620px).
-- **Breakpoints**: 1180px (desktop→2-col), 900px (tablet — nav becomes a
-  fixed bottom bar, staff sidebar collapses to 78px), 620px (mobile — single
-  column, staff sidebar becomes a fixed 64px bottom bar). Build mobile-first
-  patterns to match these three, don't add ad hoc breakpoints.
-- **Border radius scale**: 10–14px for inputs/cards, 20–24px for buttons/
-  modals, up to 999px for pills — pick from this scale, don't invent new
-  radii.
-- **Buttons**: primary is the pill-shaped `.teal-button` (`var(--teal)` bg,
-  white text, weight 800, 21px radius); `.ghost-button` for outlined/
-  translucent variants on dark backgrounds; `.submit-button` (11px radius,
-  full width) for form submission specifically.
-- **Forms**: inputs/selects/textareas get a 10px border radius and
-  `border-color: var(--teal)` + a teal focus ring
-  (`box-shadow: 0 0 0 3px rgba(21,135,195,.12)`) on focus — apply this to
-  every new form field for consistency and accessibility.
-- **Z-index layers**: nav 20, modal 100, toast 1000 — don't improvise new
-  z-index values outside this scale.
-
-Note: an earlier exploratory home-page mockup in this conversation used a
-different (teal/coral/paper) palette — that was a design exploration, not
-this project's actual style. Anything built against the real codebase should
-follow `STYLE_FORMAT.md`, not that mockup.
-
-## Tech stack (do not swap without asking)
-
-| Layer | Choice |
-|---|---|
-| Presentation | React, Next.js, TypeScript, JavaScript |
-| Application | Next.js (server-side + frontend/DB communication), Stripe (donations) |
-| Data | PostgreSQL, hosted on Neon |
-| Mobile (optional) | React Native |
-| Auth | Clerk |
-
-**Note**: `STYLE_FORMAT.md` references Vite with a Cloudflare plugin as the
-bundler, which sits oddly next to Next.js from the proposal — worth
-confirming with the team which is actually in use before assuming either.
-
-Architecture is **three-tier client-server**: presentation layer (UI/input) →
-application layer (business logic) → data layer (Postgres via Neon). Keep
-business logic out of UI components and out of raw SQL — it belongs in the
-application layer (Next.js server functions/API routes).
+- **Existing table** (`schema.ts` `adoptionApplications`):
+  `id`, `animalId` (FK), `applicantClerkUserId` (Clerk id, not UUID),
+  `homeDetails`, `familyDetails`, `existingPets`, `animalExperience`,
+  `status` (text, default `"submitted"`), `createdAt`.
+  - Adoption.md's `housingInfo`→`homeDetails`, `experience`→`animalExperience`,
+    `applicantId`→`applicantClerkUserId`.
+  - **`reviewNotes`** (text, nullable) + **`updatedAt`** (timestamp, notNull,
+    defaultNow) added by migration `0006_lumpy_sabretooth.sql`. Statuses are
+    free text, not an enum.
+- **`adoptionStatusHistory`** table (migration `0006`): `id`,
+  `applicationId` (FK), `fromStatus`, `toStatus`, `notes`, `changedBy`,
+  `changedAt`. Joined in detail responses.
+- **Partial unique index** `adoption_animal_unique_active` on
+  `adoption_applications(animal_id) WHERE status IN ('approved','completed')`
+  — prevents two concurrent approvals hitting 23505; service pre-checks via
+  `findAdoptionConflict` for friendly 409.
+- **Mounted at** `/api/adoptions`. Routes: `POST /`, `GET /mine`, `GET /`,
+  `GET /:id`, `PATCH /:id`. Auth: `requireClerkSession`, `requireStaffOrAbove`.
+- **Statuses**: `submitted → under_review → approved → completed`, or
+  `rejected`. Every transition timestamped in `adoptionStatusHistory` so both
+  the adopter stepper and the staff queue show *when*, not just *what*.
+- `rejected` requires `reviewNotes` shown to the applicant.
+- **Medical-clearance gate**: `requireMedicallyCleared` returns `true` now
+  (no-op). Flip to hard gate when veterinary module ships.
+- Notifications on stage change (email or in-app) — not yet wired.
 
 ## Entities & role-based access
 
-Every feature must respect these roles (proposal §3.2, §4.3.2). When
-scaffolding auth checks, routes, or UI, gate by role rather than assuming a
-single user type:
+Every route/action is gated server-side by role, not just hidden in the UI
+(see middleware above).
 
-- **Unregistered user** — browse listings only, no adoption actions, no login.
-- **Registered user** — browse + submit adoption applications + book vet
-  follow-ups for their rescued pet + track report/application status.
-- **Donor** — makes financial donations via Stripe; not the same as a
-  registered adopter, though one account could plausibly hold both roles.
-- **SPCA staff** — register animals, assign rescuers, review/approve or reject
-  applications, log phone-received reports and bookings.
-- **Veterinarian** — view profile + medical history, enter prescriptions/
-  treatments, medically clear animals for adoption.
-- **CEO/Manager** — oversee operations, view data summaries, wage payments.
+- **Unregistered** — browse listings only, no login required, no actions.
+- **Registered user** — browse + adoptions + vet follow-up bookings + track
+  report/application status.
+- **Donor** — donations via the Donate modal (card/QR; Stripe not wired yet);
+  one account may be both user and donor.
+- **SPCA staff** — register animals, assign rescuers, review/reject
+  applications, log phone reports/bookings (same form as online).
+- **Veterinarian** — medical history, treatments, medical clearance.
+- **Manager/Admin** — staff invitations (`staff` module, `/api/admin`),
+  metrics, wage payments.
 
 ## Login & authentication
 
-- **Unregistered/public users never log in** — browsing listings and viewing
-  animal profiles must work with no account.
-- **Every other action requires login** (proposal §4.2.1): registered users
-  must authenticate to submit adoption applications, book vet appointments,
-  or track a report/application; staff, vets, and managers must authenticate
-  to use any of their modules.
-- Auth is handled via **Clerk** — don't hand-roll password storage or session
-  handling.
-- **Role-based access control (RBAC)** is enforced on every route/action, not
-  just hidden in the UI — a registered user hitting a staff API route directly
-  should be rejected server-side.
-- **Staff and admin accounts require multi-factor authentication** (proposal
-  §6.1) — this is a named risk mitigation, not optional hardening.
-- Credentials are never stored or logged in plaintext, and card details never
-  touch SPCA's own servers — use Stripe's hosted checkout.
+- Public listing/browsing must work with **no account**.
+- Everything else requires Clerk auth; RBAC enforced server-side — a
+  registered user hitting a staff route must get 403.
+- Staff/admin accounts need **MFA** (named risk mitigation). Never store/log
+  credentials in plaintext. Card details never touch SPCA's own servers.
+
+## Frontend styling & design system (verified against real CSS)
+
+> `STYLE_FORMAT.md` is aspirational, not accurate for this repo — the real
+> styles below are the source of truth.
+
+- **No Tailwind.** Plain CSS. Design tokens live in `src/index.css` `:root`;
+  component classes live in `src/App.css` (readable, not minified). Always
+  reference `var(--token)` — never hard-code hex.
+- **⚠️ Token bug**: `--green: #147fb8` is actually **blue** (documented in an
+  `index.css` comment). A real green exists as `--success: #1f9d55`. `--gold`
+  / `--orange` don't exist in the real `:root`. Check the rendered color
+  before assuming a name means what it says; flag fixing at the source.
+- **Real class names to reuse** (in `src/App.css`): `.teal-button` (teal→
+  `--teal-dark` gradient, `border-radius: 999px`, weight 800), `.ghost-button`
+  (and `.light` variant), `.danger-button`, `.chip`, `.mini-button`,
+  `.animal-grid`, `.catalog-layout` (`310px 1fr`), `.dashboard-metrics`
+  (`repeat(4, 1fr)`), `.user-stat-card`, `.modal` / `.modal-backdrop`,
+  `.toast`, `.urgency-dot`. Do NOT reference `.public-nav`, `.metric-grid`,
+  `.staff-shell`, `.form-grid`, `.submit-button`, `.animal-status` — those
+  don't exist.
+- **Urgency dots** (real): `critical→var(--red)`, `high→#ff9500`,
+  `moderate→#e5a500`, `low→var(--green)` (the blue one).
+- **Z-index scale**: nav 20, modal 100, toast 1000.
+- **Breakpoints**: 1180 / 900 / 620 px (plus non-ad-hoc 980 / 720 / 420 in
+  use). Mobile-first; don't invent extra media queries arbitrarily.
+- **Border radius**: 10–14px inputs/cards, 20–24px buttons/modals, 999px pills.
+- **Forms**: 10px radius, `border-color: var(--teal)`, focus ring
+  `box-shadow: 0 0 0 3px rgba(21,135,195,.12)`.
+- **Font**: Arial/Helvetica stack; weights only 400 or 800.
 
 ## Data model guardrails
 
-- One **animal profile** is the anchor entity; rescue reports, medical records,
-  and adoption applications all reference it by animal ID — don't duplicate
-  animal data across tables (proposal's reliability requirement: no redundancy,
-  single source of truth per animal).
-- An animal cannot appear in public adoption listings until
-  `medically_cleared = true` is set by a veterinarian. Enforce this at the
-  application layer, not just in the UI.
-- Once an adoption application is accepted, the animal must be removed from
-  public listings in the same transaction that updates its status — avoid a
-  window where a "cleared" animal looks available after being adopted.
-- Rescue reports and vet bookings can arrive online *or* by phone. Staff-entered
-  (phone) records must use the same schema/form path as online submissions so
-  there's one code path, not two — this is a named risk mitigation in the
-  proposal (§6.7), not just a nice-to-have.
-- Two people can apply for the same animal at once. Use **database-level
-  locking** on adoption approval so only one application per animal can be
-  approved (proposal §6.6) — this is an explicit race-condition risk, not a
-  hypothetical.
-- Keep an **audit trail** for adoption approvals, rescue cases, and donations
-  (proposal §6.5, legal compliance) — log who approved/rejected what, and when.
-
-## Database migrations & the shared Neon DB
-
-- The team shares one Neon database, so another branch's migration in the DB
-  is normal (e.g. an extra `animals.deleted_at` column that this repo's schema
-  doesn't know about — extra columns are benign). Run `npm run db:migrate`
-  after every pull and **before** starting the API (`npm run server:dev`).
-  A missing column is the #1 cause of runtime errors like
-  `column "size" of relation "animals" does not exist` surfacing from
-  `NeonHttpPreparedQuery.execute`.
-- Designate **one person** to own applying migrations against the shared DB so
-  the branch's migration journal/snapshots stay consistent — the DB currently
-  records more applied migrations than this repo's `_journal.json`.
-- The API prints a **non-fatal startup warning** if a column defined in
-  `server/src/db/schema.ts` is missing from the live DB (see
-  `server/src/db/drift-check.ts`). Warn, never crash.
+- One **animal profile** is the anchor; rescue reports, adoptions, and vet
+  appointments reference `animals.id`. Don't duplicate animal data. Animals
+  soft-delete via `deletedAt` (NOT `status = closed`) because those tables use
+  NOT-ACTION FKs to `animals.id` — a hard DELETE would fail or destroy the
+  audit trail.
+- **Medical clearance gate**: the proposal rule is *no public listing until
+  `medically_cleared = true`*. The team deliberately **ships with this OFF**
+  (`findPublicAnimals` filters only on `status != adopted` + not deleted,
+  with an in-code comment). Annex:
+  **re-enable the gate when the Veterinary module ships** — an animal should
+  appear publicly only when a vet has set `medically_cleared`.
+- On adoption acceptance, remove the animal from public listings **in the
+  same transaction** as the status update, and use **database-level locking**
+  (two applicants for one animal — race risk) so only one application per
+  animal can be approved. Not implemented yet — build these into the
+  adoptions module.
+- Rescue reports and vet bookings can arrive online *or* by phone — one
+  schema/form path, distinguished by `source` (both are in
+  `rescue_reports`/`vet_appointments`). Same `source` field exists on the
+  adoptions flow to add.
+- Keep an **audit trail** — `auditLogs` table + `shared/audit/audit.service.ts`
+  (used by rescue/donations; reuse for adoption approvals).
 
 ## AI search
 
-The public search bar should accept natural-language queries (e.g. "small,
-calm dog good with children") and map them to filterable attributes
-(species, breed, age, size, temperament, etc.). Treat AI search as an
-**assistive filter only** — it narrows results, it never makes or overrides
-an adoption decision; that stays a staff action (proposal §6.6 mitigation).
+Natural-language queries map to the same filters (species, breed, age, size,
+temperament…). **Assistive only** — it narrows results, never makes or
+overrides an adoption decision. Current implementation is a client-side
+keyword match, not an external AI provider.
 
-## Non-functional requirements to keep in mind
+## Payments & third-party dependencies
 
-- **Security**: role-based access control everywhere (see Login &
-  Authentication above); credentials never stored or logged in plaintext.
-- **Performance**: listing search/filter should feel instant; design queries
-  and indexes (e.g. on species/breed/status/clearance) with that in mind.
-- **Availability**: public-facing features (listings, rescue report submission)
-  must stay usable outside SPCA's operating hours — don't gate them behind
-  staff-only availability.
-- **Reliability**: no duplicate or conflicting records for the same animal;
-  plan for regular backups.
-- **Scalability**: schema and features should tolerate growing record volumes
-  without a redesign — avoid hard-coded limits or assumptions of small data.
+- Stripe is scoped **only** for donations (hosted checkout is the plan, not
+  yet wired). Don't add Stripe for adoption fees or anything else without
+  asking.
+- Stripe, Neon, and any AI-search provider are vendor-lock-in risks — abstract
+  behind a service layer (`server/src/services/`), don't call SDKs from deep
+  in the code.
 
-## Payments
+## Non-functional requirements
 
-Stripe is scoped **only** for donations, not adoption fees or anything else
-unless explicitly requested — don't wire up Stripe elsewhere without asking.
-
-## Third-party dependencies
-
-Stripe, Neon, and the AI search provider are flagged in the proposal as a
-vendor lock-in risk (§6.10). Abstract these behind an internal interface/
-service layer rather than calling their SDKs directly from deep in the
-codebase, so a provider swap doesn't ripple everywhere.
-
-## Build order (matches planned sprints)
-
-If asked to scaffold from scratch, follow this sequence rather than jumping
-ahead:
-1. Animal Profile Management + Adoption listing/search
-2. Adoption Application + Rescue Reporting
-3. Veterinary & Health Management
+- **Security**: RBAC everywhere, credentials env-only.
+- **Performance**: listing search/filter should feel instant — index
+  species/breed/status/clearance.
+- **Availability**: public features (listings, rescue reports) must work
+  outside SPCA hours.
+- **Reliability**: no duplicate/conflicting animal records; regular backups.
+- **Scalability**: no hard-coded limits; tolerate growing record volumes.
 
 ## Conventions
 
-- TypeScript everywhere in the Next.js app; avoid plain `.js` for new files.
-- Keep Stripe, Clerk, and DB credentials in environment variables — never
-  hard-code or commit secrets.
-- This is a student group project (Group 7, USP) — prefer clear, readable
-  code and small PRs over clever abstractions; the team needs to be able to
-  review each other's work.
+- TypeScript everywhere; avoid plain `.js` for new files.
+- Secrets live in env files, never committed or logged.
+- Student group project — prefer clear, readable code and small PRs over
+  clever abstractions; teammates must be able to review your work.
+- Branches are per-teammate (`main`, `alvin`, `dante-feature`, `jas`, `kara`,
+  `surbhit`) and merged into the working branch — keep `Adoption.md`'s "what
+  NOT to touch" (search module, report generation) off your plate unless asked.
