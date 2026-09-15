@@ -1382,6 +1382,39 @@
   color: var(--slate);
 }
 
+/* staff dashboard action grid */
+.dashboard-actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  width: 100%;
+  margin-top: 22px;
+}
+
+.dashboard-action-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 16px;
+  border: none;
+  border-radius: 21px;
+  background: linear-gradient(135deg, var(--teal) 0%, var(--teal-dark) 100%);
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.92rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.dashboard-action-button:hover {
+  transform: translateY(-1px);
+  background: var(--teal-dark);
+  box-shadow: 0 10px 22px rgba(21, 135, 195, 0.18);
+}
+
 .dashboard-metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -2456,6 +2489,10 @@
   min-width: 0;
 }
 
+.tracking-results {
+  min-width: 0;
+}
+
 .catalog-results-head {
   display: flex;
   align-items: center;
@@ -2773,6 +2810,10 @@
   .user-dashboard-columns {
     grid-template-columns: 1fr 1fr;
   }
+
+  .dashboard-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 /* toast notification - z-index 1000 per the documented layer scale
@@ -2934,6 +2975,10 @@
   .dashboard-metrics,
   .user-dashboard-grid,
   .user-dashboard-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-actions {
     grid-template-columns: 1fr;
   }
 
@@ -4305,8 +4350,307 @@
     grid-column: auto;
   }
 
-  .rescue-detail-photos img {
+.rescue-detail-photos img {
     width: 160px;
     height: 160px;
+  }
+}
+
+/* Adoption module -------------------------------------------------- */
+
+/* Status pill for adoption lifecycle states - mirrors .rescue-status-badge
+   so the review queue and the applicant tracking UI share the same visual
+   language. Fixed width (like the rescue badge) so queue rows line up. */
+.adoption-status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 120px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  white-space: nowrap;
+  line-height: 1;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.adoption-status-badge.submitted {
+  background: rgba(21, 135, 195, 0.12);
+  color: var(--teal-dark);
+}
+
+.adoption-status-badge.under-review {
+  background: rgba(183, 119, 0, 0.14);
+  color: #8a5b00;
+}
+
+.adoption-status-badge.approved {
+  background: var(--teal);
+  color: #fff;
+}
+
+.adoption-status-badge.completed {
+  background: var(--success);
+  color: #fff;
+}
+
+.adoption-status-badge.rejected {
+  background: var(--red);
+  color: #fff;
+}
+
+/* badges inside the timestamped history lists are size-flexible */
+.adoption-history-badge {
+  width: auto;
+  flex-shrink: 0;
+}
+
+/* apply form: the animal header above the fields */
+.adoption-form-animal {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.adoption-form-photo {
+  width: 74px;
+  height: 74px;
+  object-fit: cover;
+  border-radius: 16px;
+  flex-shrink: 0;
+}
+
+.adoption-form-animal h2 {
+  margin: 2px 0 4px;
+}
+
+.adoption-form-breed {
+  color: var(--slate);
+  margin: 0;
+}
+
+/* forward-path stepper shown to applicants - mirrors .rescue-timeline but
+   always has the four adoption steps (rejection is a branch, not a step) */
+.adoption-stepper {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 4px 0 18px;
+}
+
+.adoption-stepper-stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding-top: 2px;
+  text-align: center;
+}
+
+.adoption-stepper-stage:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  width: 100%;
+  height: 2px;
+  background: var(--line);
+}
+
+.adoption-stepper-stage.passed::after {
+  background: var(--teal);
+}
+
+.adoption-stepper-dot {
+  position: relative;
+  z-index: 1;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: #fff;
+  border: 2px solid var(--line);
+}
+
+.adoption-stepper-stage.passed .adoption-stepper-dot,
+.adoption-stepper-stage.current .adoption-stepper-dot {
+  border-color: var(--teal);
+}
+
+.adoption-stepper-stage.passed .adoption-stepper-dot {
+  background: var(--teal);
+}
+
+.adoption-stepper-stage.current .adoption-stepper-dot {
+  box-shadow: 0 0 0 4px rgba(21, 135, 195, 0.18);
+}
+
+.adoption-stepper-stage.rejected .adoption-stepper-dot {
+  border-color: var(--red);
+  background: var(--red);
+  box-shadow: 0 0 0 4px rgba(217, 80, 80, 0.15);
+}
+
+.adoption-stepper-label {
+  font-size: 0.66rem;
+  font-weight: 800;
+  line-height: 1.3;
+  color: var(--slate);
+}
+
+.adoption-stepper-stage.passed .adoption-stepper-label {
+  color: var(--teal-dark);
+}
+
+.adoption-stepper-stage.current .adoption-stepper-label {
+  color: var(--navy);
+}
+
+.adoption-stepper-stage.rejected .adoption-stepper-label {
+  color: var(--red);
+}
+
+/* status line under the stepper in the detail modal */
+.adoption-status-line {
+  margin: 0 0 18px;
+}
+
+/* rejection banner shown to the applicant */
+.adoption-rejection-note {
+  border: 1px solid rgba(217, 80, 80, 0.35);
+  background: rgba(217, 80, 80, 0.07);
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: 18px;
+}
+
+.adoption-rejection-note .eyebrow {
+  color: var(--red);
+  margin-bottom: 2px;
+}
+
+.adoption-rejection-note p:last-child {
+  margin: 0;
+}
+
+/* timestamped status history (tracking modal + staff detail) */
+.adoption-history {
+  margin-top: 18px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
+.adoption-history ul {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.adoption-history li {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.adoption-history-when {
+  font-size: 0.78rem;
+  color: var(--slate);
+}
+
+.adoption-history-note {
+  width: 100%;
+  font-size: 0.85rem;
+  color: var(--navy);
+  background: var(--bg);
+  border-radius: 10px;
+  padding: 8px 12px;
+}
+
+/* "My applications" tracking list */
+.adoption-track-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.adoption-track-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.adoption-track-row:hover,
+.adoption-track-row:focus-visible {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px rgba(21, 135, 195, 0.12);
+  transform: translateY(-1px);
+  outline: none;
+}
+
+.adoption-track-photo {
+  width: 46px;
+  height: 46px;
+  object-fit: cover;
+  border-radius: 12px;
+  flex-shrink: 0;
+}
+
+.adoption-track-photo-empty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  color: var(--slate);
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.adoption-track-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.adoption-track-name strong {
+  font-size: 0.92rem;
+  color: var(--navy);
+}
+
+.adoption-track-name small {
+  color: var(--slate);
+  font-size: 0.75rem;
+}
+
+.adoption-track-when {
+  color: var(--slate);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+@media (max-width: 620px) {
+  .adoption-track-when {
+    display: none;
+  }
+
+  .adoption-track-row {
+    flex-wrap: wrap;
   }
 }

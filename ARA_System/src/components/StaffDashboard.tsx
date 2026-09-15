@@ -3,7 +3,9 @@ import { isDevBypassEnabled } from "../utils/devBypass";
 import { SiteHeader, type SiteHeaderView } from "./SiteHeader";
 
 type StaffDashboardProps = {
-  onNavigate: (view: SiteHeaderView | "register-animal" | "manage-animals") => void;
+  onNavigate: (
+    view: SiteHeaderView | "register-animal" | "manage-animals" | "manage-rescue-reports" | "manage-adoption-applications",
+  ) => void;
 };
 
 type StaffRole = "staff" | "veterinarian";
@@ -84,27 +86,41 @@ export function StaffDashboard({ onNavigate }: StaffDashboardProps) {
             and keep rescue, intake, adoption, and medical records up to date.
           </p>
         </div>
-        <div className="header-actions">
+        <div className="dashboard-actions">
           <button
             type="button"
-            className="teal-button"
+            className="dashboard-action-button"
+            onClick={() => onNavigate("manage-rescue-reports")}
+          >
+            Rescue Reports
+          </button>
+          <button
+            type="button"
+            className="dashboard-action-button"
+            onClick={() => onNavigate("manage-adoption-applications")}
+          >
+            Adoption Applications
+          </button>
+          <button
+            type="button"
+            className="dashboard-action-button"
             onClick={() => onNavigate("register-animal")}
           >
-            Register animal
+            Register Animal
           </button>
           <button
             type="button"
-            className="ghost-button"
+            className="dashboard-action-button"
             onClick={() => onNavigate("manage-animals")}
           >
-            Manage animal profiles
+            Manage Animal Profiles
           </button>
           <button
             type="button"
-            className="ghost-button"
+            className="dashboard-action-button"
             onClick={() => onNavigate("home")}
           >
-            View public listings
+            View Public Listings
           </button>
         </div>
       </section>
