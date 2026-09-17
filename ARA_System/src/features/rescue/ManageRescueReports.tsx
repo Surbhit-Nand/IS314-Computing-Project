@@ -7,6 +7,7 @@ import { rescueStatusClass, rescueUrgencyLabel } from "../../types/rescue";
 import type { RescueReport, RescueUrgency } from "../../types/rescue";
 import type { Animal } from "../../types/animal";
 import { isDevBypassEnabled } from "../../utils/devBypass";
+import { Breadcrumbs } from "../../components/Breadcrumbs";
 
 type ManageRescueReportsProps = {
   onNavigate: (view: "home" | "staff-dashboard" | "rescue-report-phone") => void;
@@ -251,14 +252,18 @@ export function ManageRescueReports({ onNavigate }: ManageRescueReportsProps) {
           >
             Log phone report
           </button>
-          <button type="button" className="ghost-button" onClick={() => onNavigate("staff-dashboard")}>
-            Back to dashboard
-          </button>
           <div className="user-avatar-circle">
             <UserButton />
           </div>
         </div>
       </header>
+
+      <Breadcrumbs
+        trail={[
+          { label: "Staff Dashboard", onClick: () => onNavigate("staff-dashboard") },
+          { label: "Rescue queue" },
+        ]}
+      />
 
       <section className="dashboard-panel">
         <div className="panel-heading">

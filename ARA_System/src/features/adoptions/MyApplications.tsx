@@ -2,6 +2,7 @@ import { SignInButton, UserButton, useAuth, useUser } from "@clerk/react";
 import { useEffect, useId, useState } from "react";
 import spcaLogo from "../../assets/spca-logo.png";
 import { DonateModal } from "../donations/DonateModal";
+import { Breadcrumbs } from "../../components/Breadcrumbs";
 import { SiteFooter } from "../../components/SiteFooter";
 import {
   fetchAdoptionApplicationDetail,
@@ -293,6 +294,12 @@ export function MyApplications({ isLoaded, isSignedIn, onNavigate }: MyApplicati
       </header>
 
       <main className="page-shell">
+        <Breadcrumbs
+          trail={[
+            { label: "Home", onClick: () => onNavigate("home") },
+            { label: "My applications" },
+          ]}
+        />
         <section className="catalog-hero">
           <p className="eyebrow">My applications</p>
           <h1>Your adoption applications</h1>

@@ -284,6 +284,61 @@
   padding: 8px 0 54px;
 }
 
+/* Static-hierarchy breadcrumbs rendered under the header on deep views.
+   Trail only reflects where the page sits (no router/back stack), so only
+   parent items are clickable; the current page renders as plain text. */
+.breadcrumbs {
+  margin-bottom: 26px;
+}
+
+.breadcrumbs ol {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.breadcrumbs li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  font-weight: 400;
+  color: var(--slate);
+}
+
+.breadcrumbs button {
+  padding: 0;
+  border: none;
+  background: none;
+  font-weight: 800;
+  color: var(--teal-dark);
+  cursor: pointer;
+}
+
+.breadcrumbs button:hover {
+  text-decoration: underline;
+}
+
+.breadcrumbs [aria-current="page"] {
+  font-weight: 800;
+  color: var(--navy);
+}
+
+.breadcrumb-sep {
+  color: var(--slate);
+  opacity: 0.6;
+}
+
+.dashboard-page > .breadcrumbs {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto 26px;
+}
+
 .hero-section {
   display: grid;
   grid-template-columns: 1.2fr 0.8fr;

@@ -1,6 +1,7 @@
 import { SignInButton, useAuth, useUser } from "@clerk/react";
 import { useEffect, useState, type FormEvent } from "react";
 import { SiteHeader, type SiteHeaderView } from "../../components/SiteHeader";
+import { Breadcrumbs } from "../../components/Breadcrumbs";
 import { SuccessToast } from "../../components/SuccessToast";
 import { fetchAnimalById, updateAnimal } from "../../services/animalsApi";
 import type { Animal, AnimalFormInput } from "../../types/animal";
@@ -157,6 +158,14 @@ export function EditAnimalProfile({ animalId, onNavigate }: EditAnimalProfilePro
         isSignedIn={isSignedIn}
         currentPage="edit-animal"
         onNavigate={onNavigate}
+      />
+
+      <Breadcrumbs
+        trail={[
+          { label: "Staff Dashboard", onClick: () => onNavigate("staff-dashboard") },
+          { label: "Manage animals", onClick: () => onNavigate("manage-animals") },
+          { label: "Edit profile" },
+        ]}
       />
 
       <section className="dashboard-panel">

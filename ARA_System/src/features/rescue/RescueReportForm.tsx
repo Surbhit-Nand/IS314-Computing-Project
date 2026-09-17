@@ -6,6 +6,7 @@ import { submitRescueReport, uploadRescuePhoto } from "../../services/rescueApi"
 import { reverseGeocodePlace, searchPlaces, type PlaceLookup } from "../../services/geocoding";
 import { RescueLocationMap } from "./RescueLocationMap";
 import type { RescueReportFormInput, RescueUrgency } from "../../types/rescue";
+import { Breadcrumbs } from "../../components/Breadcrumbs";
 
 type RescueReportFormProps = {
   // "public" renders the anonymous visitor form inside the public site shell;
@@ -510,18 +511,19 @@ export function RescueReportForm({ variant, source, onNavigate, onShowMyReports 
             </div>
           </div>
           <div className="dashboard-header-actions">
-            <button
-              type="button"
-              className="ghost-button"
-              onClick={() => onNavigate("manage-rescue-reports")}
-            >
-              Back to rescue queue
-            </button>
             <div className="user-avatar-circle">
               <UserButton />
             </div>
           </div>
         </header>
+
+        <Breadcrumbs
+          trail={[
+            { label: "Staff Dashboard", onClick: () => onNavigate("staff-dashboard") },
+            { label: "Rescue queue", onClick: () => onNavigate("manage-rescue-reports") },
+            { label: "Log phone report" },
+          ]}
+        />
 
         <section className="dashboard-panel rescue-phone-panel">
           <p className="security-note">

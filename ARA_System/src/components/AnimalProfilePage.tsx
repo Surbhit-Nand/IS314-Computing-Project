@@ -2,6 +2,7 @@ import { useState } from "react";
 import { adoptionStatusLabel, sizeDisplayLabel, vaccinationStatusLabel, type Animal } from "../types/animal";
 import { useFavoriteAnimals } from "../utils/favorites";
 import { capitalize } from "../utils/format";
+import { Breadcrumbs } from "./Breadcrumbs";
 import { SiteHeader, type SiteHeaderView } from "./SiteHeader";
 
 type AnimalProfilePageProps = {
@@ -46,6 +47,13 @@ export function AnimalProfilePage({ animal, isLoaded, isSignedIn, currentPage, o
       />
 
       <main className="page-shell profile-page">
+        <Breadcrumbs
+          trail={[
+            { label: "Home", onClick: () => onNavigate("home") },
+            { label: "Animals", onClick: () => onNavigate("animal-listings") },
+            { label: animal.name },
+          ]}
+        />
         {/* Hero and the two-column body below both live inside
             .profile-content, so both share the same max-width/centering and
             their left/right edges line up (they didn't before - the hero

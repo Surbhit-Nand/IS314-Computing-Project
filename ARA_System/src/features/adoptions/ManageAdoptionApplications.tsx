@@ -13,6 +13,7 @@ import {
   type AdoptionStatus,
 } from "../../types/adoption";
 import { isDevBypassEnabled } from "../../utils/devBypass";
+import { Breadcrumbs } from "../../components/Breadcrumbs";
 
 type ManageAdoptionApplicationsProps = {
   onNavigate: (view: "home" | "staff-dashboard" | "adoption-apply") => void;
@@ -213,14 +214,18 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
           </div>
         </div>
         <div className="dashboard-header-actions">
-          <button type="button" className="ghost-button" onClick={() => onNavigate("staff-dashboard")}>
-            Back to dashboard
-          </button>
           <div className="user-avatar-circle">
             <UserButton />
           </div>
         </div>
       </header>
+
+      <Breadcrumbs
+        trail={[
+          { label: "Staff Dashboard", onClick: () => onNavigate("staff-dashboard") },
+          { label: "Adoption applications" },
+        ]}
+      />
 
       <section className="dashboard-panel">
         <div className="panel-heading">

@@ -1,6 +1,7 @@
 import { SignInButton, useAuth, useUser } from "@clerk/react";
 import { useState, type FormEvent } from "react";
 import { SiteHeader, type SiteHeaderView } from "../../components/SiteHeader";
+import { Breadcrumbs } from "../../components/Breadcrumbs";
 import { SuccessToast } from "../../components/SuccessToast";
 import { createAnimal } from "../../services/animalsApi";
 import type { AnimalFormInput } from "../../types/animal";
@@ -125,6 +126,13 @@ export function AnimalRegistrationForm({ onNavigate }: AnimalRegistrationFormPro
         isSignedIn={isSignedIn}
         currentPage="register-animal"
         onNavigate={onNavigate}
+      />
+
+      <Breadcrumbs
+        trail={[
+          { label: "Staff Dashboard", onClick: () => onNavigate("staff-dashboard") },
+          { label: "Register animal" },
+        ]}
       />
 
       <section className="dashboard-panel">

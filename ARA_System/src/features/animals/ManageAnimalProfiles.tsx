@@ -1,6 +1,7 @@
 import { SignInButton, useAuth, useUser } from "@clerk/react";
 import { useEffect, useMemo, useState } from "react";
 import { SiteHeader, type SiteHeaderView } from "../../components/SiteHeader";
+import { Breadcrumbs } from "../../components/Breadcrumbs";
 import { SuccessToast } from "../../components/SuccessToast";
 import { deleteAnimal, fetchStaffAnimals } from "../../services/animalsApi";
 import { adoptionStatusLabel, vaccinationStatusLabel, type Animal } from "../../types/animal";
@@ -134,6 +135,13 @@ export function ManageAnimalProfiles({ onNavigate, onSelectAnimal }: ManageAnima
         isSignedIn={isSignedIn}
         currentPage="manage-animals"
         onNavigate={onNavigate}
+      />
+
+      <Breadcrumbs
+        trail={[
+          { label: "Staff Dashboard", onClick: () => onNavigate("staff-dashboard") },
+          { label: "Manage animals" },
+        ]}
       />
 
       <section className="dashboard-panel">
