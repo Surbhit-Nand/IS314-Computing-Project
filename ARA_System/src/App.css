@@ -235,6 +235,28 @@
   color: #fff;
 }
 
+.danger-button {
+  background: rgba(217, 80, 80, 0.08);
+  border: 1px solid rgba(217, 80, 80, 0.25);
+  color: var(--red);
+  border-radius: 999px;
+  padding: 11px 18px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.danger-button:hover {
+  background: rgba(217, 80, 80, 0.14);
+  transform: translateY(-1px);
+}
+
+.danger-button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+  transform: none;
+}
+
 .ghost-button:hover,
 .teal-button:hover,
 .chip:hover,
@@ -1360,7 +1382,7 @@
   color: var(--slate);
 }
 
-/* Staff dashboard action buttons: four equal, SPCA-blue buttons in one row. */
+/* staff dashboard action grid */
 .dashboard-actions {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1383,28 +1405,14 @@
   font-family: inherit;
   font-size: 0.92rem;
   font-weight: 800;
-  line-height: 1.2;
-  text-align: center;
   cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
 }
 
 .dashboard-action-button:hover {
   transform: translateY(-1px);
   background: var(--teal-dark);
   box-shadow: 0 10px 22px rgba(21, 135, 195, 0.18);
-}
-
-@media (max-width: 900px) {
-  .dashboard-actions {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 620px) {
-  .dashboard-actions {
-    grid-template-columns: 1fr;
-  }
 }
 
 .dashboard-metrics {
@@ -1806,6 +1814,12 @@
   gap: 22px;
 }
 
+.animal-form-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .animal-form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1910,131 +1924,6 @@
   text-transform: uppercase;
 }
 
-/* rescue report location map */
-.rescue-map-card {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.rescue-map-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.rescue-map-hint {
-  color: var(--slate);
-  font-size: 0.78rem;
-}
-
-.rescue-map {
-  position: relative;
-  z-index: 0;
-  width: 100%;
-  height: 320px;
-  border-radius: 14px;
-  border: 1px solid var(--line);
-  overflow: hidden;
-  background: var(--bg);
-}
-
-.rescue-map-coordinates {
-  margin: 0;
-  color: var(--slate);
-  font-size: 0.78rem;
-}
-
-.rescue-location-field {
-  position: relative;
-}
-
-.rescue-location-input-row {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
-.rescue-location-input-row input {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.rescue-location-input-row .small-button {
-  flex: 0 0 auto;
-  white-space: nowrap;
-}
-
-.rescue-location-status {
-  margin: 10px 0 0;
-  color: var(--slate);
-  font-size: 0.8rem;
-}
-
-.rescue-location-suggestions {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: calc(100% - 4px);
-  z-index: 5;
-  margin: 0;
-  padding: 6px;
-  list-style: none;
-  background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  box-shadow: var(--shadow);
-  max-height: 260px;
-  overflow-y: auto;
-}
-
-.rescue-location-suggestions li {
-  margin: 0;
-}
-
-.rescue-location-suggestions button {
-  display: block;
-  width: 100%;
-  text-align: left;
-  padding: 9px 10px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--navy);
-  font-size: 0.82rem;
-  line-height: 1.4;
-  cursor: pointer;
-}
-
-.rescue-location-suggestions button:hover,
-.rescue-location-suggestions button:focus-visible {
-  background: rgba(21, 135, 195, 0.1);
-  color: var(--teal);
-}
-
-.rescue-map-coordinates a {
-  color: var(--teal);
-}
-
-@media (max-width: 620px) {
-  .rescue-map {
-    height: 260px;
-  }
-
-  .rescue-map-hint {
-    display: none;
-  }
-
-  .rescue-location-input-row {
-    flex-wrap: wrap;
-  }
-
-  .rescue-location-input-row .small-button {
-    flex: 1 1 100%;
-  }
-}
-
 .animal-search-input {
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -2061,13 +1950,14 @@
   gap: 14px;
   width: 100%;
   padding: 13px 0;
-  border: none;
   border-top: 1px solid var(--line);
-  background: transparent;
-  cursor: pointer;
-  text-align: left;
-  font: inherit;
-  color: inherit;
+}
+
+.animal-table-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
 }
 
 .animal-table-photo {
@@ -2310,22 +2200,22 @@
 .about-team-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 18px;
+  gap: 20px;
 }
 
 .about-team-card {
   background: rgba(255, 255, 255, 0.8);
   border: 1px solid var(--line);
   border-radius: 20px;
-  padding: 22px 16px;
+  padding: 30px 20px;
   text-align: center;
   box-shadow: 0 10px 24px rgba(15, 25, 34, 0.03);
 }
 
 .about-avatar {
-  width: 64px;
-  height: 64px;
-  margin: 0 auto 12px;
+  width: 132px;
+  height: 132px;
+  margin: 0 auto 14px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2333,21 +2223,38 @@
   background: linear-gradient(135deg, var(--teal) 0%, var(--teal-dark) 100%);
   color: #fff;
   font-weight: 800;
-  font-size: 1.1rem;
+  font-size: 1.5rem;
+}
+
+.about-team-photo {
+  width: 200px;
+  height: 200px;
+  margin: 0 auto 14px;
+  object-fit: cover;
+  border-radius: 50%;
+  border: 3px solid var(--teal);
 }
 
 .about-team-card h3 {
   margin: 0 0 6px;
-  font-size: 1.05rem;
+  font-size: 1.15rem;
   color: var(--navy);
 }
 
 .about-team-card p {
   margin: 0;
   color: var(--slate);
-  font-size: 0.85rem;
+  font-size: 0.95rem;
   font-weight: 700;
 }
+
+.about-team-phone {
+  margin: 8px 0 0;
+  font-weight: 800;
+  color: var(--teal);
+}
+
+/* Executive committee */
 
 /* Executive committee */
 .about-committee-intro {
@@ -2368,14 +2275,14 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 16px;
-  background: var(--teal);
-  border: 1px solid var(--teal);
+  background: var(--aqua);
+  border: 1px solid var(--aqua);
   border-radius: 14px;
   padding: 14px 18px;
 }
 
 .about-committee-row span {
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--navy);
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -2582,6 +2489,10 @@
   min-width: 0;
 }
 
+.tracking-results {
+  min-width: 0;
+}
+
 .catalog-results-head {
   display: flex;
   align-items: center;
@@ -2752,6 +2663,15 @@
   font-size: 0.86rem;
 }
 
+/* Neutral "not yet" state - same weight/spacing as .pet-card-check's teal
+   checkmark lines, but slate instead of teal so it reads as informational
+   rather than a second positive confirmation or a warning. */
+.profile-check-muted {
+  margin: 6px 0 0;
+  color: var(--slate);
+  font-weight: 700;
+}
+
 .profile-facts {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2890,9 +2810,68 @@
   .user-dashboard-columns {
     grid-template-columns: 1fr 1fr;
   }
+
+  .dashboard-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* toast notification - z-index 1000 per the documented layer scale
+   (nav 20, modal 100, toast 1000) */
+
+.toast {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: 360px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: #fff;
+  border-left: 4px solid transparent;
+  box-shadow: var(--shadow);
+  color: var(--navy);
+  font-weight: 700;
+  font-size: 0.88rem;
+  animation: toast-in 0.25s ease;
+}
+
+.toast-success {
+  border-left-color: var(--success);
+}
+
+.toast-close {
+  flex: 0 0 auto;
+  border: none;
+  background: transparent;
+  color: var(--slate);
+  font-size: 1.2rem;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+}
+
+@keyframes toast-in {
+  from {
+    transform: translateY(-8px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 @media (max-width: 720px) {
+  .toast {
+    left: 16px;
+    right: 16px;
+    max-width: none;
+  }
+
   .site-header,
   .site-footer,
   .cta-strip,
@@ -2999,6 +2978,10 @@
     grid-template-columns: 1fr;
   }
 
+  .dashboard-actions {
+    grid-template-columns: 1fr;
+  }
+
   .user-dashboard-page {
     padding: 18px 12px 36px;
   }
@@ -3056,6 +3039,10 @@
   color: var(--navy);
 }
 
+.donate-modal {
+  width: min(600px, 100%);
+}
+
 .donate-intro {
   margin-bottom: 18px;
   color: var(--slate);
@@ -3065,6 +3052,7 @@
 
 .donate-form {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
 }
 
@@ -3072,11 +3060,14 @@
   border: none;
   margin: 0;
   padding: 0;
+  min-width: 0;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
 }
 
 .donate-amounts legend,
+.donate-methods legend,
 .donate-field span {
   font-size: 0.78rem;
   font-weight: 800;
@@ -3089,12 +3080,18 @@
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+  min-width: 0;
+}
+
+.donate-custom {
+  min-width: 0;
 }
 
 .donate-custom input,
 .donate-field input,
 .donate-field textarea {
   width: 100%;
+  max-width: 100%;
   border: 1px solid var(--teal);
   border-radius: 10px;
   padding: 11px 14px;
@@ -3111,7 +3108,9 @@
 
 .donate-field {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 6px;
+  min-width: 0;
 }
 
 .donate-field textarea {
@@ -3144,6 +3143,247 @@
   margin-top: 18px;
 }
 
+/* Donate modal: Card/QR payment-method toggle with sliding panels. Reuses
+   token palette + pill/radius scale; the track slides one full panel left
+   when QR is chosen (see DonateModal.tsx). */
+.donate-methods {
+  border: none;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+}
+
+.donate-method-toggle {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--bg);
+  border-radius: 999px;
+}
+
+.method-button {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: none;
+  cursor: pointer;
+  background: transparent;
+  color: var(--slate);
+  border-radius: 999px;
+  padding: 10px 12px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.method-button.active {
+  background: linear-gradient(135deg, var(--teal) 0%, var(--teal-dark) 100%);
+  color: #fff;
+  box-shadow: 0 8px 18px rgba(21, 135, 195, 0.25);
+}
+
+.donate-panel-viewport {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(21, 135, 195, 0.04);
+}
+
+.donate-panel-track {
+  display: flex;
+  min-width: 0;
+  transition: transform 0.45s ease;
+  will-change: transform;
+}
+
+.donate-panel-track.qr {
+  /* Track box is exactly one panel wide, so -100% slides it one full
+     panel — aligning the QR pane perfectly (see DonateModal). */
+  transform: translateX(-100%);
+}
+
+.donate-panel {
+  flex: 0 0 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 14px;
+  padding: 16px 18px;
+}
+
+.qr-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  min-width: 0;
+}
+
+.donate-panel p {
+  margin: 0;
+  min-width: 0;
+  color: var(--slate);
+  font-size: 0.9rem;
+  line-height: 1.55;
+  overflow-wrap: break-word;
+}
+
+.qr-row p {
+  flex: 1 1 180px;
+}
+
+.donate-panel .qr-art {
+  flex-shrink: 0;
+  width: 120px;
+  height: 120px;
+  padding: 6px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+
+/* Below the 620px mobile breakpoint the QR panel stacks: image on top,
+   description full-width underneath. */
+@media (max-width: 620px) {
+  .qr-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+/* rescue section: report location map */
+
+/* rescue report location map */
+.rescue-map-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.rescue-map-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.rescue-map-hint {
+  color: var(--slate);
+  font-size: 0.78rem;
+}
+
+.rescue-map {
+  position: relative;
+  z-index: 0;
+  width: 100%;
+  height: 320px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.rescue-map-coordinates {
+  margin: 0;
+  color: var(--slate);
+  font-size: 0.78rem;
+}
+
+.rescue-location-field {
+  position: relative;
+}
+
+.rescue-location-input-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.rescue-location-input-row input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.rescue-location-input-row .small-button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.rescue-location-status {
+  margin: 10px 0 0;
+  color: var(--slate);
+  font-size: 0.8rem;
+}
+
+.rescue-location-suggestions {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% - 4px);
+  z-index: 5;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.rescue-location-suggestions li {
+  margin: 0;
+}
+
+.rescue-location-suggestions button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--navy);
+  font-size: 0.82rem;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.rescue-location-suggestions button:hover,
+.rescue-location-suggestions button:focus-visible {
+  background: rgba(21, 135, 195, 0.1);
+  color: var(--teal);
+}
+
+.rescue-map-coordinates a {
+  color: var(--teal);
+}
+
+@media (max-width: 620px) {
+  .rescue-map {
+    height: 260px;
+  }
+
+  .rescue-map-hint {
+    display: none;
+  }
+
+  .rescue-location-input-row {
+    flex-wrap: wrap;
+  }
+
+  .rescue-location-input-row .small-button {
+    flex: 1 1 100%;
+  }
+}
+
+/* rescue section: report form, my reports, dispatch */
 /* rescue report page polish */
 .rescue-form-panel {
   max-width: 900px;
@@ -4110,8 +4350,307 @@
     grid-column: auto;
   }
 
-  .rescue-detail-photos img {
+.rescue-detail-photos img {
     width: 160px;
     height: 160px;
+  }
+}
+
+/* Adoption module -------------------------------------------------- */
+
+/* Status pill for adoption lifecycle states - mirrors .rescue-status-badge
+   so the review queue and the applicant tracking UI share the same visual
+   language. Fixed width (like the rescue badge) so queue rows line up. */
+.adoption-status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 120px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  white-space: nowrap;
+  line-height: 1;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.adoption-status-badge.submitted {
+  background: rgba(21, 135, 195, 0.12);
+  color: var(--teal-dark);
+}
+
+.adoption-status-badge.under-review {
+  background: rgba(183, 119, 0, 0.14);
+  color: #8a5b00;
+}
+
+.adoption-status-badge.approved {
+  background: var(--teal);
+  color: #fff;
+}
+
+.adoption-status-badge.completed {
+  background: var(--success);
+  color: #fff;
+}
+
+.adoption-status-badge.rejected {
+  background: var(--red);
+  color: #fff;
+}
+
+/* badges inside the timestamped history lists are size-flexible */
+.adoption-history-badge {
+  width: auto;
+  flex-shrink: 0;
+}
+
+/* apply form: the animal header above the fields */
+.adoption-form-animal {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.adoption-form-photo {
+  width: 74px;
+  height: 74px;
+  object-fit: cover;
+  border-radius: 16px;
+  flex-shrink: 0;
+}
+
+.adoption-form-animal h2 {
+  margin: 2px 0 4px;
+}
+
+.adoption-form-breed {
+  color: var(--slate);
+  margin: 0;
+}
+
+/* forward-path stepper shown to applicants - mirrors .rescue-timeline but
+   always has the four adoption steps (rejection is a branch, not a step) */
+.adoption-stepper {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 4px 0 18px;
+}
+
+.adoption-stepper-stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding-top: 2px;
+  text-align: center;
+}
+
+.adoption-stepper-stage:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  width: 100%;
+  height: 2px;
+  background: var(--line);
+}
+
+.adoption-stepper-stage.passed::after {
+  background: var(--teal);
+}
+
+.adoption-stepper-dot {
+  position: relative;
+  z-index: 1;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: #fff;
+  border: 2px solid var(--line);
+}
+
+.adoption-stepper-stage.passed .adoption-stepper-dot,
+.adoption-stepper-stage.current .adoption-stepper-dot {
+  border-color: var(--teal);
+}
+
+.adoption-stepper-stage.passed .adoption-stepper-dot {
+  background: var(--teal);
+}
+
+.adoption-stepper-stage.current .adoption-stepper-dot {
+  box-shadow: 0 0 0 4px rgba(21, 135, 195, 0.18);
+}
+
+.adoption-stepper-stage.rejected .adoption-stepper-dot {
+  border-color: var(--red);
+  background: var(--red);
+  box-shadow: 0 0 0 4px rgba(217, 80, 80, 0.15);
+}
+
+.adoption-stepper-label {
+  font-size: 0.66rem;
+  font-weight: 800;
+  line-height: 1.3;
+  color: var(--slate);
+}
+
+.adoption-stepper-stage.passed .adoption-stepper-label {
+  color: var(--teal-dark);
+}
+
+.adoption-stepper-stage.current .adoption-stepper-label {
+  color: var(--navy);
+}
+
+.adoption-stepper-stage.rejected .adoption-stepper-label {
+  color: var(--red);
+}
+
+/* status line under the stepper in the detail modal */
+.adoption-status-line {
+  margin: 0 0 18px;
+}
+
+/* rejection banner shown to the applicant */
+.adoption-rejection-note {
+  border: 1px solid rgba(217, 80, 80, 0.35);
+  background: rgba(217, 80, 80, 0.07);
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: 18px;
+}
+
+.adoption-rejection-note .eyebrow {
+  color: var(--red);
+  margin-bottom: 2px;
+}
+
+.adoption-rejection-note p:last-child {
+  margin: 0;
+}
+
+/* timestamped status history (tracking modal + staff detail) */
+.adoption-history {
+  margin-top: 18px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
+.adoption-history ul {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.adoption-history li {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.adoption-history-when {
+  font-size: 0.78rem;
+  color: var(--slate);
+}
+
+.adoption-history-note {
+  width: 100%;
+  font-size: 0.85rem;
+  color: var(--navy);
+  background: var(--bg);
+  border-radius: 10px;
+  padding: 8px 12px;
+}
+
+/* "My applications" tracking list */
+.adoption-track-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.adoption-track-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.adoption-track-row:hover,
+.adoption-track-row:focus-visible {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px rgba(21, 135, 195, 0.12);
+  transform: translateY(-1px);
+  outline: none;
+}
+
+.adoption-track-photo {
+  width: 46px;
+  height: 46px;
+  object-fit: cover;
+  border-radius: 12px;
+  flex-shrink: 0;
+}
+
+.adoption-track-photo-empty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  color: var(--slate);
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.adoption-track-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.adoption-track-name strong {
+  font-size: 0.92rem;
+  color: var(--navy);
+}
+
+.adoption-track-name small {
+  color: var(--slate);
+  font-size: 0.75rem;
+}
+
+.adoption-track-when {
+  color: var(--slate);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+@media (max-width: 620px) {
+  .adoption-track-when {
+    display: none;
+  }
+
+  .adoption-track-row {
+    flex-wrap: wrap;
   }
 }

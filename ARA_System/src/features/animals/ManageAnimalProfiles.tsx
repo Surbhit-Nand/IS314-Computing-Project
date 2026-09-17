@@ -1,7 +1,8 @@
 import { SignInButton, useAuth, useUser } from "@clerk/react";
 import { useEffect, useMemo, useState } from "react";
 import { SiteHeader, type SiteHeaderView } from "../../components/SiteHeader";
-import { fetchStaffAnimals } from "../../services/animalsApi";
+import { SuccessToast } from "../../components/SuccessToast";
+import { deleteAnimal, fetchStaffAnimals } from "../../services/animalsApi";
 import { adoptionStatusLabel, vaccinationStatusLabel, type Animal } from "../../types/animal";
 import { isDevBypassEnabled } from "../../utils/devBypass";
 
@@ -23,6 +24,11 @@ export function ManageAnimalProfiles({ onNavigate, onSelectAnimal }: ManageAnima
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  // Which animal is currently being deleted (disables just that row's
+  // button and shows "Deleting..." rather than blocking the whole page).
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState("");
+  const [successToastMessage, setSuccessToastMessage] = useState("");
 
   // Loads every animal profile once the staff member's access is confirmed.
   useEffect(() => {
@@ -40,6 +46,33 @@ export function ManageAnimalProfiles({ onNavigate, onSelectAnimal }: ManageAnima
       }
     })();
   }, [getToken, hasStaffAccess, isLoaded, isSignedIn]);
+
+  // Confirms with staff first (native browser confirm - no unsaved-form
+  // state to lose here, so a simple confirm is enough), soft-deletes on the
+  // server, then removes the animal from the local list so it disappears
+  // from the page immediately without a full reload.
+  async function handleDelete(animal: Animal) {
+    const confirmed = window.confirm(
+      `Are you sure you want to delete ${animal.name}'s profile? This cannot be undone.`,
+    );
+    if (!confirmed) return;
+
+    setDeleteError("");
+    setDeletingId(animal.id);
+    try {
+      const token = await getToken();
+      if (!token) throw new Error("Your Clerk session has expired. Please sign in again.");
+      await deleteAnimal(token, animal.id);
+      setAnimals((previous) => previous.filter((existing) => existing.id !== animal.id));
+      setSuccessToastMessage(`✓ ${animal.name}'s profile deleted.`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "The animal profile could not be deleted.";
+      window.alert(message);
+      setDeleteError(message);
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   // Filters the already-loaded list client-side across the fields staff are
   // most likely to search by - no extra network round trip needed.
@@ -88,6 +121,13 @@ export function ManageAnimalProfiles({ onNavigate, onSelectAnimal }: ManageAnima
 
   return (
     <main className="dashboard-page">
+      {successToastMessage && (
+        <SuccessToast
+          message={successToastMessage}
+          onDismiss={() => setSuccessToastMessage("")}
+        />
+      )}
+
       <SiteHeader
         isLoaded={isLoaded}
         isSignedIn={isSignedIn}
@@ -110,6 +150,8 @@ export function ManageAnimalProfiles({ onNavigate, onSelectAnimal }: ManageAnima
           />
         </div>
 
+        {deleteError && <p className="invite-feedback error">{deleteError}</p>}
+
         {isLoading && <p className="dashboard-data-state">Loading animal profiles...</p>}
         {!isLoading && loadError && <p className="dashboard-data-state error">{loadError}</p>}
         {!isLoading && !loadError && filteredAnimals.length === 0 && (
@@ -119,12 +161,10 @@ export function ManageAnimalProfiles({ onNavigate, onSelectAnimal }: ManageAnima
         {!isLoading && !loadError && filteredAnimals.length > 0 && (
           <div className="animal-table">
             {filteredAnimals.map((animal) => (
-              <button
-                type="button"
-                key={animal.id}
-                className="animal-table-row"
-                onClick={() => onSelectAnimal(animal.id)}
-              >
+              // A plain, non-interactive row - clicking the photo/name/ID/
+              // badges does nothing. Editing is only reachable through the
+              // explicit "Edit" button below, not the row itself.
+              <div key={animal.id} className="animal-table-row">
                 <span className="animal-table-photo">
                   {animal.photoUrls[0] ? (
                     <img src={animal.photoUrls[0]} alt={animal.name} />
@@ -139,9 +179,30 @@ export function ManageAnimalProfiles({ onNavigate, onSelectAnimal }: ManageAnima
                   </span>
                 </span>
                 <span className="role-pill muted">{adoptionStatusLabel(animal.status)}</span>
-                <span className="role-pill muted">{vaccinationStatusLabel(animal.vaccinationStatus)}</span>
-                <span className="text-button">View / Edit</span>
-              </button>
+                {/* Teal (accent) when vaccinated vs. muted/grey when not -
+                    both states always render, just visually distinct, so
+                    "not yet vaccinated" doesn't just disappear from the row. */}
+                <span className={animal.vaccinationStatus === "vaccinated" ? "role-pill" : "role-pill muted"}>
+                  {vaccinationStatusLabel(animal.vaccinationStatus)}
+                </span>
+                <div className="animal-table-actions">
+                  <button
+                    type="button"
+                    className="teal-button small-button"
+                    onClick={() => onSelectAnimal(animal.id)}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    className="danger-button small-button"
+                    onClick={() => handleDelete(animal)}
+                    disabled={deletingId === animal.id}
+                  >
+                    {deletingId === animal.id ? "Deleting..." : "Delete"}
+                  </button>
+                </div>
+              </div>
             ))}
           </div>
         )}

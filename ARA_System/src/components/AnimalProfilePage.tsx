@@ -148,18 +148,34 @@ export function AnimalProfilePage({ animal, isLoaded, isSignedIn, currentPage, o
               <p className="pet-card-check profile-check">
                 ✓ {adoptionStatusLabel(animal.status)}
               </p>
-              {animal.vaccinationStatus === "vaccinated" && (
+              {/* Always shown, not just when vaccinated - "not yet vaccinated"
+                  is information adopters need too, not something to hide.
+                  Visually distinct (slate/neutral, open-circle marker) from
+                  the teal checkmark states so the two are easy to tell apart
+                  at a glance, without reading as an alarm/warning. */}
+              {animal.vaccinationStatus === "vaccinated" ? (
                 <p className="pet-card-check profile-check">
                   ✓ {vaccinationStatusLabel(animal.vaccinationStatus)}
                 </p>
+              ) : (
+                <p className="profile-check-muted profile-check">
+                  ○ {vaccinationStatusLabel(animal.vaccinationStatus)}
+                </p>
               )}
 
-              {/* No click behaviour yet - a teammate is wiring up the actual
-                  adoption application flow. This just needs to exist and
-                  look right. */}
-              <button type="button" className="teal-button profile-adopt-button">
-                Adopt {animal.name}
-              </button>
+              {/* Routes to the public adoption application form for this
+                  animal (see App.tsx's "adoption-apply" branch). If the
+                  visitor is not signed in the form itself prompts them to
+                  log in before applying. Hidden once the animal is adopted. */}
+              {animal.status !== "adopted" && (
+                <button
+                  type="button"
+                  className="teal-button profile-adopt-button"
+                  onClick={() => onNavigate("adoption-apply")}
+                >
+                  Adopt {animal.name}
+                </button>
+              )}
             </div>
 
             {/* RIGHT: the animal's own story, in prose - About, then

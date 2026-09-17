@@ -8,8 +8,10 @@ import {
 	pgTable,
 	text,
 	timestamp,
+	uniqueIndex,
 	uuid,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 export const animalStatus = pgEnum("animal_status", [
 	"intake",
@@ -53,6 +55,16 @@ export const animals = pgTable("animals", {
 	size: animalSize("size"),
 	medicallyCleared: boolean("medically_cleared").notNull().default(false),
 	status: animalStatus("status").notNull().default("intake"),
+	// Soft delete: set when staff remove a profile (animal passed away,
+	// transferred elsewhere, etc). Deliberately NOT reusing the "closed"
+	// status value above - that's part of the adoption/vet lifecycle and
+	// likely means something different (e.g. case closed after adoption),
+	// so overloading it for deletion risks a future collision. A hard
+	// DELETE isn't safe here anyway: rescue_reports, adoption_applications,
+	// and vet_appointments all have a NOT-ACTION foreign key to animals.id,
+	// so deleting a row with any history would fail with a raw DB
+	// constraint error, and would destroy the audit trail for rows with none.
+	deletedAt: timestamp("deleted_at", { withTimezone: true }),
 	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 	updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -73,9 +85,9 @@ export const rescueReports = pgTable("rescue_reports", {
 	reporterPhone: text("reporter_phone"),
 	reporterEmail: text("reporter_email"),
 	location: text("location").notNull(),
-	// Pin coordinates from the interactive Google Map on the rescue report
-	// form. Optional - a reporter can type a location without dropping a pin -
-	// but stored whenever chosen so staff can see exactly where the animal is.
+	// Pin coordinates from the interactive map on the rescue report form.
+	// Optional - a reporter can type a location without dropping a pin - but
+	// stored whenever chosen so staff can see exactly where the animal is.
 	latitude: doublePrecision("latitude"),
 	longitude: doublePrecision("longitude"),
 	animalType: text("animal_type"),
@@ -98,15 +110,42 @@ export const rescueReports = pgTable("rescue_reports", {
 	updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const adoptionApplications = pgTable("adoption_applications", {
+export const adoptionApplications = pgTable(
+	"adoption_applications",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		animalId: uuid("animal_id").notNull().references(() => animals.id),
+		applicantClerkUserId: text("applicant_clerk_user_id").notNull(),
+		homeDetails: text("home_details").notNull(),
+		familyDetails: text("family_details").notNull(),
+		existingPets: text("existing_pets"),
+		animalExperience: text("animal_experience"),
+		status: text("status").notNull().default("submitted"),
+		reviewNotes: text("review_notes"),
+		createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+		updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+	},
+	// Partial unique index: only one application per animal can ever reach
+	// "approved" or "completed". Any concurrent UPDATE that tries to move a
+	// second application for the same animal into one of those statuses will
+	// hit a unique-violation (23505), which the service layer translates into
+	// a 409 Conflict. Works over the stateless neon-http driver because the
+	// guarantee is a single-statement DB constraint, not a multi-statement lock.
+	(table) => [
+		uniqueIndex("adoption_animal_unique_active")
+			.on(table.animalId)
+			.where(sql`${table.status} IN ('approved', 'completed')`),
+	],
+);
+
+export const adoptionStatusHistory = pgTable("adoption_status_history", {
 	id: uuid("id").defaultRandom().primaryKey(),
-	 animalId: uuid("animal_id").notNull().references(() => animals.id),
-	applicantClerkUserId: text("applicant_clerk_user_id").notNull(),
-	homeDetails: text("home_details").notNull(),
-	familyDetails: text("family_details").notNull(),
-	existingPets: text("existing_pets"),
-	 animalExperience: text("animal_experience"),
-	status: text("status").notNull().default("submitted"),
+	applicationId: uuid("application_id")
+		.notNull()
+		.references(() => adoptionApplications.id),
+	status: text("status").notNull(),
+	changedByClerkUserId: text("changed_by_clerk_user_id"),
+	note: text("note"),
 	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -121,8 +160,21 @@ export const vetAppointments = pgTable("vet_appointments", {
 	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-// Donation lifecycle mirrors the Stripe checkout states the DonateModal
-// submits against. The table itself comes from migration 0003_add_donations.
+export const auditLogs = pgTable("audit_logs", {
+	id: uuid("id").defaultRandom().primaryKey(),
+	actorClerkUserId: text("actor_clerk_user_id").notNull(),
+	action: text("action").notNull(),
+	entityType: text("entity_type").notNull(),
+	entityId: text("entity_id").notNull(),
+	metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Donations are cross-cutting: any visitor can give anonymously, so the
+// donor identity is optional (filled in from the Clerk session when present).
+// `currency`/`status` have DB defaults so an insert never needs them, and
+// `stripeCheckoutSessionId` is reserved for the Stripe hosted-checkout
+// integration planned in AGENTS.md (see the Payments section).
 export const donationStatus = pgEnum("donation_status", [
 	"pending",
 	"completed",
@@ -138,17 +190,10 @@ export const donations = pgTable("donations", {
 	amountCents: integer("amount_cents").notNull(),
 	currency: text("currency").notNull().default("USD"),
 	status: donationStatus("status").notNull().default("completed"),
+	// Which method the donor picked in the Donate modal toggle; validated to
+	// "card" | "qr" in donations.service.ts before it ever reaches this table.
+	paymentMethod: text("payment_method").notNull().default("card"),
 	message: text("message"),
 	stripeCheckoutSessionId: text("stripe_checkout_session_id"),
-	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-export const auditLogs = pgTable("audit_logs", {
-	id: uuid("id").defaultRandom().primaryKey(),
-	actorClerkUserId: text("actor_clerk_user_id").notNull(),
-	action: text("action").notNull(),
-	entityType: text("entity_type").notNull(),
-	entityId: text("entity_id").notNull(),
-	metadata: jsonb("metadata").$type<Record<string, unknown>>(),
 	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

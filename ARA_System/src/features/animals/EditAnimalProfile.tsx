@@ -1,6 +1,7 @@
 import { SignInButton, useAuth, useUser } from "@clerk/react";
 import { useEffect, useState, type FormEvent } from "react";
 import { SiteHeader, type SiteHeaderView } from "../../components/SiteHeader";
+import { SuccessToast } from "../../components/SuccessToast";
 import { fetchAnimalById, updateAnimal } from "../../services/animalsApi";
 import type { Animal, AnimalFormInput } from "../../types/animal";
 import { isDevBypassEnabled } from "../../utils/devBypass";
@@ -49,6 +50,11 @@ export function EditAnimalProfile({ animalId, onNavigate }: EditAnimalProfilePro
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
   const [saveError, setSaveError] = useState("");
+  // Separate from saveMessage/saveError on purpose: this only ever gets set
+  // in the success branch below, so it can't collide with or hide the
+  // existing error-handling path (alert + inline .invite-feedback.error
+  // message), which is untouched.
+  const [successToastMessage, setSuccessToastMessage] = useState("");
 
   // Fetches the animal to edit once staff access is confirmed.
   useEffect(() => {
@@ -89,11 +95,18 @@ export function EditAnimalProfile({ animalId, onNavigate }: EditAnimalProfilePro
       if (!token) throw new Error("Your Clerk session has expired. Please sign in again.");
       await updateAnimal(token, animalId, form);
       setSaveMessage("Animal profile updated.");
+      setSuccessToastMessage(`✓ ${form.name} updated successfully!`);
+      // Give staff a moment to actually see the toast before the page
+      // changes out from under it - navigating immediately would unmount
+      // this component (and the toast with it) before it ever painted.
+      // isSubmitting deliberately stays true here (not reset in a finally)
+      // so "Save changes" stays disabled for this brief window rather than
+      // becoming re-clickable right before navigating away.
+      window.setTimeout(() => onNavigate("manage-animals"), 1200);
     } catch (error) {
       const message = error instanceof Error ? error.message : "The animal profile could not be updated.";
       window.alert(message);
       setSaveError(message);
-    } finally {
       setIsSubmitting(false);
     }
   }
@@ -132,6 +145,13 @@ export function EditAnimalProfile({ animalId, onNavigate }: EditAnimalProfilePro
 
   return (
     <main className="dashboard-page">
+      {successToastMessage && (
+        <SuccessToast
+          message={successToastMessage}
+          onDismiss={() => setSuccessToastMessage("")}
+        />
+      )}
+
       <SiteHeader
         isLoaded={isLoaded}
         isSignedIn={isSignedIn}
@@ -150,9 +170,22 @@ export function EditAnimalProfile({ animalId, onNavigate }: EditAnimalProfilePro
 
             <form className="animal-form" onSubmit={handleSubmit}>
               <AnimalProfileFields value={form} onChange={setForm} getToken={getToken} />
-              <button type="submit" className="teal-button submit-button" disabled={isSubmitting}>
-                {isSubmitting ? "Saving..." : "Save changes"}
-              </button>
+              <div className="animal-form-actions">
+                {/* No confirmation - the form has no persisted draft to lose
+                    (nothing is saved until "Save changes" succeeds), so
+                    discarding on navigate-away is exactly what staff expect
+                    from "Cancel". */}
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={() => onNavigate("manage-animals")}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="teal-button submit-button" disabled={isSubmitting}>
+                  {isSubmitting ? "Saving..." : "Save changes"}
+                </button>
+              </div>
             </form>
           </>
         )}

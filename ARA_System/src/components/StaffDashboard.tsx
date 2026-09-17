@@ -4,12 +4,7 @@ import { SiteHeader, type SiteHeaderView } from "./SiteHeader";
 
 type StaffDashboardProps = {
   onNavigate: (
-    view:
-      | SiteHeaderView
-      | "register-animal"
-      | "manage-animals"
-      | "manage-rescue-reports"
-      | "rescue-report-phone",
+    view: SiteHeaderView | "register-animal" | "manage-animals" | "manage-rescue-reports" | "manage-adoption-applications",
   ) => void;
 };
 
@@ -98,6 +93,13 @@ export function StaffDashboard({ onNavigate }: StaffDashboardProps) {
             onClick={() => onNavigate("manage-rescue-reports")}
           >
             Rescue Reports
+          </button>
+          <button
+            type="button"
+            className="dashboard-action-button"
+            onClick={() => onNavigate("manage-adoption-applications")}
+          >
+            Adoption Applications
           </button>
           <button
             type="button"

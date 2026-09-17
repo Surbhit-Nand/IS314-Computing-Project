@@ -12,10 +12,13 @@ import { UserDashboard } from "./components/UserDashboard";
 import { AnimalRegistrationForm } from "./features/animals/AnimalRegistrationForm";
 import { EditAnimalProfile } from "./features/animals/EditAnimalProfile";
 import { ManageAnimalProfiles } from "./features/animals/ManageAnimalProfiles";
-import type { Animal } from "./types/animal";
+import { AdoptionApplicationForm } from "./features/adoptions/AdoptionApplicationForm";
+import { ManageAdoptionApplications } from "./features/adoptions/ManageAdoptionApplications";
+import { MyApplications } from "./features/adoptions/MyApplications";
 import { ManageRescueReports } from "./features/rescue/ManageRescueReports";
-import { RescueReportForm } from "./features/rescue/RescueReportForm";
 import { MyReports } from "./features/rescue/MyReports";
+import { RescueReportForm } from "./features/rescue/RescueReportForm";
+import type { Animal } from "./types/animal";
 
 export type View =
   | "home"
@@ -33,7 +36,10 @@ export type View =
   | "rescue-report"
   | "rescue-report-phone"
   | "my-reports"
-  | "manage-rescue-reports";
+  | "manage-rescue-reports"
+  | "adoption-apply"
+  | "my-applications"
+  | "manage-adoption-applications";
 
 function App() {
   const [view, setView] = useState<View>("home");
@@ -55,6 +61,10 @@ function App() {
 
   function openMyReports() {
     setView("my-reports");
+  }
+
+  function openMyApplications() {
+    setView("my-applications");
   }
 
   if (view === "dashboard") {
@@ -104,6 +114,26 @@ function App() {
     );
   }
 
+  if (view === "register-animal") {
+    return <AnimalRegistrationForm onNavigate={setView} />;
+  }
+
+  if (view === "manage-animals") {
+    return (
+      <ManageAnimalProfiles
+        onNavigate={setView}
+        onSelectAnimal={(animalId) => {
+          setSelectedAnimalId(animalId);
+          setView("edit-animal");
+        }}
+      />
+    );
+  }
+
+  if (view === "edit-animal" && selectedAnimalId) {
+    return <EditAnimalProfile animalId={selectedAnimalId} onNavigate={setView} />;
+  }
+
   if (view === "rescue-report") {
     return (
       <RescueReportForm
@@ -140,24 +170,30 @@ function App() {
     return <ManageRescueReports onNavigate={setView} />;
   }
 
-  if (view === "register-animal") {
-    return <AnimalRegistrationForm onNavigate={setView} />;
-  }
-
-  if (view === "manage-animals") {
+  if (view === "adoption-apply") {
     return (
-      <ManageAnimalProfiles
+      <AdoptionApplicationForm
+        animal={viewedAnimal}
+        isLoaded={isLoaded}
+        isSignedIn={isSignedIn}
+        onShowMyApplications={openMyApplications}
         onNavigate={setView}
-        onSelectAnimal={(animalId) => {
-          setSelectedAnimalId(animalId);
-          setView("edit-animal");
-        }}
       />
     );
   }
 
-  if (view === "edit-animal" && selectedAnimalId) {
-    return <EditAnimalProfile animalId={selectedAnimalId} onNavigate={setView} />;
+  if (view === "my-applications") {
+    return (
+      <MyApplications
+        isLoaded={isLoaded}
+        isSignedIn={isSignedIn}
+        onNavigate={setView}
+      />
+    );
+  }
+
+  if (view === "manage-adoption-applications") {
+    return <ManageAdoptionApplications onNavigate={setView} />;
   }
 
   if (view === "login" || view === "register") {

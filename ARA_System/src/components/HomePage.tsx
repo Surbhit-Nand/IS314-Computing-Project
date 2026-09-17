@@ -2,27 +2,15 @@ import { useEffect, useState } from "react";
 import type { Animal } from "../types/animal";
 import { capitalize } from "../utils/format";
 import { useFavoriteAnimals } from "../utils/favorites";
-import { DonateButton } from "../features/donations/DonateButton";
+import { DonateModal } from "../features/donations/DonateModal";
 import { SiteFooter } from "./SiteFooter";
-import { SiteHeader } from "./SiteHeader";
+import { SiteHeader, type SiteHeaderView } from "./SiteHeader";
 
 type HomePageProps = {
   isLoaded: boolean;
   isSignedIn: boolean | undefined;
   currentPage: string;
-  onNavigate: (
-    view:
-      | "home"
-      | "animal-listings"
-      | "about"
-      | "login"
-      | "register"
-      | "dashboard"
-      | "staff-dashboard"
-      | "user-dashboard"
-      | "rescue-report"
-      | "my-reports",
-  ) => void;
+  onNavigate: (view: SiteHeaderView) => void;
   onViewAnimal: (animal: Animal) => void;
 };
 
@@ -45,6 +33,7 @@ export function HomePage({ isLoaded, isSignedIn, currentPage, onNavigate, onView
   const [animalsLoading, setAnimalsLoading] = useState(true);
   const [animalsError, setAnimalsError] = useState("");
   const [heroSlide, setHeroSlide] = useState(0);
+  const [donateOpen, setDonateOpen] = useState(false);
   const { isFavorite, toggle } = useFavoriteAnimals();
 
   useEffect(() => {
@@ -83,7 +72,7 @@ export function HomePage({ isLoaded, isSignedIn, currentPage, onNavigate, onView
 
   return (
     <div className="home-page">
-<SiteHeader
+      <SiteHeader
         isLoaded={isLoaded}
         isSignedIn={isSignedIn}
         currentPage={currentPage}
@@ -123,7 +112,13 @@ export function HomePage({ isLoaded, isSignedIn, currentPage, onNavigate, onView
               >
                 Meet the animals
               </button>
-<DonateButton className="teal-button donate-button">Donate & support</DonateButton>
+              <button
+                type="button"
+                className="teal-button donate-button"
+                onClick={() => setDonateOpen(true)}
+              >
+                Donate & support
+              </button>
             </div>
           </div>
         </section>
@@ -286,10 +281,17 @@ export function HomePage({ isLoaded, isSignedIn, currentPage, onNavigate, onView
             >
               Submit rescue report
             </button>
-<DonateButton className="ghost-button light">Donate</DonateButton>
+            <button
+              type="button"
+              className="ghost-button light"
+              onClick={() => setDonateOpen(true)}
+            >
+              Donate
+            </button>
           </div>
         </section>
       </main>
+      <DonateModal open={donateOpen} onClose={() => setDonateOpen(false)} />
       <SiteFooter />
     </div>
   );

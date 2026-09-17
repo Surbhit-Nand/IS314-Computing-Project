@@ -1,7 +1,7 @@
 import { UserButton, useAuth, useUser } from "@clerk/react";
 import { useEffect, useRef, useState, type ChangeEvent, type DragEvent, type FormEvent } from "react";
 import spcaLogo from "../../assets/spca-logo.png";
-import { DonateButton } from "../donations/DonateButton";
+import { DonateModal } from "../donations/DonateModal";
 import { submitRescueReport, uploadRescuePhoto } from "../../services/rescueApi";
 import { reverseGeocodePlace, searchPlaces, type PlaceLookup } from "../../services/geocoding";
 import { RescueLocationMap } from "./RescueLocationMap";
@@ -59,6 +59,7 @@ export function RescueReportForm({ variant, source, onNavigate, onShowMyReports 
   const { getToken } = useAuth();
   const [form, setForm] = useState<RescueReportFormInput>({ ...emptyForm, source });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [donateOpen, setDonateOpen] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -576,7 +577,9 @@ export function RescueReportForm({ variant, source, onNavigate, onShowMyReports 
           >
             Rescue Report
           </button>
-          <DonateButton className="nav-link">Donate</DonateButton>
+          <button type="button" className="nav-link" onClick={() => setDonateOpen(true)}>
+            Donate
+          </button>
         </nav>
         <div className="header-actions">
           {isSignedIn && (
@@ -650,6 +653,7 @@ export function RescueReportForm({ variant, source, onNavigate, onShowMyReports 
           </div>
         </section>
       </main>
+      <DonateModal open={donateOpen} onClose={() => setDonateOpen(false)} />
     </div>
   );
 }

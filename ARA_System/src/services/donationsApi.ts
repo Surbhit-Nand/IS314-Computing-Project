@@ -15,12 +15,15 @@ async function readApiResponse<T>(response: Response): Promise<T> {
 	return (await response.json()) as T;
 }
 
+export type PaymentMethod = "card" | "qr";
+
 export type DonationRequest = {
 	amountCents: number;
 	currency?: string;
 	donorName?: string;
 	donorEmail?: string;
 	message?: string;
+	paymentMethod?: PaymentMethod;
 };
 
 export type DonationResponse = {
@@ -28,6 +31,7 @@ export type DonationResponse = {
 	amountCents: number;
 	currency: string;
 	status: "pending" | "completed" | "failed" | "refunded";
+	paymentMethod: PaymentMethod;
 	createdAt: string;
 };
 

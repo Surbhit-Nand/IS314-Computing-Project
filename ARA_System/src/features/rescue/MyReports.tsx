@@ -1,7 +1,7 @@
 import { SignInButton, UserButton, useAuth, useUser } from "@clerk/react";
 import { useEffect, useId, useState } from "react";
 import spcaLogo from "../../assets/spca-logo.png";
-import { DonateButton } from "../donations/DonateButton";
+import { DonateModal } from "../donations/DonateModal";
 import { fetchMyRescueReports } from "../../services/rescueApi";
 import type { RescueReport, RescueReportStatus } from "../../types/rescue";
 import {
@@ -190,6 +190,7 @@ export function MyReports({
 }: MyReportsProps) {
   const { getToken } = useAuth();
   const { user } = useUser();
+  const [donateOpen, setDonateOpen] = useState(false);
   const [myReports, setMyReports] = useState<RescueReport[]>([]);
   const [myReportsLoading, setMyReportsLoading] = useState(false);
   const [myReportsError, setMyReportsError] = useState("");
@@ -242,7 +243,9 @@ export function MyReports({
           <button type="button" className="nav-link" onClick={() => onNavigate("rescue-report")}>
             Rescue Report
           </button>
-          <DonateButton className="nav-link">Donate</DonateButton>
+          <button type="button" className="nav-link" onClick={() => setDonateOpen(true)}>
+            Donate
+          </button>
         </nav>
         <div className="header-actions">
           {!isLoaded ? null : isSignedIn ? (
@@ -343,6 +346,7 @@ export function MyReports({
       {selectedReport && (
         <RescueReportDetailModal report={selectedReport} onClose={closeDetail} />
       )}
+      <DonateModal open={donateOpen} onClose={() => setDonateOpen(false)} />
     </div>
   );
 }

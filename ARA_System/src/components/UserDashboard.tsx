@@ -1,9 +1,7 @@
 import { SignInButton, useAuth, useUser } from "@clerk/react";
 import { SiteHeader, type SiteHeaderView } from "./SiteHeader";
 
-type UserDashboardProps = {
-  onNavigate: (view: SiteHeaderView | "rescue-report" | "my-reports") => void;
-};
+type UserDashboardProps = { onNavigate: (view: SiteHeaderView) => void };
 
 const activity = [
   [
@@ -104,8 +102,12 @@ export function UserDashboard({ onNavigate }: UserDashboardProps) {
               <p className="eyebrow">Your activity</p>
               <h2>Recent updates</h2>
             </div>
-            <button type="button" className="text-button">
-              View history
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => onNavigate("my-applications")}
+            >
+              View my applications
             </button>
           </div>
           <div className="user-activity-list">
@@ -130,6 +132,14 @@ export function UserDashboard({ onNavigate }: UserDashboardProps) {
               <h2>Start something new</h2>
             </div>
           </div>
+          <button
+            type="button"
+            className="user-action-button"
+            onClick={() => onNavigate("animal-listings")}
+          >
+            <strong>Apply to adopt an animal</strong>
+            <span>Start an adoption application from any animal profile.</span>
+          </button>
           <button
             type="button"
             className="user-action-button"

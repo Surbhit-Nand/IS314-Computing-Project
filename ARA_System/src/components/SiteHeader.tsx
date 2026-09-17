@@ -1,7 +1,7 @@
 import { SignInButton, SignUpButton, UserButton, useUser } from "@clerk/react";
 import { useState } from "react";
 import spcaLogo from "../assets/spca-logo.png";
-import { DonateButton } from "../features/donations/DonateButton";
+import { DonateModal } from "../features/donations/DonateModal";
 import { isDevBypassEnabled } from "../utils/devBypass";
 
 export type SiteHeaderView =
@@ -13,7 +13,10 @@ export type SiteHeaderView =
   | "dashboard"
   | "staff-dashboard"
   | "user-dashboard"
-  | "rescue-report";
+  | "rescue-report"
+  | "adoption-apply"
+  | "my-applications"
+  | "manage-adoption-applications";
 
 type SiteHeaderProps = {
   isLoaded: boolean;
@@ -33,6 +36,7 @@ export function SiteHeader({
 }: SiteHeaderProps) {
   const { user } = useUser();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [donateOpen, setDonateOpen] = useState(false);
   const userRole = user?.publicMetadata.role;
   const isAdmin = userRole === "manager" || userRole === "admin";
   // isDevBypassEnabled is OR'd in here only so the "Staff dashboard" nav
@@ -100,19 +104,30 @@ export function SiteHeader({
         >
           Rescue Report
         </button>
-        <button
-          type="button"
-          className={
-            currentPage === "animal-listings" ? "nav-link active" : "nav-link"
-          }
-          onClick={() => navigate("animal-listings")}
-        >
-          Adopt
-        </button>
         {/* Staff, vets, and managers run the rescue operation, so the
-            public donate prompt is hidden for their accounts. */}
+            public adopt and donate prompts are hidden for their accounts. */}
         {!isStaff && !isAdmin && (
-          <DonateButton className="nav-link">Donate</DonateButton>
+          <button
+            type="button"
+            className={
+              currentPage === "animal-listings" ? "nav-link active" : "nav-link"
+            }
+            onClick={() => navigate("animal-listings")}
+          >
+            Adopt
+          </button>
+        )}
+        {!isStaff && !isAdmin && (
+          <button
+            type="button"
+            className="nav-link"
+            onClick={() => {
+              setMenuOpen(false);
+              setDonateOpen(true);
+            }}
+          >
+            Donate
+          </button>
         )}
       </nav>
 
@@ -157,6 +172,8 @@ export function SiteHeader({
           </>
         )}
       </div>
+
+      <DonateModal open={donateOpen} onClose={() => setDonateOpen(false)} />
     </header>
   );
 }
