@@ -9,6 +9,40 @@ const invitationSchema = z.object({
 	role: z.enum(staffRoles),
 });
 
+type ClerkApiError = {
+	clerkError: boolean;
+	status: number;
+	errors: Array<{
+		code: string;
+		message: string;
+		longMessage?: string;
+		meta?: { emailAddresses?: string[] };
+	}>;
+};
+
+// Clerk surfaces business-rule violations (duplicate invitation, email already
+// registered) as API errors. Map those to friendly 4xx responses so the admin
+// sees *why* the invite failed instead of a generic 500.
+function mapInvitationError(error: unknown): { status: number; error: string } | null {
+	if (typeof error !== "object" || error === null) return null;
+	const clerkError = error as ClerkApiError;
+	if (clerkError.clerkError !== true || !Array.isArray(clerkError.errors) || clerkError.errors.length === 0) {
+		return null;
+	}
+
+	const first = clerkError.errors[0];
+	const message = first.longMessage ?? first.message;
+
+	if (first.code === "duplicate_record") {
+		return { status: 409, error: message };
+	}
+	if (first.code === "form_identifier_exists") {
+		return { status: 409, error: message };
+	}
+
+	return null;
+}
+
 export const staffRouter = Router();
 
 staffRouter.get(
@@ -48,7 +82,14 @@ staffRouter.post(
 			});
 		} catch (error) {
 			console.error("[INVITATION_ERROR]", error instanceof Error ? error.message : error);
-			// Return the actual error details for debugging
+
+			const mapped = mapInvitationError(error);
+			if (mapped) {
+				response.status(mapped.status).json({ error: mapped.error });
+				return;
+			}
+
+			// Unknown error - return the actual error details for debugging
 			const errorMessage = error instanceof Error ? error.message : String(error);
 			response.status(500).json({
 				error: "Invitation failed",

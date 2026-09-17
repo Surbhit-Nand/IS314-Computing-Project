@@ -9,7 +9,13 @@ import { adoptionsRouter } from "./modules/adoptions/adoptions.routes.js";
 
 export const app = express();
 
-app.use(cors({ origin: env.clientOrigin }));
+app.use(
+	cors({
+		origin: env.clientOrigin,
+		allowedHeaders: ["Content-Type", "Authorization"],
+		methods: ["GET", "HEAD", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+	}),
+);
 app.use(express.json());
 app.get("/health", (_request, response) => response.json({ status: "ok" }));
 app.use("/api/animals", animalsRouter);
