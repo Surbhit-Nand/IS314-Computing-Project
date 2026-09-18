@@ -48,10 +48,11 @@ into a single record. Three modules, plus cross-cutting donations:
   extend the `View` union + add a branch in `App.tsx`. There are no URL params.
 - **Auth middleware**: `requireClerkSession` (`server/src/middleware/auth.ts`)
   resolves the token into `request.clerkUserId`; `requireStaffOrAbove` /
-  `requireManagerOrAdmin` (`middleware/rbac.ts`) check Clerk
-  `publicMetadata.role` = `staff | veterinarian | manager | admin`
-  (`shared/types/roles.ts`). Public endpoints use `resolveOptionalClerkUserId`
-  so anonymous visitors still work (rescue reports).
+  `requireRescuerOrAbove` / `requireManagerOrAdmin` (`middleware/rbac.ts`)
+  check Clerk `publicMetadata.role` = `staff | veterinarian | manager | admin |
+  rescuer` (`shared/types/roles.ts`). Public endpoints use
+  `resolveOptionalClerkUserId` so anonymous visitors still work (rescue
+  reports).
 
 ## Commands (all verified)
 
@@ -182,6 +183,9 @@ Every route/action is gated server-side by role, not just hidden in the UI
   one account may be both user and donor.
 - **SPCA staff** — register animals, assign rescuers, review/reject
   applications, log phone reports/bookings (same form as online).
+- **Rescuer** — the rescue-report queue: review, assign, and dispatch reports
+  (`requireRescuerOrAbove` on the rescue routes; has its own
+  `RescuerDashboard`).
 - **Veterinarian** — medical history, treatments, medical clearance.
 - **Manager/Admin** — staff invitations (`staff` module, `/api/admin`),
   metrics, wage payments.

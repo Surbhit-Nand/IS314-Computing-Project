@@ -7,6 +7,7 @@ import { AnimalProfilePage } from "./components/AnimalProfilePage";
 import { AuthPage } from "./components/AuthPage";
 import { HomePage } from "./components/HomePage";
 import { ManagerDashboard } from "./components/ManagerDashboard";
+import { RescuerDashboard } from "./components/RescuerDashboard";
 import { StaffDashboard } from "./components/StaffDashboard";
 import { UserDashboard } from "./components/UserDashboard";
 import { AnimalRegistrationForm } from "./features/animals/AnimalRegistrationForm";
@@ -29,6 +30,7 @@ export type View =
   | "register"
   | "dashboard"
   | "staff-dashboard"
+  | "rescuer-dashboard"
   | "user-dashboard"
   | "register-animal"
   | "manage-animals"
@@ -73,6 +75,10 @@ function App() {
 
   if (view === "staff-dashboard") {
     return <StaffDashboard onNavigate={setView} />;
+  }
+
+  if (view === "rescuer-dashboard") {
+    return <RescuerDashboard onNavigate={setView} />;
   }
 
   if (view === "user-dashboard") {

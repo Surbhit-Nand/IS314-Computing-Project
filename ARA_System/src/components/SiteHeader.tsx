@@ -12,6 +12,7 @@ export type SiteHeaderView =
   | "register"
   | "dashboard"
   | "staff-dashboard"
+  | "rescuer-dashboard"
   | "user-dashboard"
   | "rescue-report"
   | "adoption-apply"
@@ -39,9 +40,10 @@ export function SiteHeader({
   const [donateOpen, setDonateOpen] = useState(false);
   const userRole = user?.publicMetadata.role;
   const isAdmin = userRole === "manager" || userRole === "admin";
-  // isDevBypassEnabled is OR'd in here only so the "Staff dashboard" nav
-  // button appears locally without a real role - see src/utils/devBypass.ts.
-  const isStaff = isDevBypassEnabled || userRole === "staff" || userRole === "veterinarian";
+  const isRescuer = userRole === "rescuer";
+  // isDevBypassEnabled is OR'd in here only so the "Dashboard" nav buttons
+  // appear locally without a real role - see src/utils/devBypass.ts.
+  const isStaff = isDevBypassEnabled || isRescuer || userRole === "staff" || userRole === "veterinarian";
 
   function navigate(view: SiteHeaderView) {
     setMenuOpen(false);
@@ -141,17 +143,21 @@ export function SiteHeader({
                 navigate(
                   isAdmin
                     ? "dashboard"
-                    : isStaff
-                      ? "staff-dashboard"
-                      : "user-dashboard",
+                    : isRescuer
+                      ? "rescuer-dashboard"
+                      : isStaff
+                        ? "staff-dashboard"
+                        : "user-dashboard",
                 )
               }
             >
               {isAdmin
                 ? "Admin dashboard"
-                : isStaff
-                  ? "Staff dashboard"
-                  : "My dashboard"}
+                : isRescuer
+                  ? "Rescue dashboard"
+                  : isStaff
+                    ? "Staff dashboard"
+                    : "My dashboard"}
             </button>
             <div className="user-avatar-circle">
               <UserButton />

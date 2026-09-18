@@ -1,12 +1,17 @@
 // All the account roles Clerk can assign via `publicMetadata.role`.
 // Kept in one place so route/middleware role checks don't drift out of sync
 // with each other (see AGENTS.md's "Entities & role-based access" section).
-export const roles = ["staff", "veterinarian", "manager", "admin"] as const;
+export const roles = ["staff", "veterinarian", "manager", "admin", "rescuer"] as const;
 export type Role = (typeof roles)[number];
 
 // Roles allowed to register/edit animal profiles (staff and above, per
 // AGENTS.md: "SPCA staff — register animals").
 export const staffOrAboveRoles = ["staff", "veterinarian", "manager", "admin"] as const satisfies readonly Role[];
+
+// Roles allowed to handle rescue reports: rescuers (the new role who runs the
+// rescue queue) plus every staff-and-above role, since staff/vets/managers/
+// admins also dispatch reports. Rescue routes gate on this list.
+export const rescuerOrAboveRoles = ["rescuer", "staff", "veterinarian", "manager", "admin"] as const satisfies readonly Role[];
 
 // Roles allowed to manage staff accounts/invitations (manager and admin only).
 export const managerOrAdminRoles = ["manager", "admin"] as const satisfies readonly Role[];
@@ -14,4 +19,4 @@ export const managerOrAdminRoles = ["manager", "admin"] as const satisfies reado
 // Staff-role values used for invitation creation and listing. `admin` is
 // included here because an admin can also manage team access and create
 // invitations, even though the manager/admin gate is enforced separately.
-export const invitationalStaffRoles = ["staff", "veterinarian", "manager", "admin"] as const satisfies readonly Role[];
+export const invitationalStaffRoles = ["staff", "veterinarian", "manager", "admin", "rescuer"] as const satisfies readonly Role[];
