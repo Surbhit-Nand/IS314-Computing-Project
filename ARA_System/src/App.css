@@ -1589,6 +1589,29 @@
   color: #b77700;
 }
 
+/* Role dropdown and per-row actions on the ManagerDashboard staff list. */
+.role-select {
+  flex: 0 0 auto;
+  padding: 8px 10px;
+  border: 1px solid rgba(21, 135, 195, 0.35);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--teal-dark);
+  font-size: 0.8rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.role-select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.staff-row .small-button {
+  padding: 8px 14px;
+  font-size: 0.78rem;
+}
+
 .security-note,
 .invite-help {
   margin: 18px 0 0;

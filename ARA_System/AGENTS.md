@@ -188,13 +188,25 @@ Every route/action is gated server-side by role, not just hidden in the UI
   `RescuerDashboard`).
 - **Veterinarian** — medical history, treatments, medical clearance.
 - **Manager/Admin** — staff invitations (`staff` module, `/api/admin`),
-  metrics, wage payments.
+  edit staff member roles, revoke member access / pending invitations
+  (admins rule managers/admin; no self-changes), metrics, wage payments.
 
 ## Login & authentication
 
 - Public listing/browsing must work with **no account**.
 - Everything else requires Clerk auth; RBAC enforced server-side — a
   registered user hitting a staff route must get 403.
+- **Staff-first landing**: staff-type accounts (manager/admin/staff/vet/
+  rescuer) are routed straight to their own dashboard: `App.tsx` derives a
+  fresh `home` landing into the matching dashboard (a pure render derivation,
+  once per session per user id — also applies on reload since `view` resets to
+  `home`). Registered users stay on the public Home page.
+- `SiteHeader.tsx` renders **team navigation** (Dashboard, Rescue queue,
+  Animals, Register, Adoptions + "View public site") on internal pages
+  (`dashboard`, `staff-dashboard`, `rescuer-dashboard`, `register-animal`,
+  `manage-animals`, `edit-animal`); public pages keep the normal nav (Adopt/
+  Donate prompts hidden for staff-type accounts). Rescuers see only the
+  rescue queue, not animal/adoption modules.
 - Staff/admin accounts need **MFA** (named risk mitigation). Never store/log
   credentials in plaintext. Card details never touch SPCA's own servers.
 

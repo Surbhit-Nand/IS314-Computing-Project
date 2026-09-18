@@ -1,5 +1,6 @@
 import { SignInButton, useAuth, useUser } from "@clerk/react";
 import { useEffect, useState, type FormEvent } from "react";
+import { SuccessToast } from "./SuccessToast";
 import { SiteHeader, type SiteHeaderView } from "./SiteHeader";
 
 type ManagerDashboardProps = { onNavigate: (view: SiteHeaderView) => void };
@@ -21,6 +22,16 @@ type PendingInvitation = {
 
 const apiBaseUrl = import.meta.env.VITE_API_URL ?? "http://localhost:8787";
 
+// Roles a manager/admin can assign. Order matters for the dropdown; must stay
+// in sync with staffRoles in server/src/modules/staff/staff.service.ts.
+const INVITABLE_ROLES: Record<string, string> = {
+  staff: "Staff",
+  veterinarian: "Veterinarian",
+  rescuer: "Rescuer",
+  manager: "Manager",
+  admin: "Admin",
+};
+
 async function readApiResponse<T>(response: Response): Promise<T> {
   const contentType = response.headers.get("content-type") ?? "";
   if (!contentType.includes("application/json")) {
@@ -37,7 +48,10 @@ export function ManagerDashboard({ onNavigate }: ManagerDashboardProps) {
   const [emailAddress, setEmailAddress] = useState("");
   const [role, setRole] = useState("staff");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [invitationMessage, setInvitationMessage] = useState("");
+  // Single non-blocking success confirmation for invite/role actions (rendered
+  // as a corner toast, auto-dismissing). Errors stay inline so the cause is
+  // never auto-hidden.
+  const [successToastMessage, setSuccessToastMessage] = useState("");
   const [invitationError, setInvitationError] = useState("");
   const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
   const [pendingInvitations, setPendingInvitations] = useState<
@@ -45,6 +59,7 @@ export function ManagerDashboard({ onNavigate }: ManagerDashboardProps) {
   >([]);
   const [staffLoading, setStaffLoading] = useState(true);
   const [staffError, setStaffError] = useState("");
+  const [staffActionError, setStaffActionError] = useState("");
 
   const userRole = user?.publicMetadata.role;
   const hasManagerAccess = userRole === "manager" || userRole === "admin";
@@ -83,8 +98,8 @@ export function ManagerDashboard({ onNavigate }: ManagerDashboardProps) {
   async function handleInvitationSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsSubmitting(true);
-    setInvitationMessage("");
     setInvitationError("");
+    setIsSubmitting(true);
 
     try {
       const token = await getToken();
@@ -111,7 +126,7 @@ export function ManagerDashboard({ onNavigate }: ManagerDashboardProps) {
         throw new Error(result.error ?? "The invitation could not be created.");
       }
 
-      setInvitationMessage(
+      setSuccessToastMessage(
         `Invitation sent to ${result.emailAddress ?? emailAddress}.`,
       );
       setEmailAddress("");
@@ -120,6 +135,107 @@ export function ManagerDashboard({ onNavigate }: ManagerDashboardProps) {
         error instanceof Error
           ? error.message
           : "The invitation could not be created.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function changeMemberRole(member: StaffMember, newRole: string) {
+    if (String(member.role) === newRole) return;
+    setStaffActionError("");
+    setIsSubmitting(true);
+    try {
+      const token = await getToken();
+      if (!token) {
+        throw new Error("Your Clerk session has expired. Please sign in again.");
+      }
+      const response = await fetch(`${apiBaseUrl}/api/admin/staff/${member.id}/role`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ role: newRole }),
+      });
+      const result = await readApiResponse<{ error?: string }>(response);
+      if (!response.ok) {
+        throw new Error(result.error ?? "The role could not be updated.");
+      }
+      setStaffMembers((previous) =>
+        previous.map((item) => (item.id === member.id ? { ...item, role: newRole } : item)),
+      );
+      setSuccessToastMessage(`Role updated for ${member.name}.`);
+    } catch (error) {
+      setStaffActionError(
+        error instanceof Error ? error.message : "The role could not be updated.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function revokeMemberRole(member: StaffMember) {
+    const confirmed = window.confirm(
+      `Revoke ${member.name}'s staff role? They will keep their account but lose access to the team workspace.`,
+    );
+    if (!confirmed) return;
+    setStaffActionError("");
+    setIsSubmitting(true);
+    try {
+      const token = await getToken();
+      if (!token) {
+        throw new Error("Your Clerk session has expired. Please sign in again.");
+      }
+      const response = await fetch(`${apiBaseUrl}/api/admin/staff/${member.id}/role`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const result = await readApiResponse<{ error?: string }>(response);
+      if (!response.ok) {
+        throw new Error(result.error ?? "The role could not be revoked.");
+      }
+      setStaffMembers((previous) => previous.filter((item) => item.id !== member.id));
+      setSuccessToastMessage(`Revoked ${member.name}'s staff role.`);
+    } catch (error) {
+      setStaffActionError(
+        error instanceof Error ? error.message : "The role could not be revoked.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function revokePendingInvite(invitation: PendingInvitation) {
+    const confirmed = window.confirm(
+      `Revoke the pending invitation sent to ${invitation.emailAddress}?`,
+    );
+    if (!confirmed) return;
+    setStaffActionError("");
+    setIsSubmitting(true);
+    try {
+      const token = await getToken();
+      if (!token) {
+        throw new Error("Your Clerk session has expired. Please sign in again.");
+      }
+      const response = await fetch(
+        `${apiBaseUrl}/api/admin/invitations/${invitation.id}/revoke`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+      const result = await readApiResponse<{ error?: string }>(response);
+      if (!response.ok) {
+        throw new Error(result.error ?? "The invitation could not be revoked.");
+      }
+      setPendingInvitations((previous) =>
+        previous.filter((item) => item.id !== invitation.id),
+      );
+      setSuccessToastMessage(`Revoked the invitation for ${invitation.emailAddress}.`);
+    } catch (error) {
+      setStaffActionError(
+        error instanceof Error ? error.message : "The invitation could not be revoked.",
       );
     } finally {
       setIsSubmitting(false);
@@ -166,6 +282,12 @@ export function ManagerDashboard({ onNavigate }: ManagerDashboardProps) {
 
   return (
     <main className="dashboard-page">
+      {successToastMessage && (
+        <SuccessToast
+          message={successToastMessage}
+          onDismiss={() => setSuccessToastMessage("")}
+        />
+      )}
       <SiteHeader
         isLoaded={isLoaded}
         isSignedIn={isSignedIn}
@@ -230,44 +352,89 @@ export function ManagerDashboard({ onNavigate }: ManagerDashboardProps) {
                   No staff accounts or pending invitations yet.
                 </p>
               )}
+            {staffActionError && (
+              <p className="invite-feedback error">{staffActionError}</p>
+            )}
             {!staffLoading &&
               !staffError &&
-              [...staffMembers, ...pendingInvitations].map((member) => (
-                <div className="staff-row" key={member.id}>
-                  <div className="staff-avatar">
-                    {member.status === "Pending"
-                      ? "?"
-                      : member.name
-                          .split(" ")
-                          .map((part) => part[0])
-                          .join("")}
+              staffMembers.map((member) => {
+                const managesOwnRow = user?.id === member.id;
+                const isAdminOnlyRole =
+                  String(member.role) === "manager" ||
+                  String(member.role) === "admin";
+                const canManage =
+                  !managesOwnRow &&
+                  (userRole === "admin" || !isAdminOnlyRole) &&
+                  !isSubmitting;
+                return (
+                  <div className="staff-row" key={member.id}>
+                    <div className="staff-avatar">
+                      {member.name
+                        .split(" ")
+                        .map((part) => part[0])
+                        .join("")}
+                    </div>
+                    <div className="staff-details">
+                      <strong>
+                        {member.name}
+                        {managesOwnRow ? " (you)" : ""}
+                      </strong>
+                      <span>{member.emailAddress}</span>
+                    </div>
+                    <select
+                      className="role-select"
+                      aria-label={`Role for ${member.name}`}
+                      value={String(member.role ?? "")}
+                      disabled={!canManage}
+                      onChange={(event) =>
+                        void changeMemberRole(member, event.target.value)
+                      }
+                    >
+                      {Object.entries(INVITABLE_ROLES).map(([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      className="danger-button small-button"
+                      onClick={() => void revokeMemberRole(member)}
+                      disabled={!canManage}
+                    >
+                      Revoke access
+                    </button>
                   </div>
+                );
+              })}
+            {!staffLoading &&
+              !staffError &&
+              pendingInvitations.map((invitation) => (
+                <div className="staff-row" key={invitation.id}>
+                  <div className="staff-avatar">?</div>
                   <div className="staff-details">
-                    <strong>
-                      {member.status === "Pending"
-                        ? "Pending invitation"
-                        : member.name}
-                    </strong>
-                    <span>{member.emailAddress}</span>
+                    <strong>Pending invitation</strong>
+                    <span>{invitation.emailAddress}</span>
                   </div>
                   <span className="role-pill muted">
-                    {String(member.role ?? "Unassigned")}
+                    {String(invitation.role ?? "Unassigned")}
                   </span>
-                  <span
-                    className={
-                      member.status === "Pending"
-                        ? "status-text pending"
-                        : "status-text"
-                    }
+                  <button
+                    type="button"
+                    className="danger-button small-button"
+                    onClick={() => void revokePendingInvite(invitation)}
+                    disabled={isSubmitting}
                   >
-                    {member.status}
-                  </span>
+                    Revoke
+                  </button>
                 </div>
               ))}
           </div>
           <p className="security-note">
-            Role changes and invitations will be verified by the backend before
-            Clerk is updated.
+            Use the dropdown to change a member&apos;s role or revoke their
+            access. Managers can manage staff, veterinarians, and rescuers;
+            only admins can change Manager or Admin roles, and nobody can
+            change their own.
           </p>
         </div>
         <div className="dashboard-panel invite-panel">
@@ -309,9 +476,6 @@ export function ManagerDashboard({ onNavigate }: ManagerDashboardProps) {
               {isSubmitting ? "Sending invitation..." : "Send invitation"}
             </button>
           </form>
-          {invitationMessage && (
-            <p className="invite-feedback success">{invitationMessage}</p>
-          )}
           {invitationError && (
             <p className="invite-feedback error">{invitationError}</p>
           )}
