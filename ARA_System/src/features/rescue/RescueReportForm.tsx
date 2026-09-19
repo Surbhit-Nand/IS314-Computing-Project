@@ -506,7 +506,7 @@ export function RescueReportForm({ variant, source, onNavigate, onShowMyReports 
               <img src={spcaLogo} alt="SPCA Fiji logo" className="brand-logo" />
             </button>
             <div>
-              <p className="eyebrow">ARA operations</p>
+              <p className="eyebrow">SPCA operations</p>
               <h1>Log a phone rescue report</h1>
             </div>
           </div>

@@ -1,4 +1,5 @@
 import { SignInButton, useAuth, useUser } from "@clerk/react";
+import spcaLogo from "../assets/spca-logo.png";
 import { SiteHeader, type SiteHeaderView } from "./SiteHeader";
 
 type UserDashboardProps = { onNavigate: (view: SiteHeaderView) => void };
@@ -27,7 +28,11 @@ export function UserDashboard({ onNavigate }: UserDashboardProps) {
     return (
       <main className="dashboard-locked">
         <div className="dashboard-locked-card">
-          <p className="eyebrow">Your ARA account</p>
+          <div className="auth-brand">
+            <img src={spcaLogo} alt="SPCA Fiji logo" className="brand-logo" />
+            <strong>SPCA Fiji</strong>
+          </div>
+          <p className="eyebrow">Your SPCA account</p>
           <h1>Sign in to continue</h1>
           <p>
             Log in to view your applications, reports, appointments, and saved
@@ -56,7 +61,7 @@ export function UserDashboard({ onNavigate }: UserDashboardProps) {
         <div>
           <span className="role-pill teal-pill">Registered user</span>
           <p className="eyebrow">Welcome back</p>
-          <h2>{user?.firstName ?? "Friend"}, follow your ARA journey.</h2>
+          <h2>{user?.firstName ?? "Friend"}, follow your SPCA journey.</h2>
           <p>
             Signed in as{" "}
             {user?.primaryEmailAddress?.emailAddress ?? "Clerk user"}. Keep
