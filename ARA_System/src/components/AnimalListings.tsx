@@ -342,9 +342,14 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
           <section className="catalog-results" aria-label="Animal listings">
             <div className="catalog-results-head">
               <p className="animals-summary">
-                {animalsLoading
-                  ? "Loading available animals..."
-                  : `${visible.length} of ${animals.length} animals available for adoption`}
+                {animalsLoading ? (
+                  <span
+                    className="skeleton-bar skeleton-width-3"
+                    aria-hidden="true"
+                  />
+                ) : (
+                  `${visible.length} of ${animals.length} animals available for adoption`
+                )}
               </p>
             </div>
 

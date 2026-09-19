@@ -1,6 +1,7 @@
 import { useAuth, useUser } from "@clerk/react";
 import { useState } from "react";
 import "./App.css";
+import spcaLogo from "./assets/spca-logo.png";
 import { AboutUs } from "./components/AboutUs";
 import { AnimalListings } from "./components/AnimalListings";
 import { AnimalProfilePage } from "./components/AnimalProfilePage";
@@ -10,6 +11,7 @@ import { ManagerDashboard } from "./components/ManagerDashboard";
 import { RescuerDashboard } from "./components/RescuerDashboard";
 import { StaffDashboard } from "./components/StaffDashboard";
 import { UserDashboard } from "./components/UserDashboard";
+import { ReportsPage } from "./components/ReportsPage";
 import { AnimalRegistrationForm } from "./features/animals/AnimalRegistrationForm";
 import { EditAnimalProfile } from "./features/animals/EditAnimalProfile";
 import { ManageAnimalProfiles } from "./features/animals/ManageAnimalProfiles";
@@ -41,7 +43,8 @@ export type View =
   | "manage-rescue-reports"
   | "adoption-apply"
   | "my-applications"
-  | "manage-adoption-applications";
+  | "manage-adoption-applications"
+  | "reports";
 
 function App() {
   const [view, setView] = useState<View>("home");
@@ -65,7 +68,7 @@ function App() {
 
   const role = user?.publicMetadata.role;
   const staffLanding =
-    !isSignedIn || !user || view !== "home" || landedForUserId === user.id
+    !isLoaded || !isSignedIn || !user || view !== "home" || landedForUserId === user.id
       ? null
       : role === "manager" || role === "admin"
         ? "dashboard"
@@ -75,6 +78,29 @@ function App() {
             ? "staff-dashboard"
             : null;
   const activeView = staffLanding ?? view;
+
+  // Keep the public Home page from flashing before auth resolves. Signed-in
+  // sessions briefly lag on the Clerk user profile hydration, so both
+  // `isLoaded` and the `user` object must be ready before any page paints.
+  // Anonymous visitors hit `isLoaded=true` -> `isSignedIn=false` and see Home.
+  if (!isLoaded || (isSignedIn && !user)) {
+    return (
+      <main className="dashboard-locked loading-screen">
+        <div className="dashboard-locked-card loading-card">
+          <div className="loading-brand">
+            <img src={spcaLogo} alt="SPCA Fiji logo" className="brand-logo" />
+            <strong>SPCA Fiji</strong>
+          </div>
+          <div className="loading-spinner" aria-hidden="true" />
+          <div className="loading-skeleton" aria-hidden="true">
+            <span className="skeleton-bar" />
+            <span className="skeleton-bar skeleton-width-2" />
+            <span className="skeleton-bar skeleton-width-3" />
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   // Marks the current user as on a session that chose its own view, so the
   // staff-first landing above only applies once per sign-in session.
@@ -98,6 +124,10 @@ function App() {
 
   if (activeView === "dashboard") {
     return <ManagerDashboard onNavigate={navigate} />;
+  }
+
+  if (activeView === "reports") {
+    return <ReportsPage onNavigate={navigate} />;
   }
 
   if (activeView === "staff-dashboard") {

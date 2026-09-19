@@ -12,6 +12,7 @@ import {
   type AdoptionApplication,
   type AdoptionStatus,
 } from "../../types/adoption";
+import { SkeletonLoader } from "../../components/SkeletonLoader";
 import { isDevBypassEnabled } from "../../utils/devBypass";
 import { Breadcrumbs } from "../../components/Breadcrumbs";
 
@@ -173,7 +174,11 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
     return (
       <main className="dashboard-locked">
         <div className="dashboard-locked-card">
-          <p className="eyebrow">ARA operations</p>
+          <div className="auth-brand">
+            <img src={spcaLogo} alt="SPCA Fiji logo" className="brand-logo" />
+            <strong>SPCA Fiji</strong>
+          </div>
+          <p className="eyebrow">SPCA operations</p>
           <h1>Sign in to continue</h1>
           <p>Reviewing adoption applications is available to authorised team members.</p>
           <SignInButton mode="modal">
@@ -190,7 +195,11 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
     return (
       <main className="dashboard-locked">
         <div className="dashboard-locked-card">
-          <p className="eyebrow">ARA operations</p>
+          <div className="auth-brand">
+            <img src={spcaLogo} alt="SPCA Fiji logo" className="brand-logo" />
+            <strong>SPCA Fiji</strong>
+          </div>
+          <p className="eyebrow">SPCA operations</p>
           <h1>Access restricted</h1>
           <p>Your account does not have staff, veterinary, manager, or admin permissions.</p>
           <button type="button" className="teal-button" onClick={() => onNavigate("home")}>
@@ -209,7 +218,7 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
             <img src={spcaLogo} alt="SPCA Fiji logo" className="brand-logo" />
           </button>
           <div>
-            <p className="eyebrow">ARA operations</p>
+            <p className="eyebrow">SPCA operations</p>
             <h1>Adoption applications</h1>
           </div>
         </div>
@@ -261,7 +270,7 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
         {savingMessage && <p className="invite-feedback success">{savingMessage}</p>}
         {savingError && <p className="invite-feedback error">{savingError}</p>}
 
-        {isLoading && <p className="dashboard-data-state">Loading adoption applications...</p>}
+        {isLoading && <SkeletonLoader variant="card" />}
         {!isLoading && loadError && <p className="dashboard-data-state error">{loadError}</p>}
         {!isLoading && !loadError && visibleApplications.length === 0 && (
           <p className="dashboard-data-state">No adoption applications match your filters.</p>

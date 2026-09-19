@@ -22,7 +22,8 @@ export type SiteHeaderView =
   | "manage-animals"
   | "edit-animal"
   | "manage-rescue-reports"
-  | "rescue-report-phone";
+  | "rescue-report-phone"
+  | "reports";
 
 type SiteHeaderProps = {
   isLoaded: boolean;
@@ -63,6 +64,7 @@ export function SiteHeader({
     "register-animal",
     "manage-animals",
     "edit-animal",
+    "reports",
   ]);
   const isInternalPage = (isStaff || isAdmin) && internalPages.has(currentPage);
 
@@ -166,6 +168,17 @@ export function SiteHeader({
                 onClick={() => navigate("manage-adoption-applications")}
               >
                 Adoptions
+              </button>
+            )}
+            {isAdmin && (
+              <button
+                type="button"
+                className={
+                  currentPage === "reports" ? "nav-link active" : "nav-link"
+                }
+                onClick={() => navigate("reports")}
+              >
+                Reports
               </button>
             )}
             <button

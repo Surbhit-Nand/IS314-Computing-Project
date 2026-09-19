@@ -8,6 +8,7 @@ import type { RescueReport, RescueUrgency } from "../../types/rescue";
 import type { Animal } from "../../types/animal";
 import { isDevBypassEnabled } from "../../utils/devBypass";
 import { Breadcrumbs } from "../../components/Breadcrumbs";
+import { SkeletonLoader } from "../../components/SkeletonLoader";
 
 type ManageRescueReportsProps = {
   onNavigate: (view: "home" | "staff-dashboard" | "rescue-report-phone") => void;
@@ -204,7 +205,11 @@ export function ManageRescueReports({ onNavigate }: ManageRescueReportsProps) {
     return (
       <main className="dashboard-locked">
         <div className="dashboard-locked-card">
-          <p className="eyebrow">ARA operations</p>
+          <div className="auth-brand">
+            <img src={spcaLogo} alt="SPCA Fiji logo" className="brand-logo" />
+            <strong>SPCA Fiji</strong>
+          </div>
+          <p className="eyebrow">SPCA operations</p>
           <h1>Sign in to continue</h1>
           <p>Dispatching rescue reports is available to authorised team members.</p>
           <SignInButton mode="modal">
@@ -221,7 +226,11 @@ export function ManageRescueReports({ onNavigate }: ManageRescueReportsProps) {
     return (
       <main className="dashboard-locked">
         <div className="dashboard-locked-card">
-          <p className="eyebrow">ARA operations</p>
+          <div className="auth-brand">
+            <img src={spcaLogo} alt="SPCA Fiji logo" className="brand-logo" />
+            <strong>SPCA Fiji</strong>
+          </div>
+          <p className="eyebrow">SPCA operations</p>
           <h1>Access restricted</h1>
           <p>Your account does not have staff, veterinary, manager, or admin permissions.</p>
           <button type="button" className="teal-button" onClick={() => onNavigate("home")}>
@@ -240,7 +249,7 @@ export function ManageRescueReports({ onNavigate }: ManageRescueReportsProps) {
             <img src={spcaLogo} alt="SPCA Fiji logo" className="brand-logo" />
           </button>
           <div>
-            <p className="eyebrow">ARA operations</p>
+            <p className="eyebrow">SPCA operations</p>
             <h1>Rescue report dispatch</h1>
           </div>
         </div>
@@ -299,7 +308,7 @@ export function ManageRescueReports({ onNavigate }: ManageRescueReportsProps) {
         {savingMessage && <p className="invite-feedback success">{savingMessage}</p>}
         {savingError && <p className="invite-feedback error">{savingError}</p>}
 
-        {isLoading && <p className="dashboard-data-state">Loading rescue reports...</p>}
+        {isLoading && <SkeletonLoader variant="card" />}
         {!isLoading && loadError && <p className="dashboard-data-state error">{loadError}</p>}
         {!isLoading && !loadError && visibleReports.length === 0 && (
           <p className="dashboard-data-state">No rescue reports match your filters.</p>

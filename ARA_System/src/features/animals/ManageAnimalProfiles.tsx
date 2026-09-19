@@ -1,7 +1,9 @@
 import { SignInButton, useAuth, useUser } from "@clerk/react";
 import { useEffect, useMemo, useState } from "react";
+import spcaLogo from "../../assets/spca-logo.png";
 import { SiteHeader, type SiteHeaderView } from "../../components/SiteHeader";
 import { Breadcrumbs } from "../../components/Breadcrumbs";
+import { SkeletonLoader } from "../../components/SkeletonLoader";
 import { SuccessToast } from "../../components/SuccessToast";
 import { deleteAnimal, fetchStaffAnimals } from "../../services/animalsApi";
 import { adoptionStatusLabel, vaccinationStatusLabel, type Animal } from "../../types/animal";
@@ -93,7 +95,11 @@ export function ManageAnimalProfiles({ onNavigate, onSelectAnimal }: ManageAnima
     return (
       <main className="dashboard-locked">
         <div className="dashboard-locked-card">
-          <p className="eyebrow">ARA operations</p>
+          <div className="auth-brand">
+            <img src={spcaLogo} alt="SPCA Fiji logo" className="brand-logo" />
+            <strong>SPCA Fiji</strong>
+          </div>
+          <p className="eyebrow">SPCA operations</p>
           <h1>Sign in to continue</h1>
           <p>Managing animal profiles is available to authorised team members.</p>
           <SignInButton mode="modal">
@@ -110,7 +116,11 @@ export function ManageAnimalProfiles({ onNavigate, onSelectAnimal }: ManageAnima
     return (
       <main className="dashboard-locked">
         <div className="dashboard-locked-card">
-          <p className="eyebrow">ARA operations</p>
+          <div className="auth-brand">
+            <img src={spcaLogo} alt="SPCA Fiji logo" className="brand-logo" />
+            <strong>SPCA Fiji</strong>
+          </div>
+          <p className="eyebrow">SPCA operations</p>
           <h1>Access restricted</h1>
           <p>Your account does not have staff, veterinary, manager, or admin permissions.</p>
           <button type="button" className="teal-button" onClick={() => onNavigate("home")}>
@@ -161,7 +171,7 @@ export function ManageAnimalProfiles({ onNavigate, onSelectAnimal }: ManageAnima
 
         {deleteError && <p className="invite-feedback error">{deleteError}</p>}
 
-        {isLoading && <p className="dashboard-data-state">Loading animal profiles...</p>}
+        {isLoading && <SkeletonLoader variant="card" />}
         {!isLoading && loadError && <p className="dashboard-data-state error">{loadError}</p>}
         {!isLoading && !loadError && filteredAnimals.length === 0 && (
           <p className="dashboard-data-state">No animal profiles match your search.</p>

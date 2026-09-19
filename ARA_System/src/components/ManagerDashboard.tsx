@@ -1,7 +1,9 @@
 import { SignInButton, useAuth, useUser } from "@clerk/react";
 import { useEffect, useState, type FormEvent } from "react";
-import { SuccessToast } from "./SuccessToast";
+import spcaLogo from "../assets/spca-logo.png";
 import { SiteHeader, type SiteHeaderView } from "./SiteHeader";
+import { SkeletonLoader } from "./SkeletonLoader";
+import { SuccessToast } from "./SuccessToast";
 
 type ManagerDashboardProps = { onNavigate: (view: SiteHeaderView) => void };
 
@@ -36,7 +38,7 @@ async function readApiResponse<T>(response: Response): Promise<T> {
   const contentType = response.headers.get("content-type") ?? "";
   if (!contentType.includes("application/json")) {
     throw new Error(
-      "The ARA API is not running. Start it with `npm run server:dev`.",
+      "The SPCA API is not running. Start it with `npm run server:dev`.",
     );
   }
   return (await response.json()) as T;
@@ -246,10 +248,14 @@ export function ManagerDashboard({ onNavigate }: ManagerDashboardProps) {
     return (
       <main className="dashboard-locked">
         <div className="dashboard-locked-card">
+          <div className="auth-brand">
+            <img src={spcaLogo} alt="SPCA Fiji logo" className="brand-logo" />
+            <strong>SPCA Fiji</strong>
+          </div>
           <p className="eyebrow">Manager workspace</p>
           <h1>Sign in to continue</h1>
           <p>
-            Only authenticated users can access the ARA operations dashboard.
+            Only authenticated users can access the SPCA operations dashboard.
           </p>
           <SignInButton mode="modal">
             <button type="button" className="teal-button">
@@ -265,6 +271,10 @@ export function ManagerDashboard({ onNavigate }: ManagerDashboardProps) {
     return (
       <main className="dashboard-locked">
         <div className="dashboard-locked-card">
+          <div className="auth-brand">
+            <img src={spcaLogo} alt="SPCA Fiji logo" className="brand-logo" />
+            <strong>SPCA Fiji</strong>
+          </div>
           <p className="eyebrow">Manager workspace</p>
           <h1>Access restricted</h1>
           <p>Your account does not have Manager or Admin permissions.</p>
@@ -306,23 +316,44 @@ export function ManagerDashboard({ onNavigate }: ManagerDashboardProps) {
             priorities.
           </p>
         </div>
-        <button
-          type="button"
-          className="ghost-button"
-          onClick={() => onNavigate("home")}
-        >
-          Return to public site
-        </button>
+        <div className="dashboard-welcome-actions">
+          <button
+            type="button"
+            className="ghost-button"
+            onClick={() => onNavigate("reports")}
+          >
+            View reports
+          </button>
+          <button
+            type="button"
+            className="ghost-button"
+            onClick={() => onNavigate("home")}
+          >
+            Return to public site
+          </button>
+        </div>
       </section>
       <section className="dashboard-metrics" aria-label="Operations summary">
         <article>
           <span>Staff access accounts</span>
-          <strong>{staffLoading ? "..." : staffMembers.length}</strong>
+          <strong>
+            {staffLoading ? (
+              <span className="skeleton-bar skeleton-metric-value" aria-hidden="true" />
+            ) : (
+              staffMembers.length
+            )}
+          </strong>
           <small>Loaded from Clerk</small>
         </article>
         <article>
           <span>Pending invitations</span>
-          <strong>{staffLoading ? "..." : pendingInvitations.length}</strong>
+          <strong>
+            {staffLoading ? (
+              <span className="skeleton-bar skeleton-metric-value" aria-hidden="true" />
+            ) : (
+              pendingInvitations.length
+            )}
+          </strong>
           <small>Loaded from Clerk</small>
         </article>
       </section>
@@ -337,9 +368,7 @@ export function ManagerDashboard({ onNavigate }: ManagerDashboardProps) {
           </div>
           <div className="staff-list">
             {staffLoading && (
-              <p className="dashboard-data-state">
-                Loading Clerk staff data...
-              </p>
+              <SkeletonLoader variant="card" />
             )}
             {!staffLoading && staffError && (
               <p className="dashboard-data-state error">{staffError}</p>
