@@ -284,6 +284,61 @@
   padding: 8px 0 54px;
 }
 
+/* Static-hierarchy breadcrumbs rendered under the header on deep views.
+   Trail only reflects where the page sits (no router/back stack), so only
+   parent items are clickable; the current page renders as plain text. */
+.breadcrumbs {
+  margin-bottom: 26px;
+}
+
+.breadcrumbs ol {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.breadcrumbs li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  font-weight: 400;
+  color: var(--slate);
+}
+
+.breadcrumbs button {
+  padding: 0;
+  border: none;
+  background: none;
+  font-weight: 800;
+  color: var(--teal-dark);
+  cursor: pointer;
+}
+
+.breadcrumbs button:hover {
+  text-decoration: underline;
+}
+
+.breadcrumbs [aria-current="page"] {
+  font-weight: 800;
+  color: var(--navy);
+}
+
+.breadcrumb-sep {
+  color: var(--slate);
+  opacity: 0.6;
+}
+
+.dashboard-page > .breadcrumbs {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto 26px;
+}
+
 .hero-section {
   display: grid;
   grid-template-columns: 1.2fr 0.8fr;
@@ -1534,6 +1589,29 @@
   color: #b77700;
 }
 
+/* Role dropdown and per-row actions on the ManagerDashboard staff list. */
+.role-select {
+  flex: 0 0 auto;
+  padding: 8px 10px;
+  border: 1px solid rgba(21, 135, 195, 0.35);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--teal-dark);
+  font-size: 0.8rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.role-select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.staff-row .small-button {
+  padding: 8px 14px;
+  font-size: 0.78rem;
+}
+
 .security-note,
 .invite-help {
   margin: 18px 0 0;
@@ -1661,6 +1739,154 @@
 
 .dashboard-locked-card h1 { margin: 0; }
 .dashboard-locked-card p:not(.eyebrow) { color: var(--slate); line-height: 1.6; }
+
+/* ---------------------------------------------------------- loading states */
+/* Shared shimmer skeletons (SkeletonLoader.tsx) + the App-level auth splash. */
+
+@keyframes app-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: 0 0;
+  }
+}
+
+@keyframes app-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.skeleton-bar,
+.skeleton-metric {
+  display: block;
+  border-radius: 8px;
+  background: linear-gradient(
+    90deg,
+    var(--line) 25%,
+    #eef3f8 37%,
+    var(--line) 63%
+  );
+  background-size: 400% 100%;
+  animation: app-shimmer 1.2s ease-in-out infinite;
+}
+
+.skeleton-bar {
+  height: 14px;
+  width: 100%;
+}
+
+.skeleton-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.skeleton-width-1 {
+  width: 60%;
+}
+
+.skeleton-width-2 {
+  width: 90%;
+}
+
+.skeleton-width-3 {
+  width: 75%;
+}
+
+.skeleton-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+}
+
+.skeleton-metric-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.skeleton-metric {
+  height: 118px;
+  border: 1px solid var(--line);
+}
+
+/* Shimmer block sized to look like a big metric number while it loads. */
+.skeleton-metric-value {
+  height: 30px;
+  width: 64px;
+  max-width: 100%;
+}
+
+/* App-level pre-auth splash: logo + spinner + skeleton bars. */
+.loading-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+  padding: 40px 34px;
+}
+
+.loading-brand,
+.auth-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.loading-brand img,
+.auth-brand img {
+  height: 46px;
+}
+
+.loading-brand strong,
+.auth-brand strong {
+  font-size: 1.2rem;
+  color: var(--navy);
+}
+
+.loading-spinner {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 3px solid var(--line);
+  border-top-color: var(--teal);
+  animation: app-spin 0.9s linear infinite;
+}
+
+.loading-skeleton {
+  width: 100%;
+  margin-top: 4px;
+}
+
+@media (max-width: 900px) {
+  .skeleton-metric-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 620px) {
+  .skeleton-metric-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-bar,
+  .skeleton-metric {
+    animation: none;
+  }
+
+  .loading-spinner {
+    animation-duration: 2.5s;
+  }
+}
 
 .user-dashboard-page {
   min-height: 100vh;
@@ -4652,5 +4878,196 @@
 
   .adoption-track-row {
     flex-wrap: wrap;
+  }
+}
+
+/* ---------------------------------------------------------------- reports */
+/* Manager/Admin analytics page (ReportsPage.tsx). */
+
+.report-page {
+  min-height: 100vh;
+}
+
+.report-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.report-range {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--slate);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.report-range select {
+  padding: 10px 34px 10px 12px;
+  border: 1px solid var(--teal);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--navy);
+  font-family: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.report-range select:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(21, 135, 195, 0.12);
+}
+
+/* Two-up grid so each chart panel gets room to breathe. */
+.report-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.report-panel {
+  break-inside: avoid;
+}
+
+.report-chart-title {
+  margin: 18px 0 10px;
+  color: var(--slate);
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.report-kpi-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin-bottom: 4px;
+  color: var(--slate);
+  font-size: 0.85rem;
+}
+
+.report-kpi-row strong {
+  color: var(--navy);
+  font-weight: 800;
+}
+
+/* recharts needs a fixed-height parent to size its ResponsiveContainer. */
+.chart-box {
+  position: relative;
+  width: 100%;
+  height: 240px;
+}
+
+.report-per-animal table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.report-per-animal th,
+.report-per-animal td {
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+
+.report-per-animal th {
+  color: var(--slate);
+  font-size: 0.74rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.report-per-animal tr:last-child td {
+  border-bottom: none;
+}
+
+/* Print / PDF branding — screen-only by default. */
+.report-print-header {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .report-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .report-toolbar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .report-toolbar-actions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 620px) {
+  .report-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .report-page .dashboard-metrics {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* When "Download PDF" runs window.print(): strip the chrome and show the
+   branded header instead of the toolbar. */
+@media print {
+  body {
+    background: #fff;
+  }
+
+  .no-print,
+  .site-header,
+  .report-toolbar,
+  .dashboard-locked {
+    display: none !important;
+  }
+
+  .report-page {
+    padding: 0;
+  }
+
+  .report-print-header {
+    display: block;
+    margin-bottom: 26px;
+    padding-bottom: 18px;
+    border-bottom: 3px solid var(--teal);
+  }
+
+  .report-print-header h1 {
+    margin: 0 0 8px;
+    font-size: 1.8rem;
+  }
+
+  .report-print-header p {
+    margin: 0;
+    color: var(--slate);
+    font-size: 0.9rem;
+  }
+
+  .dashboard-panel,
+  .dashboard-welcome,
+  .dashboard-metrics article {
+    border-color: var(--line);
+    box-shadow: none;
+  }
+
+  .dashboard-panel,
+  .dashboard-metrics article {
+    break-inside: avoid;
+  }
+
+  .chart-box {
+    height: 200px;
   }
 }

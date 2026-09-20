@@ -10,7 +10,7 @@ export const rescueApiBaseUrl = apiBaseUrl;
 async function readApiResponse<T>(response: Response): Promise<T> {
   const contentType = response.headers.get("content-type") ?? "";
   if (!contentType.includes("application/json")) {
-    throw new Error("The ARA API is not running. Start it with `npm run server:dev`.");
+    throw new Error("The SPCA API is not running. Start it with `npm run server:dev`.");
   }
   return (await response.json()) as T;
 }

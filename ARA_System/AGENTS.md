@@ -48,10 +48,11 @@ into a single record. Three modules, plus cross-cutting donations:
   extend the `View` union + add a branch in `App.tsx`. There are no URL params.
 - **Auth middleware**: `requireClerkSession` (`server/src/middleware/auth.ts`)
   resolves the token into `request.clerkUserId`; `requireStaffOrAbove` /
-  `requireManagerOrAdmin` (`middleware/rbac.ts`) check Clerk
-  `publicMetadata.role` = `staff | veterinarian | manager | admin`
-  (`shared/types/roles.ts`). Public endpoints use `resolveOptionalClerkUserId`
-  so anonymous visitors still work (rescue reports).
+  `requireRescuerOrAbove` / `requireManagerOrAdmin` (`middleware/rbac.ts`)
+  check Clerk `publicMetadata.role` = `staff | veterinarian | manager | admin |
+  rescuer` (`shared/types/roles.ts`). Public endpoints use
+  `resolveOptionalClerkUserId` so anonymous visitors still work (rescue
+  reports).
 
 ## Commands (all verified)
 
@@ -139,6 +140,15 @@ scaffolded service/routes/repository but never mounted in `app.ts`; no UI).
       `donations.service.ts`); **no Stripe SDK / hosted checkout exists** —
       `stripe_checkout_session_id` is a reserved column only.
 
+**Reports & analytics (cross-cutting)**
+- [x] Manager/Admin analytics + PDF report — `server/src/modules/reports/{routes,service,repository}.ts`
+      mounted at `/api/reports`; `GET /api/reports/analytics?range=30d|90d|12m|all`
+      (default `90d`), gated `requireClerkSession` + `requireManagerOrAdmin`.
+      Live KPIs + recharts trends/breakdowns + `window.print()` PDF export in
+      `src/components/ReportsPage.tsx`; "reports" nav link is manager/admin-only
+      (`SiteHeader.tsx`). Data is read-only over `animals` / `rescue_reports` /
+      `adoption_applications` / `donations` (completed only).
+
 ## Adoption module (spec: `Adoption.md`)
 
 `Adoption.md` is the working scoping doc for this module — honor it, but its
@@ -182,15 +192,30 @@ Every route/action is gated server-side by role, not just hidden in the UI
   one account may be both user and donor.
 - **SPCA staff** — register animals, assign rescuers, review/reject
   applications, log phone reports/bookings (same form as online).
+- **Rescuer** — the rescue-report queue: review, assign, and dispatch reports
+  (`requireRescuerOrAbove` on the rescue routes; has its own
+  `RescuerDashboard`).
 - **Veterinarian** — medical history, treatments, medical clearance.
 - **Manager/Admin** — staff invitations (`staff` module, `/api/admin`),
-  metrics, wage payments.
+  edit staff member roles, revoke member access / pending invitations
+  (admins rule managers/admin; no self-changes), metrics, wage payments.
 
 ## Login & authentication
 
 - Public listing/browsing must work with **no account**.
 - Everything else requires Clerk auth; RBAC enforced server-side — a
   registered user hitting a staff route must get 403.
+- **Staff-first landing**: staff-type accounts (manager/admin/staff/vet/
+  rescuer) are routed straight to their own dashboard: `App.tsx` derives a
+  fresh `home` landing into the matching dashboard (a pure render derivation,
+  once per session per user id — also applies on reload since `view` resets to
+  `home`). Registered users stay on the public Home page.
+- `SiteHeader.tsx` renders **team navigation** (Dashboard, Rescue queue,
+  Animals, Register, Adoptions + "View public site") on internal pages
+  (`dashboard`, `staff-dashboard`, `rescuer-dashboard`, `register-animal`,
+  `manage-animals`, `edit-animal`, `reports`); public pages keep the normal nav (Adopt/
+  Donate prompts hidden for staff-type accounts). Rescuers see only the
+  rescue queue, not animal/adoption modules.
 - Staff/admin accounts need **MFA** (named risk mitigation). Never store/log
   credentials in plaintext. Card details never touch SPCA's own servers.
 
@@ -284,3 +309,7 @@ keyword match, not an external AI provider.
 - Branches are per-teammate (`main`, `alvin`, `dante-feature`, `jas`, `kara`,
   `surbhit`) and merged into the working branch — keep `Adoption.md`'s "what
   NOT to touch" (search module, report generation) off your plate unless asked.
+  **Reconcile at merge**: the reports/analytics module (`server/src/modules/reports/*`,
+  `src/components/ReportsPage.tsx`) overlaps `Adoption.md`'s "report generation"
+  but was built on `surbhit` deliberately **at the user's request** — QA it in
+  that context, not as an Alvin duplicate.

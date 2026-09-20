@@ -2,7 +2,9 @@ import { SignInButton, UserButton, useAuth, useUser } from "@clerk/react";
 import { useEffect, useId, useState } from "react";
 import spcaLogo from "../../assets/spca-logo.png";
 import { DonateModal } from "../donations/DonateModal";
+import { Breadcrumbs } from "../../components/Breadcrumbs";
 import { SiteFooter } from "../../components/SiteFooter";
+import { SkeletonLoader } from "../../components/SkeletonLoader";
 import {
   fetchAdoptionApplicationDetail,
   fetchMyAdoptionApplications,
@@ -293,6 +295,12 @@ export function MyApplications({ isLoaded, isSignedIn, onNavigate }: MyApplicati
       </header>
 
       <main className="page-shell">
+        <Breadcrumbs
+          trail={[
+            { label: "Home", onClick: () => onNavigate("home") },
+            { label: "My applications" },
+          ]}
+        />
         <section className="catalog-hero">
           <p className="eyebrow">My applications</p>
           <h1>Your adoption applications</h1>
@@ -303,7 +311,7 @@ export function MyApplications({ isLoaded, isSignedIn, onNavigate }: MyApplicati
         </section>
 
         {!isLoaded ? (
-          <p className="dashboard-data-state">Loading your adoption applications...</p>
+          <SkeletonLoader variant="card" />
         ) : !isSignedIn ? (
           <div className="search-card catalog-search">
             <p className="security-note">
@@ -331,7 +339,7 @@ export function MyApplications({ isLoaded, isSignedIn, onNavigate }: MyApplicati
               </button>
             </div>
             {applicationsLoading && (
-              <p className="dashboard-data-state">Loading your adoption applications...</p>
+              <SkeletonLoader variant="card" />
             )}
             {!applicationsLoading && applicationsError && (
               <p className="dashboard-data-state error">{applicationsError}</p>

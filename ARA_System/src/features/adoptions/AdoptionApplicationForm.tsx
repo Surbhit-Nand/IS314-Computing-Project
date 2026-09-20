@@ -4,6 +4,8 @@ import spcaLogo from "../../assets/spca-logo.png";
 import { DonateModal } from "../donations/DonateModal";
 import { submitAdoptionApplication } from "../../services/adoptionsApi";
 import type { Animal } from "../../types/animal";
+import { Breadcrumbs } from "../../components/Breadcrumbs";
+import { SkeletonLoader } from "../../components/SkeletonLoader";
 
 type AdoptionApplicationFormProps = {
   // The animal being applied for (the one whose profile "Adopt" was clicked
@@ -108,6 +110,17 @@ export function AdoptionApplicationForm({
       </header>
 
       <main className="page-shell">
+        <Breadcrumbs
+          trail={[
+            { label: "Home", onClick: () => onNavigate("home") },
+            { label: "Animals", onClick: () => onNavigate("animal-listings") },
+            {
+              label: animal?.name ?? "this animal",
+              onClick: animal ? () => onNavigate("animal-profile") : undefined,
+            },
+            { label: "Apply to adopt" },
+          ]}
+        />
         <section className="catalog-hero">
           <p className="eyebrow">Adoption application</p>
           <h1>Apply to adopt {animal?.name ?? "this animal"}</h1>
@@ -134,7 +147,7 @@ export function AdoptionApplicationForm({
           </section>
         ) : !isLoaded ? (
           <section className="rescue-form-panel">
-            <p className="dashboard-data-state">Loading...</p>
+            <SkeletonLoader variant="card" />
           </section>
         ) : !isSignedIn ? (
           <section className="rescue-form-panel">

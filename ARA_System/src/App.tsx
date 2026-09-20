@@ -1,14 +1,17 @@
-import { useAuth } from "@clerk/react";
+import { useAuth, useUser } from "@clerk/react";
 import { useState } from "react";
 import "./App.css";
+import spcaLogo from "./assets/spca-logo.png";
 import { AboutUs } from "./components/AboutUs";
 import { AnimalListings } from "./components/AnimalListings";
 import { AnimalProfilePage } from "./components/AnimalProfilePage";
 import { AuthPage } from "./components/AuthPage";
 import { HomePage } from "./components/HomePage";
 import { ManagerDashboard } from "./components/ManagerDashboard";
+import { RescuerDashboard } from "./components/RescuerDashboard";
 import { StaffDashboard } from "./components/StaffDashboard";
 import { UserDashboard } from "./components/UserDashboard";
+import { ReportsPage } from "./components/ReportsPage";
 import { AnimalRegistrationForm } from "./features/animals/AnimalRegistrationForm";
 import { EditAnimalProfile } from "./features/animals/EditAnimalProfile";
 import { ManageAnimalProfiles } from "./features/animals/ManageAnimalProfiles";
@@ -29,6 +32,7 @@ export type View =
   | "register"
   | "dashboard"
   | "staff-dashboard"
+  | "rescuer-dashboard"
   | "user-dashboard"
   | "register-animal"
   | "manage-animals"
@@ -39,7 +43,8 @@ export type View =
   | "manage-rescue-reports"
   | "adoption-apply"
   | "my-applications"
-  | "manage-adoption-applications";
+  | "manage-adoption-applications"
+  | "reports";
 
 function App() {
   const [view, setView] = useState<View>("home");
@@ -53,6 +58,56 @@ function App() {
   // profile page.
   const [viewedAnimal, setViewedAnimal] = useState<Animal | null>(null);
   const { isLoaded, isSignedIn } = useAuth();
+  const { user } = useUser();
+  // Staff-first landing: a staff-type account that lands on the public Home
+  // page (fresh sign-in, or any reload since view resets to "home") is shown
+  // its own dashboard instead. This is a pure derivation during render - the
+  // first navigation the staff member makes records them as actively browsing
+  // (landedForUserId), so afterwards they can freely visit the public site.
+  const [landedForUserId, setLandedForUserId] = useState<string | null>(null);
+
+  const role = user?.publicMetadata.role;
+  const staffLanding =
+    !isLoaded || !isSignedIn || !user || view !== "home" || landedForUserId === user.id
+      ? null
+      : role === "manager" || role === "admin"
+        ? "dashboard"
+        : role === "rescuer"
+          ? "rescuer-dashboard"
+          : role === "staff" || role === "veterinarian"
+            ? "staff-dashboard"
+            : null;
+  const activeView = staffLanding ?? view;
+
+  // Keep the public Home page from flashing before auth resolves. Signed-in
+  // sessions briefly lag on the Clerk user profile hydration, so both
+  // `isLoaded` and the `user` object must be ready before any page paints.
+  // Anonymous visitors hit `isLoaded=true` -> `isSignedIn=false` and see Home.
+  if (!isLoaded || (isSignedIn && !user)) {
+    return (
+      <main className="dashboard-locked loading-screen">
+        <div className="dashboard-locked-card loading-card">
+          <div className="loading-brand">
+            <img src={spcaLogo} alt="SPCA Fiji logo" className="brand-logo" />
+            <strong>SPCA Fiji</strong>
+          </div>
+          <div className="loading-spinner" aria-hidden="true" />
+          <div className="loading-skeleton" aria-hidden="true">
+            <span className="skeleton-bar" />
+            <span className="skeleton-bar skeleton-width-2" />
+            <span className="skeleton-bar skeleton-width-3" />
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  // Marks the current user as on a session that chose its own view, so the
+  // staff-first landing above only applies once per sign-in session.
+  function navigate(nextView: View) {
+    if (user) setLandedForUserId(user.id);
+    setView(nextView);
+  }
 
   function handleViewAnimal(animal: Animal) {
     setViewedAnimal(animal);
@@ -67,137 +122,147 @@ function App() {
     setView("my-applications");
   }
 
-  if (view === "dashboard") {
-    return <ManagerDashboard onNavigate={setView} />;
+  if (activeView === "dashboard") {
+    return <ManagerDashboard onNavigate={navigate} />;
   }
 
-  if (view === "staff-dashboard") {
-    return <StaffDashboard onNavigate={setView} />;
+  if (activeView === "reports") {
+    return <ReportsPage onNavigate={navigate} />;
   }
 
-  if (view === "user-dashboard") {
-    return <UserDashboard onNavigate={setView} />;
+  if (activeView === "staff-dashboard") {
+    return <StaffDashboard onNavigate={navigate} />;
   }
 
-  if (view === "animal-listings") {
+  if (activeView === "rescuer-dashboard") {
+    return <RescuerDashboard onNavigate={navigate} />;
+  }
+
+  if (activeView === "user-dashboard") {
+    return <UserDashboard onNavigate={navigate} />;
+  }
+
+  if (activeView === "animal-listings") {
     return (
       <AnimalListings
         isLoaded={isLoaded}
         isSignedIn={isSignedIn}
         currentPage="animal-listings"
-        onNavigate={setView}
+        onNavigate={navigate}
         onViewAnimal={handleViewAnimal}
       />
     );
   }
 
-  if (view === "about") {
+  if (activeView === "about") {
     return (
       <AboutUs
         isLoaded={isLoaded}
         isSignedIn={isSignedIn}
         currentPage="about"
-        onNavigate={setView}
+        onNavigate={navigate}
       />
     );
   }
 
-  if (view === "animal-profile" && viewedAnimal) {
+  if (activeView === "animal-profile" && viewedAnimal) {
     return (
       <AnimalProfilePage
         animal={viewedAnimal}
         isLoaded={isLoaded}
         isSignedIn={isSignedIn}
         currentPage="animal-listings"
-        onNavigate={setView}
+        onNavigate={navigate}
       />
     );
   }
 
-  if (view === "register-animal") {
-    return <AnimalRegistrationForm onNavigate={setView} />;
+  if (activeView === "register-animal") {
+    return <AnimalRegistrationForm onNavigate={navigate} />;
   }
 
-  if (view === "manage-animals") {
+  if (activeView === "manage-animals") {
     return (
       <ManageAnimalProfiles
-        onNavigate={setView}
+        onNavigate={navigate}
         onSelectAnimal={(animalId) => {
           setSelectedAnimalId(animalId);
-          setView("edit-animal");
+          navigate("edit-animal");
         }}
       />
     );
   }
 
-  if (view === "edit-animal" && selectedAnimalId) {
-    return <EditAnimalProfile animalId={selectedAnimalId} onNavigate={setView} />;
+  if (activeView === "edit-animal" && selectedAnimalId) {
+    return (
+      <EditAnimalProfile animalId={selectedAnimalId} onNavigate={navigate} />
+    );
   }
 
-  if (view === "rescue-report") {
+  if (activeView === "rescue-report") {
     return (
       <RescueReportForm
         variant="public"
         source="online"
-        onNavigate={setView}
+        onNavigate={navigate}
         onShowMyReports={openMyReports}
       />
     );
   }
 
-  if (view === "rescue-report-phone") {
+  if (activeView === "rescue-report-phone") {
     return (
       <RescueReportForm
         variant="staff"
         source="phone"
-        onNavigate={setView}
+        onNavigate={navigate}
         onShowMyReports={openMyReports}
       />
     );
   }
 
-  if (view === "my-reports") {
+  if (activeView === "my-reports") {
     return (
       <MyReports
         isLoaded={isLoaded}
         isSignedIn={isSignedIn}
-        onNavigate={setView}
+        onNavigate={navigate}
       />
     );
   }
 
-  if (view === "manage-rescue-reports") {
-    return <ManageRescueReports onNavigate={setView} />;
+  if (activeView === "manage-rescue-reports") {
+    return <ManageRescueReports onNavigate={navigate} />;
   }
 
-  if (view === "adoption-apply") {
+  if (activeView === "adoption-apply") {
     return (
       <AdoptionApplicationForm
         animal={viewedAnimal}
         isLoaded={isLoaded}
         isSignedIn={isSignedIn}
         onShowMyApplications={openMyApplications}
-        onNavigate={setView}
+        onNavigate={navigate}
       />
     );
   }
 
-  if (view === "my-applications") {
+  if (activeView === "my-applications") {
     return (
       <MyApplications
         isLoaded={isLoaded}
         isSignedIn={isSignedIn}
-        onNavigate={setView}
+        onNavigate={navigate}
       />
     );
   }
 
-  if (view === "manage-adoption-applications") {
-    return <ManageAdoptionApplications onNavigate={setView} />;
+  if (activeView === "manage-adoption-applications") {
+    return <ManageAdoptionApplications onNavigate={navigate} />;
   }
 
-  if (view === "login" || view === "register") {
-    return <AuthPage mode={view} onNavigate={setView} />;
+  if (activeView === "login" || activeView === "register") {
+    return <AuthPage mode={activeView} onNavigate={navigate} />;
   }
 
   return (
@@ -205,7 +270,7 @@ function App() {
       isLoaded={isLoaded}
       isSignedIn={isSignedIn}
       currentPage="home"
-      onNavigate={setView}
+      onNavigate={navigate}
       onViewAnimal={handleViewAnimal}
     />
   );

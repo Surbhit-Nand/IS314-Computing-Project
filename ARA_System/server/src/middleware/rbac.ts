@@ -1,7 +1,12 @@
 import type { NextFunction, Request, Response } from "express";
 import { env } from "../config/env.js";
 import { clerkClient } from "../services/clerkClient.js";
-import { managerOrAdminRoles, staffOrAboveRoles, type Role } from "../shared/types/roles.js";
+import {
+	managerOrAdminRoles,
+	rescuerOrAboveRoles,
+	staffOrAboveRoles,
+	type Role,
+} from "../shared/types/roles.js";
 
 // Looks up the signed-in Clerk user's role and rejects the request (403) if
 // their role isn't in the allowed list. requireClerkSession must run first
@@ -45,6 +50,14 @@ function requireRole(allowedRoles: readonly Role[], deniedMessage: string) {
 export const requireStaffOrAbove = requireRole(
 	staffOrAboveRoles,
 	"Staff, veterinarian, manager, or admin access is required",
+);
+
+// Gate for the rescue-report workflow: rescuers plus every staff-and-above
+// role, since they all dispatch reports. The rescue routes mount this as soon
+// as the veterinarian module's placeholder wiring is replaced.
+export const requireRescuerOrAbove = requireRole(
+	rescuerOrAboveRoles,
+	"Rescuer, staff, veterinarian, manager, or admin access is required",
 );
 
 // Gate for manager-only actions: staff account/invitation management.

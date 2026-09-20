@@ -9,6 +9,7 @@ import {
   rescueUrgencyLabel,
 } from "../../types/rescue";
 import { SiteFooter } from "../../components/SiteFooter";
+import { Breadcrumbs } from "../../components/Breadcrumbs";
 
 type MyReportsProps = {
   isLoaded: boolean;
@@ -272,6 +273,12 @@ export function MyReports({
       </header>
 
       <main className="page-shell">
+        <Breadcrumbs
+          trail={[
+            { label: "Home", onClick: () => onNavigate("home") },
+            { label: "My reports" },
+          ]}
+        />
         <section className="catalog-hero">
           <p className="eyebrow">My reports</p>
           <h1>Your rescue reports</h1>

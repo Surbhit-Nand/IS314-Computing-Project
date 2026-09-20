@@ -1,4 +1,5 @@
 import { SignInButton, useAuth, useUser } from "@clerk/react";
+import spcaLogo from "../assets/spca-logo.png";
 import { isDevBypassEnabled } from "../utils/devBypass";
 import { SiteHeader, type SiteHeaderView } from "./SiteHeader";
 
@@ -32,7 +33,11 @@ export function StaffDashboard({ onNavigate }: StaffDashboardProps) {
     return (
       <main className="dashboard-locked">
         <div className="dashboard-locked-card">
-          <p className="eyebrow">ARA operations</p>
+          <div className="auth-brand">
+            <img src={spcaLogo} alt="SPCA Fiji logo" className="brand-logo" />
+            <strong>SPCA Fiji</strong>
+          </div>
+          <p className="eyebrow">SPCA operations</p>
           <h1>Sign in to continue</h1>
           <p>
             Staff and veterinary workspaces are available to authorised team
@@ -52,7 +57,11 @@ export function StaffDashboard({ onNavigate }: StaffDashboardProps) {
     return (
       <main className="dashboard-locked">
         <div className="dashboard-locked-card">
-          <p className="eyebrow">ARA operations</p>
+          <div className="auth-brand">
+            <img src={spcaLogo} alt="SPCA Fiji logo" className="brand-logo" />
+            <strong>SPCA Fiji</strong>
+          </div>
+          <p className="eyebrow">SPCA operations</p>
           <h1>Access restricted</h1>
           <p>Your account does not have staff or veterinary permissions.</p>
           <button
