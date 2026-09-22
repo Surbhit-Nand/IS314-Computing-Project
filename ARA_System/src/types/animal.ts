@@ -73,7 +73,10 @@ export type AnimalFormInput = {
   gender: string;
   colour: string;
   description: string;
-  rescueDate: string;
+  // No rescueDate here on purpose - staff never enter it. The server sets it
+  // automatically to "today" the moment a new animal is registered (see
+  // registerAnimal in animals.service.ts), and it's never touched again on
+  // edits, since it's not part of this form at all.
   behaviour: string;
   rescueHistory: string;
   photoUrls: string[];

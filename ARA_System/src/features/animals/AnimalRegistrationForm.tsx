@@ -22,7 +22,6 @@ const emptyForm: AnimalFormInput = {
   gender: "",
   colour: "",
   description: "",
-  rescueDate: "",
   behaviour: "",
   rescueHistory: "",
   photoUrls: [],

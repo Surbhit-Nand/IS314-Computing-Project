@@ -27,7 +27,8 @@ function toFormInput(animal: Animal): AnimalFormInput {
     gender: animal.gender ?? "",
     colour: animal.colour ?? "",
     description: animal.description ?? "",
-    rescueDate: animal.rescueDate ?? "",
+    // rescueDate deliberately excluded - it's not part of this form at all
+    // (see AnimalFormInput's comment), so editing can never change it.
     behaviour: animal.behaviour ?? "",
     rescueHistory: animal.rescueHistory ?? "",
     photoUrls: animal.photoUrls,

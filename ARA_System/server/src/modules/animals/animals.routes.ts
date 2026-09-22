@@ -13,26 +13,40 @@ import {
 	uploadAnimalPhoto,
 } from "./animals.service.js";
 
+// Rejects free text that's just one letter repeated (e.g. "B, B, B, B" once
+// punctuation/spacing is stripped) - the garbage input flagged in the
+// lecturer demo. Mirrors validateAnimalForm.ts's isNonsenseText on the
+// frontend; kept as a second, server-side check rather than trusting the
+// client alone.
+function isNotNonsenseText(value: string): boolean {
+	const letters = value.replace(/[^a-zA-Z]/g, "");
+	if (letters.length === 0) return false;
+	return new Set(letters.toLowerCase()).size > 1;
+}
+
+const freeText = z
+	.string()
+	.min(10, "Must be at least 10 characters")
+	.refine(isNotNonsenseText, "Doesn't look like a real entry");
+
 // Fields a staff member fills in when registering a new animal. `publicId`
-// is deliberately absent here — the server generates it, staff never type it.
+// is deliberately absent here — the server generates it, staff never type
+// it. `rescueDate` is also absent - the server sets it automatically to the
+// registration date (see registerAnimal in animals.service.ts), staff never
+// enter it and it's never part of an edit either.
 const animalSchema = z.object({
 	name: z.string().min(1),
 	type: z.enum(["dog", "cat", "rabbit", "other"]),
-	breed: z.string().optional(),
+	breed: z.string().min(1),
+	// Left optional here, matching its pre-existing behaviour - the lecturer
+	// confirmed Age validation already works correctly (blocked client-side
+	// in validateAnimalForm.ts), so this field is untouched per that feedback.
 	estimatedAge: z.string().optional(),
 	gender: z.string().optional(),
-	colour: z.string().optional(),
-	description: z.string().min(1),
-	// An empty string is a valid TypeScript string, but it's not a valid
-	// Postgres `date` literal - the rescueDate column would reject "" with a
-	// raw DB error, so a blank date input is converted to "not provided" here
-	// rather than being passed through.
-	rescueDate: z
-		.string()
-		.optional()
-		.transform((value) => (value && value.trim() !== "" ? value : undefined)),
-	behaviour: z.string().optional(),
-	rescueHistory: z.string().optional(),
+	colour: z.string().min(1),
+	description: freeText,
+	behaviour: freeText,
+	rescueHistory: freeText,
 	// Between 1 and 3 photos - photoUrls[0] is the animal's main/profile
 	// picture (used on listing cards and as the profile hero), enforced here
 	// and again client-side in validateAnimalForm.ts.

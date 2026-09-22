@@ -1,6 +1,7 @@
 import { useState, type ChangeEvent } from "react";
 import { uploadAnimalPhoto } from "../../services/animalsApi";
 import { sizeOptionLabel, type AnimalFormInput, type AnimalSize } from "../../types/animal";
+import { BREED_OPTIONS, COLOUR_OPTIONS } from "./animalOptions";
 
 const SIZE_OPTIONS: AnimalSize[] = ["small", "medium", "large", "extra_large"];
 
@@ -58,6 +59,12 @@ export function AnimalProfileFields({ value, onChange, getToken }: AnimalProfile
     );
   }
 
+  // Breed options depend on species, so switching species clears whatever
+  // breed was picked - it likely doesn't exist in the new species' list.
+  function handleSpeciesChange(nextType: AnimalFormInput["type"]) {
+    onChange({ ...value, type: nextType, breed: "" });
+  }
+
   return (
     <div className="animal-form-grid">
       <label>
@@ -72,7 +79,10 @@ export function AnimalProfileFields({ value, onChange, getToken }: AnimalProfile
 
       <label>
         Species
-        <select value={value.type} onChange={(event) => setField("type", event.target.value as AnimalFormInput["type"])}>
+        <select
+          value={value.type}
+          onChange={(event) => handleSpeciesChange(event.target.value as AnimalFormInput["type"])}
+        >
           <option value="dog">Dog</option>
           <option value="cat">Cat</option>
           <option value="rabbit">Rabbit</option>
@@ -82,12 +92,14 @@ export function AnimalProfileFields({ value, onChange, getToken }: AnimalProfile
 
       <label>
         Breed
-        <input
-          type="text"
-          value={value.breed}
-          onChange={(event) => setField("breed", event.target.value)}
-          required
-        />
+        <select value={value.breed} onChange={(event) => setField("breed", event.target.value)}>
+          <option value="">Select breed</option>
+          {BREED_OPTIONS[value.type].map((breed) => (
+            <option key={breed} value={breed}>
+              {breed}
+            </option>
+          ))}
+        </select>
       </label>
 
       <label>
@@ -112,12 +124,14 @@ export function AnimalProfileFields({ value, onChange, getToken }: AnimalProfile
 
       <label>
         Colour
-        <input
-          type="text"
-          value={value.colour}
-          onChange={(event) => setField("colour", event.target.value)}
-          required
-        />
+        <select value={value.colour} onChange={(event) => setField("colour", event.target.value)}>
+          <option value="">Select colour</option>
+          {COLOUR_OPTIONS.map((colour) => (
+            <option key={colour} value={colour}>
+              {colour}
+            </option>
+          ))}
+        </select>
       </label>
 
       <label>
@@ -148,15 +162,6 @@ export function AnimalProfileFields({ value, onChange, getToken }: AnimalProfile
         </select>
       </label>
 
-      <label>
-        Rescue date
-        <input
-          type="date"
-          value={value.rescueDate}
-          onChange={(event) => setField("rescueDate", event.target.value)}
-        />
-      </label>
-
       <label className="animal-form-full">
         Description
         <textarea
@@ -173,6 +178,7 @@ export function AnimalProfileFields({ value, onChange, getToken }: AnimalProfile
           rows={3}
           value={value.behaviour}
           onChange={(event) => setField("behaviour", event.target.value)}
+          required
         />
       </label>
 
@@ -182,6 +188,7 @@ export function AnimalProfileFields({ value, onChange, getToken }: AnimalProfile
           rows={3}
           value={value.rescueHistory}
           onChange={(event) => setField("rescueHistory", event.target.value)}
+          required
         />
       </label>
 
