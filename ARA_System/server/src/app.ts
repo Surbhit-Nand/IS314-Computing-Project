@@ -7,6 +7,7 @@ import { rescueRouter } from "./modules/rescue/rescue.routes.js";
 import { donationsRouter } from "./modules/donations/donations.routes.js";
 import { adoptionsRouter } from "./modules/adoptions/adoptions.routes.js";
 import { reportsRouter } from "./modules/reports/reports.routes.js";
+import { webhooksRouter } from "./webhooks/webhooks.routes.js";
 
 export const app = express();
 
@@ -17,6 +18,11 @@ app.use(
 		methods: ["GET", "HEAD", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
 	}),
 );
+// The webhook receiver must see the raw JSON body (signature verification
+// runs against the exact bytes), and express.json() would consume the stream
+// first - so it is mounted before the json parser. Clerk's own auth applies
+// via the signing secret, so this route must not sit behind requireClerkSession.
+app.use("/api/webhooks", webhooksRouter);
 app.use(express.json());
 app.get("/health", (_request, response) => response.json({ status: "ok" }));
 app.use("/api/animals", animalsRouter);
