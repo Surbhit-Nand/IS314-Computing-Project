@@ -28,13 +28,21 @@ export type SiteHeaderView =
   | "edit-animal"
   | "manage-rescue-reports"
   | "rescue-report-phone"
-  | "reports";
+  | "reports"
+  | "veterinary-dashboard"
+  | "veterinary-record"
+  | "vet-appointments"
+  | "vet-appointment-details";
 
 type SiteHeaderProps = {
   isLoaded: boolean;
   isSignedIn: boolean | undefined;
   currentPage: string;
   onNavigate: (view: SiteHeaderView) => void;
+  // The veterinary module is a focused work screen: hide the public-site
+  // links (Home, About Us, Animals, Rescue Report, Adopt, Donate) so vets
+  // aren't shown navigation they don't use inside the module.
+  hideSiteNav?: boolean;
 };
 
 // Shared public-site header. On screens narrower than 980px the nav links
@@ -45,6 +53,7 @@ export function SiteHeader({
   isSignedIn,
   currentPage,
   onNavigate,
+  hideSiteNav = false,
 }: SiteHeaderProps) {
   const { user } = useUser();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -52,13 +61,14 @@ export function SiteHeader({
   const userRole = user?.publicMetadata.role;
   const isAdmin = userRole === "manager" || userRole === "admin";
   const isDispatcher = isDispatcherRole(userRole);
+  const isVeterinarian = userRole === "veterinarian";
   // isDevBypassEnabled is OR'd in here only so the "Dashboard" nav buttons
   // appear locally without a real role - see src/utils/devBypass.ts.
-  const isStaff = isDevBypassEnabled || isDispatcher || userRole === "staff" || userRole === "veterinarian";
+  const isStaff = isDevBypassEnabled || isDispatcher || userRole === "staff" || isVeterinarian;
   // Module-level work (register animals, review adoptions) is staff work -
   // Dispatchers keep the rescue queue and public site only.
   const isStaffModuleRole =
-    isDevBypassEnabled || isAdmin || userRole === "staff" || userRole === "veterinarian";
+    isDevBypassEnabled || isAdmin || userRole === "staff" || isVeterinarian;
   // Internal screens rendered by account-type dashboards and staff forms swap
   // the public prompts for team navigation; staff can still preview the
   // public site through the "View public site" link.
@@ -80,7 +90,9 @@ export function SiteHeader({
       ? "dashboard"
       : isDispatcher
         ? "dispatcher-dashboard"
-        : "staff-dashboard";
+        : isVeterinarian
+          ? "veterinary-dashboard"
+          : "staff-dashboard";
   }
 
   function navigate(view: SiteHeaderView) {
@@ -90,17 +102,19 @@ export function SiteHeader({
 
   return (
     <header className="site-header">
-      <button
-        type="button"
-        className={`nav-toggle${menuOpen ? " open" : ""}`}
-        aria-label="Toggle navigation menu"
-        aria-expanded={menuOpen}
-        onClick={() => setMenuOpen((open) => !open)}
-      >
-        <span />
-        <span />
-        <span />
-      </button>
+      {!hideSiteNav ? (
+        <button
+          type="button"
+          className={`nav-toggle${menuOpen ? " open" : ""}`}
+          aria-label="Toggle navigation menu"
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen((open) => !open)}
+        >
+          <span />
+          <span />
+          <span />
+        </button>
+      ) : null}
 
       <button
         type="button"
@@ -110,6 +124,7 @@ export function SiteHeader({
         <img src={spcaLogo} alt="SPCA Fiji logo" className="brand-logo" />
       </button>
 
+      {!hideSiteNav ? (
       <nav
         className={`main-nav${menuOpen ? " open" : ""}`}
         aria-label="Main navigation"
@@ -264,6 +279,7 @@ export function SiteHeader({
           </>
         )}
       </nav>
+      ) : null}
 
       <div className="header-actions">
         {!isLoaded ? null : isSignedIn ? (
@@ -277,9 +293,11 @@ export function SiteHeader({
                     ? "dashboard"
                     : isDispatcher
                       ? "dispatcher-dashboard"
-                      : isStaff
-                        ? "staff-dashboard"
-                        : "user-dashboard",
+                      : isVeterinarian
+                        ? "veterinary-dashboard"
+                        : isStaff
+                          ? "staff-dashboard"
+                          : "user-dashboard",
                 )
               }
             >
@@ -287,9 +305,11 @@ export function SiteHeader({
                 ? "Admin dashboard"
                 : isDispatcher
                   ? "Dispatcher dashboard"
-                  : isStaff
-                    ? "Staff dashboard"
-                    : "My dashboard"}
+                  : isVeterinarian
+                    ? "Veterinary dashboard"
+                    : isStaff
+                      ? "Staff dashboard"
+                      : "My dashboard"}
             </button>
             <div className="user-avatar-circle">
               <UserButton />

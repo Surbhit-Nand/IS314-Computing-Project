@@ -178,15 +178,9 @@ export async function transitionAdoptionApplication(
 	return findAdoptionApplicationById(updated.id);
 }
 
-// The proposal rule is "no public listing until a vet has set
-// medically_cleared". That gate is intentionally OFF for this prototype -
-// the Veterinary module that would set the flag doesn't exist yet, so the
-// team ships with it disabled and this function always returns true. When
-// the vet module lands, flip the body to return the animal's clearance flag
-// so an animal is only approvable once a vet has cleared it.
 async function requireMedicallyCleared(animalId: string): Promise<boolean> {
-	void animalId;
-	return true;
+	const animal = await getAnimalById(animalId);
+	return animal?.medicallyCleared === true;
 }
 
 function throwIfInvalidTransition(from: AdoptionStatus, to: AdoptionStatus) {

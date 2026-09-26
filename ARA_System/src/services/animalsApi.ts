@@ -74,11 +74,13 @@ export async function createAnimal(token: string, input: AnimalFormInput): Promi
   return result as Animal;
 }
 
-// Updates an existing animal profile.
+// Updates an existing animal profile. `input` is partial so an editor can
+// touch just one or two fields (e.g. a vet recording an estimated age
+// during an assessment) without re-sending the whole form.
 export async function updateAnimal(
   token: string,
   id: string,
-  input: AnimalFormInput,
+  input: Partial<AnimalFormInput>,
 ): Promise<Animal> {
   const response = await fetch(`${apiBaseUrl}/api/animals/${id}`, {
     method: "PATCH",

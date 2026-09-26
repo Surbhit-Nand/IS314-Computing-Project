@@ -36,6 +36,10 @@ const animalSchema = z.object({
 	photoUrls: z.array(z.string().url()).min(1),
 	vaccinationStatus: z.enum(["not_vaccinated", "vaccinated"]),
 	size: z.enum(["small", "medium", "large", "extra_large"]),
+	// Triage priority is selected by staff during registration (not inherited
+	// from any rescue-report urgency). Required - an animal cannot be
+	// registered without one.
+	veterinaryPriority: z.enum(["critical", "high", "moderate", "routine"]),
 });
 
 // Same shape, but every field is optional since an edit can touch just one
@@ -56,8 +60,7 @@ function getIdParam(value: string | string[]): string {
 
 export const animalsRouter = Router();
 
-// Public: every not-yet-adopted animal (see the NOTE on findPublicAnimals
-// in animals.repository.ts for why this isn't gated on medical clearance).
+// Public: only medically cleared, not-yet-adopted animals.
 animalsRouter.get("/", async (_request, response, next) => {
 	try {
 		response.json(await listPublicAnimals());

@@ -2,15 +2,9 @@ import { and, eq, isNull, ne } from "drizzle-orm";
 import { db } from "../../db/client.js";
 import { animals } from "../../db/schema.js";
 
-// Public listing: every animal not yet adopted and not soft-deleted is
-// publicly visible.
-//
-// NOTE: AGENTS.md's default rule is that an animal can't appear publicly
-// until a vet sets medically_cleared - that gate is intentionally NOT
-// applied here. The team decided to skip strict medical clearance for this
-// prototype (vaccination status is shown as informational only, not a
-// listing gate), since the Veterinary module that would set that flag
-// hasn't been built yet. Revisit this once that module exists.
+// Public discovery: non-adopted animals remain visible so visitors can learn
+// about them while veterinary care is pending. Adoption approval is separately
+// gated by medical clearance in the adoption service.
 export async function findPublicAnimals() {
 	return db
 		.select()

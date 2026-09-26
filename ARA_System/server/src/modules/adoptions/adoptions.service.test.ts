@@ -142,7 +142,9 @@ function resetImpls() {
 	repo("findActiveAdoptionApplication", async () => undefined);
 	repo("findAdoptionConflict", async () => undefined);
 	repo("findAdoptionStatusHistoryByApplication", async () => []);
-	repo("getAnimalById", async () => undefined);
+	// Approval is gated on veterinary clearance, so the default animal is
+	// cleared. Tests that exercise the gate stub this out explicitly.
+	repo("getAnimalById", async () => baseAnimal({ medicallyCleared: true }));
 	repo("createAdoptionStatusHistoryEntry", async (entry: Record<string, unknown>) => {
 		historySpy.push(entry);
 		return entry;
@@ -305,6 +307,19 @@ describe("adoptions.service", () => {
 
 			assert.equal(result?.status, "approved");
 			assert.equal(current.status, "approved");
+			assert.equal(animalUpdateSpy.length, 0);
+		});
+
+		it("blocks approval when the animal is not medically cleared", async () => {
+			const current = statefulApplication("under_review");
+			repo("getAnimalById", async () => baseAnimal({ medicallyCleared: false }));
+
+			await assert.rejects(
+				transitionAdoptionApplication(APPLICATION_ID, { status: "approved" }, ACTOR_ID),
+				/not yet medically cleared/,
+			);
+
+			assert.equal(current.status, "under_review");
 			assert.equal(animalUpdateSpy.length, 0);
 		});
 

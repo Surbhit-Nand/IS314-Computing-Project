@@ -1,7 +1,8 @@
 import { useAuth, useUser } from "@clerk/react";
 import { useState } from "react";
-import "./App.css";
 import spcaLogo from "./assets/spca-logo.png";
+import "./App.css";
+import "./features/veterinary/veterinary.css";
 import { AboutUs } from "./components/AboutUs";
 import { AnimalListings } from "./components/AnimalListings";
 import { AnimalProfilePage } from "./components/AnimalProfilePage";
@@ -21,6 +22,11 @@ import { MyApplications } from "./features/adoptions/MyApplications";
 import { ManageRescueReports } from "./features/rescue/ManageRescueReports";
 import { MyReports } from "./features/rescue/MyReports";
 import { RescueReportForm } from "./features/rescue/RescueReportForm";
+import { VeterinaryAppointmentBooking } from "./features/veterinary/VeterinaryAppointmentBooking";
+import { VeterinaryDashboard } from "./features/veterinary/VeterinaryDashboard";
+import { VeterinaryMedicalHistory } from "./features/veterinary/VeterinaryMedicalHistory";
+import { VeterinaryUpcomingAppointments } from "./features/veterinary/VeterinaryUpcomingAppointments";
+import type { VeterinaryAppointment } from "./types/veterinary";
 import type { Animal } from "./types/animal";
 import { isDispatcherRole } from "./utils/roles";
 
@@ -48,7 +54,13 @@ export type View =
   | "adoption-apply"
   | "my-applications"
   | "manage-adoption-applications"
-  | "reports";
+  | "reports"
+  | "veterinary-dashboard"
+  | "veterinary-record"
+  | "veterinary-records"
+  | "vet-appointments"
+  | "vet-booking"
+  | "vet-appointment-details";
 
 function App() {
   const [view, setView] = useState<View>("home");
@@ -56,6 +68,9 @@ function App() {
   // profile to load - there is no router/URL param for this, so it rides
   // alongside `view` in local state.
   const [selectedAnimalId, setSelectedAnimalId] = useState<string | null>(null);
+  // The follow-up appointment a vet clicked "View" on. Like selectedAnimalId,
+  // there is no router param, so it rides in local state alongside `view`.
+  const [selectedAppointment, setSelectedAppointment] = useState<VeterinaryAppointment | null>(null);
   // The animal a visitor clicked "View full profile" on. Holds the whole
   // object (not just an id) since the public listing fetch that got us here
   // already returned every field - no second request needed to render the
@@ -68,6 +83,12 @@ function App() {
   // its own dashboard instead. This is a pure derivation during render - the
   // first navigation the staff member makes records them as actively browsing
   // (landedForUserId), so afterwards they can freely visit the public site.
+  //
+  // Veterinarians get the veterinary dashboard rather than the generic staff
+  // one, because the vet pages ship with a hidden site navbar (see SiteHeader
+  // `hideSiteNav`). Deriving it here rather than redirecting from an effect
+  // keeps a single source of truth: an effect calling setView would race this
+  // derivation, which would win and strand them on the staff dashboard.
   const [landedForUserId, setLandedForUserId] = useState<string | null>(null);
 
   const role = user?.publicMetadata.role;
@@ -78,9 +99,11 @@ function App() {
         ? "dashboard"
         : isDispatcherRole(role)
           ? "dispatcher-dashboard"
-          : role === "staff" || role === "veterinarian"
-            ? "staff-dashboard"
-            : null;
+          : role === "veterinarian"
+            ? "veterinary-dashboard"
+            : role === "staff"
+              ? "staff-dashboard"
+              : null;
   const activeView = staffLanding ?? view;
 
   // Keep the public Home page from flashing before auth resolves. Signed-in
@@ -136,6 +159,47 @@ function App() {
 
   if (activeView === "staff-dashboard") {
     return <StaffDashboard onNavigate={navigate} />;
+  }
+
+  // Veterinary views read activeView (not view) and are handed navigate (not
+  // setView) for the same reason as the landing derivation above: staffLanding
+  // wins over view until the session is marked as browsing, so reading `view`
+  // would never show the vet dashboard, and a raw setView would leave the vet
+  // pinned to it with no way to reach the medical history.
+  if (
+    activeView === "veterinary-dashboard" ||
+    activeView === "veterinary-record" ||
+    activeView === "vet-appointment-details"
+  ) {
+    return (
+      <VeterinaryDashboard
+        currentView={activeView}
+        onNavigate={navigate}
+        onSelectAnimal={(animalId) => {
+          setSelectedAnimalId(animalId);
+          navigate("veterinary-record");
+        }}
+        selectedAnimalId={selectedAnimalId}
+        selectedAppointment={activeView === "vet-appointment-details" ? selectedAppointment : null}
+        onSelectAppointment={(appointment) => {
+          setSelectedAppointment(appointment);
+          navigate("vet-appointment-details");
+        }}
+        onViewAnimalProfile={handleViewAnimal}
+      />
+    );
+  }
+
+  if (activeView === "vet-appointments") {
+    return <VeterinaryUpcomingAppointments currentView={activeView} onNavigate={navigate} />;
+  }
+
+  if (activeView === "vet-booking") {
+    return <VeterinaryAppointmentBooking currentView={activeView} onNavigate={navigate} />;
+  }
+
+  if (activeView === "veterinary-records") {
+    return <VeterinaryMedicalHistory currentView={activeView} onNavigate={navigate} />;
   }
 
   if (activeView === "dispatcher-dashboard") {
