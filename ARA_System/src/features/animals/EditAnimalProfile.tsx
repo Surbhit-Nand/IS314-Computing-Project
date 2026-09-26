@@ -32,6 +32,8 @@ function toFormInput(animal: Animal): AnimalFormInput {
     // Legacy animals registered before this field existed have size: null -
     // fall back to the unselected placeholder so staff can pick one now.
     size: animal.size ?? "",
+    // Same fallback for veterinary priority - staff can set it on an edit.
+    veterinaryPriority: animal.veterinaryPriority ?? "",
   };
 }
 

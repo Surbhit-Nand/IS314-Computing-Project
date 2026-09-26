@@ -1,7 +1,7 @@
 import { SignInButton, useAuth, useUser } from "@clerk/react";
 import { SiteHeader, type SiteHeaderView } from "./SiteHeader";
 
-type UserDashboardProps = { onNavigate: (view: SiteHeaderView) => void };
+type UserDashboardProps = { onNavigate: (view: SiteHeaderView | "vet-appointments") => void };
 
 const activity = [
   [
@@ -148,7 +148,7 @@ export function UserDashboard({ onNavigate }: UserDashboardProps) {
             <strong>Submit a rescue report</strong>
             <span>Tell SPCA Fiji about an animal that needs help.</span>
           </button>
-          <button type="button" className="user-action-button">
+          <button type="button" className="user-action-button" onClick={() => onNavigate("vet-appointments")}>
             <strong>Book a vet follow-up</strong>
             <span>Arrange care for a rescued animal.</span>
           </button>

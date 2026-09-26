@@ -37,6 +37,13 @@ export const vaccinationStatus = pgEnum("vaccination_status", [
 // migration that would otherwise need a value for every existing row.
 export const animalSize = pgEnum("animal_size", ["small", "medium", "large", "extra_large"]);
 
+// Triage priority chosen by staff when an animal is registered. Replaces the
+// rescue-report urgency for veterinary triage (which stays on rescue_reports
+// and is still used by the rescue module). Nullable so animals registered
+// before this field existed keep working; new registrations require a value
+// (enforced in animals.routes.ts and the registration form).
+export const animalPriority = pgEnum("animal_priority", ["critical", "high", "moderate", "routine"]);
+
 export const animals = pgTable("animals", {
 	id: uuid("id").defaultRandom().primaryKey(),
 	publicId: text("public_id").notNull().unique(),
@@ -53,7 +60,12 @@ export const animals = pgTable("animals", {
 	photoUrls: jsonb("photo_urls").$type<string[]>().notNull().default([]),
 	vaccinationStatus: vaccinationStatus("vaccination_status").notNull().default("not_vaccinated"),
 	size: animalSize("size"),
+	veterinaryPriority: animalPriority("veterinary_priority"),
 	medicallyCleared: boolean("medically_cleared").notNull().default(false),
+	veterinaryStatus: text("veterinary_status").notNull().default("needs_initial_examination"),
+	medicalClearanceDate: timestamp("medical_clearance_date", { withTimezone: true }),
+	medicalClearedByClerkUserId: text("medical_cleared_by_clerk_user_id"),
+	medicalClearanceNotes: text("medical_clearance_notes"),
 	status: animalStatus("status").notNull().default("intake"),
 	// Soft delete: set when staff remove a profile (animal passed away,
 	// transferred elsewhere, etc). Deliberately NOT reusing the "closed"
@@ -154,9 +166,56 @@ export const vetAppointments = pgTable("vet_appointments", {
 	 animalId: uuid("animal_id").notNull().references(() => animals.id),
 	bookedByClerkUserId: text("booked_by_clerk_user_id").notNull(),
 	appointmentDate: timestamp("appointment_date", { withTimezone: true }).notNull(),
+	purpose: text("purpose").notNull().default("Follow-up examination"),
 	notes: text("notes"),
+	visitDetails: text("visit_details"),
+	treatmentPerformed: text("treatment_performed"),
+	completedAt: timestamp("completed_at", { withTimezone: true }),
+	completedByClerkUserId: text("completed_by_clerk_user_id"),
 	source: text("source").notNull().default("online"),
 	status: text("status").notNull().default("booked"),
+	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [uniqueIndex("vet_appointment_slot_unique").on(table.appointmentDate)]);
+
+export const veterinaryExaminations = pgTable("veterinary_examinations", {
+	id: uuid("id").defaultRandom().primaryKey(),
+	 animalId: uuid("animal_id").notNull().references(() => animals.id),
+	examinationDate: timestamp("examination_date", { mode: "string", withTimezone: true }).notNull(),
+	weightKg: doublePrecision("weight_kg"),
+	temperatureC: doublePrecision("temperature_c"),
+	generalCondition: text("general_condition").notNull(),
+	injuries: text("injuries"),
+	observations: text("observations"),
+	diagnosis: text("diagnosis"),
+	notes: text("notes"),
+	performedByClerkUserId: text("performed_by_clerk_user_id").notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const veterinaryCarePlans = pgTable("veterinary_care_plans", {
+	id: uuid("id").defaultRandom().primaryKey(),
+	 animalId: uuid("animal_id").notNull().references(() => animals.id),
+	requirementType: text("requirement_type").notNull(),
+	status: text("status").notNull().default("required"),
+	scheduledDate: timestamp("scheduled_date", { mode: "string", withTimezone: true }),
+	completedDate: timestamp("completed_date", { mode: "string", withTimezone: true }),
+	details: text("details"),
+	medication: text("medication"),
+	notes: text("notes"),
+	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+	updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const veterinaryTreatmentHistory = pgTable("veterinary_treatment_history", {
+	id: uuid("id").defaultRandom().primaryKey(),
+	 animalId: uuid("animal_id").notNull().references(() => animals.id),
+	carePlanId: uuid("care_plan_id").references(() => veterinaryCarePlans.id),
+	appointmentId: uuid("appointment_id").references(() => vetAppointments.id),
+	treatmentDate: date("treatment_date").notNull(),
+	details: text("details").notNull(),
+	medication: text("medication"),
+	notes: text("notes"),
+	performedByClerkUserId: text("performed_by_clerk_user_id").notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

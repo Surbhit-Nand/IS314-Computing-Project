@@ -32,6 +32,12 @@ export function validateAnimalForm(input: AnimalFormInput): string | null {
   if (input.photoUrls.length > 3) {
     return "Please upload no more than 3 photos of the animal.";
   }
+  if (!input.vaccinationStatus) {
+    return "Please select a vaccination status.";
+  }
+  if (!input.veterinaryPriority) {
+    return "Please select the animal's veterinary priority.";
+  }
   if (input.vaccinationStatus !== "not_vaccinated" && input.vaccinationStatus !== "vaccinated") {
     return "Please select a vaccination status.";
   }

@@ -1,6 +1,8 @@
-import { useAuth } from "@clerk/react";
-import { useState } from "react";
+import { useAuth, useUser } from "@clerk/react";
+import { useEffect, useRef, useState } from "react";
+import { isDevBypassEnabled } from "./utils/devBypass";
 import "./App.css";
+import "./features/veterinary/veterinary.css";
 import { AboutUs } from "./components/AboutUs";
 import { AnimalListings } from "./components/AnimalListings";
 import { AnimalProfilePage } from "./components/AnimalProfilePage";
@@ -18,6 +20,11 @@ import { MyApplications } from "./features/adoptions/MyApplications";
 import { ManageRescueReports } from "./features/rescue/ManageRescueReports";
 import { MyReports } from "./features/rescue/MyReports";
 import { RescueReportForm } from "./features/rescue/RescueReportForm";
+import { VeterinaryAppointmentBooking } from "./features/veterinary/VeterinaryAppointmentBooking";
+import { VeterinaryDashboard } from "./features/veterinary/VeterinaryDashboard";
+import { VeterinaryMedicalHistory } from "./features/veterinary/VeterinaryMedicalHistory";
+import { VeterinaryUpcomingAppointments } from "./features/veterinary/VeterinaryUpcomingAppointments";
+import type { VeterinaryAppointment } from "./types/veterinary";
 import type { Animal } from "./types/animal";
 
 export type View =
@@ -39,7 +46,13 @@ export type View =
   | "manage-rescue-reports"
   | "adoption-apply"
   | "my-applications"
-  | "manage-adoption-applications";
+  | "manage-adoption-applications"
+  | "veterinary-dashboard"
+  | "veterinary-record"
+  | "veterinary-records"
+  | "vet-appointments"
+  | "vet-booking"
+  | "vet-appointment-details";
 
 function App() {
   const [view, setView] = useState<View>("home");
@@ -47,12 +60,32 @@ function App() {
   // profile to load - there is no router/URL param for this, so it rides
   // alongside `view` in local state.
   const [selectedAnimalId, setSelectedAnimalId] = useState<string | null>(null);
+  // The follow-up appointment a vet clicked "View" on. Like selectedAnimalId,
+  // there is no router param, so it rides in local state alongside `view`.
+  const [selectedAppointment, setSelectedAppointment] = useState<VeterinaryAppointment | null>(null);
   // The animal a visitor clicked "View full profile" on. Holds the whole
   // object (not just an id) since the public listing fetch that got us here
   // already returned every field - no second request needed to render the
   // profile page.
   const [viewedAnimal, setViewedAnimal] = useState<Animal | null>(null);
   const { isLoaded, isSignedIn } = useAuth();
+  const { user } = useUser();
+
+  // As soon as a veterinarian's session finishes loading (first page load or
+  // right after signing in), drop them straight onto the veterinary dashboard
+  // instead of the public home page. The vet module pages ship with a hidden
+  // site navbar (see SiteHeader `hideSiteNav`), so this is what removes the
+  // old public navigation the moment they log in.
+  const lastSignedInState = useRef(isSignedIn);
+  useEffect(() => {
+    if (!isLoaded) return;
+    const signedInNow = isSignedIn === true;
+    const crossedIntoSignedIn = !lastSignedInState.current && signedInNow;
+    lastSignedInState.current = isSignedIn;
+    if (!crossedIntoSignedIn) return;
+    if (user?.publicMetadata.role !== "veterinarian" && !isDevBypassEnabled) return;
+    window.setTimeout(() => setView("veterinary-dashboard"), 0);
+  }, [isLoaded, isSignedIn, user?.publicMetadata.role]);
 
   function handleViewAnimal(animal: Animal) {
     setViewedAnimal(animal);
@@ -73,6 +106,38 @@ function App() {
 
   if (view === "staff-dashboard") {
     return <StaffDashboard onNavigate={setView} />;
+  }
+
+  if (view === "veterinary-dashboard" || view === "veterinary-record" || view === "vet-appointment-details") {
+    return (
+      <VeterinaryDashboard
+        currentView={view}
+        onNavigate={setView}
+        onSelectAnimal={(animalId) => {
+          setSelectedAnimalId(animalId);
+          setView("veterinary-record");
+        }}
+        selectedAnimalId={selectedAnimalId}
+        selectedAppointment={view === "vet-appointment-details" ? selectedAppointment : null}
+        onSelectAppointment={(appointment) => {
+          setSelectedAppointment(appointment);
+          setView("vet-appointment-details");
+        }}
+        onViewAnimalProfile={handleViewAnimal}
+      />
+    );
+  }
+
+  if (view === "vet-appointments") {
+    return <VeterinaryUpcomingAppointments currentView={view} onNavigate={setView} />;
+  }
+
+  if (view === "vet-booking") {
+    return <VeterinaryAppointmentBooking currentView={view} onNavigate={setView} />;
+  }
+
+  if (view === "veterinary-records") {
+    return <VeterinaryMedicalHistory currentView={view} onNavigate={setView} />;
   }
 
   if (view === "user-dashboard") {

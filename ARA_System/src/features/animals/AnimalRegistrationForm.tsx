@@ -26,6 +26,7 @@ const emptyForm: AnimalFormInput = {
   photoUrls: [],
   vaccinationStatus: "not_vaccinated",
   size: "",
+  veterinaryPriority: "",
 };
 
 // Staff-only page: registers a brand-new animal profile. The unique Animal

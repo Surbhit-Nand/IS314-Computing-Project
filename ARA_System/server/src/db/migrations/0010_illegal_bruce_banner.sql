@@ -1,0 +1,2 @@
+ALTER TABLE "veterinary_care_plans" ALTER COLUMN "scheduled_date" SET DATA TYPE timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "veterinary_care_plans" ALTER COLUMN "completed_date" SET DATA TYPE timestamp with time zone;

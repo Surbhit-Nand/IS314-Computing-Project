@@ -1,0 +1,1 @@
+ALTER TABLE "veterinary_examinations" ALTER COLUMN "examination_date" SET DATA TYPE timestamp with time zone;

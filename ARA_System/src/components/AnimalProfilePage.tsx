@@ -148,6 +148,11 @@ export function AnimalProfilePage({ animal, isLoaded, isSignedIn, currentPage, o
               <p className="pet-card-check profile-check">
                 ✓ {adoptionStatusLabel(animal.status)}
               </p>
+              {!animal.medicallyCleared && (
+                <p className="profile-check-muted profile-check">
+                  ○ Medical review pending
+                </p>
+              )}
               {/* Always shown, not just when vaccinated - "not yet vaccinated"
                   is information adopters need too, not something to hide.
                   Visually distinct (slate/neutral, open-circle marker) from
@@ -167,7 +172,7 @@ export function AnimalProfilePage({ animal, isLoaded, isSignedIn, currentPage, o
                   animal (see App.tsx's "adoption-apply" branch). If the
                   visitor is not signed in the form itself prompts them to
                   log in before applying. Hidden once the animal is adopted. */}
-              {animal.status !== "adopted" && (
+              {animal.status !== "adopted" && animal.medicallyCleared && (
                 <button
                   type="button"
                   className="teal-button profile-adopt-button"
@@ -175,6 +180,11 @@ export function AnimalProfilePage({ animal, isLoaded, isSignedIn, currentPage, o
                 >
                   Adopt {animal.name}
                 </button>
+              )}
+              {animal.status !== "adopted" && !animal.medicallyCleared && (
+                <p className="profile-adoption-pending">
+                  Adoption applications open after veterinary clearance.
+                </p>
               )}
             </div>
 

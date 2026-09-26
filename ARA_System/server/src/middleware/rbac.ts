@@ -3,6 +3,11 @@ import { env } from "../config/env.js";
 import { clerkClient } from "../services/clerkClient.js";
 import { managerOrAdminRoles, staffOrAboveRoles, type Role } from "../shared/types/roles.js";
 
+// Only veterinarian accounts can access veterinary routes. Staff register
+// animals and run rescue/adoption ops but cannot view medical records or
+// issue clearance.
+const veterinaryRoles: readonly Role[] = ["veterinarian"];
+
 // Looks up the signed-in Clerk user's role and rejects the request (403) if
 // their role isn't in the allowed list. requireClerkSession must run first
 // so `request.clerkUserId` is set.
@@ -51,4 +56,9 @@ export const requireStaffOrAbove = requireRole(
 export const requireManagerOrAdmin = requireRole(
 	managerOrAdminRoles,
 	"Manager or admin access is required",
+);
+
+export const requireVeterinaryAccess = requireRole(
+	veterinaryRoles,
+	"Veterinarian access is required",
 );
