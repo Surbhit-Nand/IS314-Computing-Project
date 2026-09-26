@@ -99,7 +99,7 @@ function baseApplication(overrides: Record<string, unknown> = {}) {
 		reviewNotes: null,
 		createdAt: new Date("2026-01-01T00:00:00Z"),
 		updatedAt: new Date("2026-01-01T00:00:00Z"),
-		animal: { id: ANIMAL_ID, publicId: "SPCA-2026-1000", name: "Bella", type: "dog" },
+		animal: { id: ANIMAL_ID, publicId: "SPCA-2026-1000", name: "Bella", type: "dog", medicallyCleared: true },
 		...overrides,
 	};
 }

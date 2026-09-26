@@ -5272,6 +5272,24 @@
   color: #fff;
 }
 
+/* Vet clearance warning on an adoption application whose animal hasn't been
+   cleared yet. Amber rather than red: it's a "waiting on the vet team" state,
+   not an error the reviewer caused. */
+.adoption-clearance-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px;
+  border-radius: 999px;
+  /* Same amber pair as .adoption-status-badge.under-review directly above, so
+     the two amber badges read identically when both show. */
+  background: rgba(183, 119, 0, 0.14);
+  color: #8a5b00;
+  font-size: 0.68rem;
+  font-weight: 800;
+  white-space: nowrap;
+  line-height: 1;
+}
+
 /* badges inside the timestamped history lists are size-flexible */
 .adoption-history-badge {
   width: auto;
