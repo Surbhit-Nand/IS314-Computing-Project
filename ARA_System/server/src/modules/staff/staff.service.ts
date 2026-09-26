@@ -1,6 +1,6 @@
 import { clerkClient } from "../../services/clerkClient.js";
 import { logAuditEntry } from "../../shared/audit/audit.service.js";
-import { invitationalStaffRoles } from "../../shared/types/roles.js";
+import { normalizeRole, invitationalStaffRoles } from "../../shared/types/roles.js";
 
 export const staffRoles = invitationalStaffRoles;
 export type StaffRole = (typeof staffRoles)[number];
@@ -23,9 +23,13 @@ export class StaffActionError extends Error {
 // veterinarians, and dispatchers; nobody (including admins) can change their own.
 const adminOnlyRoles: readonly StaffRole[] = ["manager", "admin"];
 
+// Reads a user's staff role off their Clerk account, normalising the
+// pre-rename `rescuer` value so legacy accounts still resolve to `dispatcher`.
+// Anything missing or unrecognised is undefined ("no staff role"), which the
+// role-management actions below treat as "not a staff member".
 function getStaffRole(user: { publicMetadata?: { role?: unknown } }): StaffRole | undefined {
-	const role = user.publicMetadata?.role;
-	return typeof role === "string" && (staffRoles as readonly string[]).includes(role)
+	const role = normalizeRole(user.publicMetadata?.role);
+	return role !== undefined && (staffRoles as readonly string[]).includes(role)
 		? (role as StaffRole)
 		: undefined;
 }
@@ -168,10 +172,12 @@ export async function listStaffAccess() {
 			id: user.id,
 			name: [user.firstName, user.lastName].filter(Boolean).join(" ") || "Unnamed user",
 			emailAddress: user.primaryEmailAddress?.emailAddress ?? "No email address",
-			role: user.publicMetadata.role,
+			// Normalised so a pre-rename `rescuer` shows up as "dispatcher" and
+			// stays editable in the role dropdown instead of being filtered out.
+			role: normalizeRole(user.publicMetadata.role) ?? null,
 			status: "Active" as const,
 		}))
-		.filter((member) => staffRoles.includes(member.role as StaffRole));
+		.filter((member) => member.role !== null);
 
 	const pendingInvitations = invitations.data.map((invitation) => ({
 		id: invitation.id,

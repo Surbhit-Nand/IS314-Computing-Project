@@ -53,6 +53,17 @@ into a single record. Three modules, plus cross-cutting donations:
   veterinarian | manager | admin | dispatcher` (`shared/types/roles.ts`). Public endpoints use
   `resolveOptionalClerkUserId` so anonymous visitors still work (rescue
   reports).
+- **Role rename (`rescuer` → `dispatcher`)**: roles live **only** in Clerk
+  `publicMetadata.role` — there is no role column in Postgres, so the rename
+  needs no migration. Accounts created before the rename still carry
+  `rescuer`, so every server-side read goes through `normalizeRole()`
+  (`shared/types/roles.ts`, which owns `legacyRoleAliases`) and the frontend
+  uses `isDispatcherRole()` (`src/utils/roles.ts`). `normalizeRole` returns
+  `undefined` for missing/unknown values, and the request schemas
+  (`z.enum(staffRoles)`) mean `rescuer` can never be **written** back. Once
+  the remaining legacy Clerk accounts are updated, delete `legacyRoleAliases`
+  and the alias arm in `isDispatcherRole`. Locked in by
+  `modules/staff/staff.service.test.ts`.
 
 ## Commands (all verified)
 
@@ -64,10 +75,16 @@ npm run db:generate   # create a Drizzle migration from schema.ts
 npm run db:migrate    # apply migrations — run AFTER every pull, BEFORE server:dev
 npm run build         # tsc -b && vite build (typechecks frontend+server)
 npm run lint          # eslint .
+npm test             # node:test via tsx — server + frontend suites
 ```
 
-- **Tests**: no `npm test` script exists. The only test is a `node:test`
-  file: `npx tsx --test server/src/modules/donations/donations.service.test.ts`.
+- **Tests**: `npm test` runs every `*.test.ts` under `server/src/**` and
+  `src/**` (93 tests / 6 files): adoptions, donations, reports, rescue, staff,
+  plus `src/utils/clerkToken.test.ts`. The script needs
+  `--experimental-test-module-mocks` because the suites stub modules with
+  `node:test`'s `mock.module` — running `npx tsx --test <file>` directly fails
+  with `TypeError: mock.module is not a function`. Add new suites as
+  `*.test.ts` anywhere under those two roots; the glob picks them up.
 - **Required order**: `db:migrate` → `server:dev`. A missing column is the #1
   cause of `column "xxx" of relation "animals" does not exist` crashes.
 - `npm run dev` does NOT start the API — run both `dev` and `server:dev`.
@@ -199,6 +216,10 @@ Every route/action is gated server-side by role, not just hidden in the UI
 - **Manager/Admin** — staff invitations (`staff` module, `/api/admin`),
   edit staff member roles, revoke member access / pending invitations
   (admins rule managers/admin; no self-changes), metrics, wage payments.
+  The assignable-role list lives once in the UI (`INVITABLE_ROLES`,
+  `ManagerDashboard.tsx`) and is rendered by both the invite form and the
+  per-member role editor; a test in `modules/staff/staff.service.test.ts`
+  asserts it still matches the server's `invitationalStaffRoles`.
 
 ## Login & authentication
 

@@ -11,7 +11,7 @@
     "db:migrate": "tsx server/src/db/migrate.ts",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "test": "node --import tsx --experimental-test-module-mocks --test \"server/src/modules/**/*.test.ts\"",
+    "test": "node --import tsx --experimental-test-module-mocks --test \"server/src/**/*.test.ts\" \"src/**/*.test.ts\"",
     "preview": "vite preview"
   },
   "dependencies": {

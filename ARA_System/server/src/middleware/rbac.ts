@@ -4,6 +4,7 @@ import { clerkClient } from "../services/clerkClient.js";
 import {
 	managerOrAdminRoles,
 	dispatcherRoles,
+	normalizeRole,
 	rescueQueueRoles,
 	staffOrAboveRoles,
 	type Role,
@@ -34,9 +35,11 @@ function requireRole(allowedRoles: readonly Role[], deniedMessage: string) {
 			}
 
 			const user = await clerkClient.users.getUser(request.clerkUserId);
-			const role = user.publicMetadata.role === "rescuer" ? "dispatcher" : user.publicMetadata.role;
+			// normalizeRole maps a pre-rename `rescuer` account onto `dispatcher`
+			// so legacy accounts keep passing the gates they used to pass.
+			const role = normalizeRole(user.publicMetadata.role);
 
-			if (!allowedRoles.includes(role as Role)) {
+			if (role === undefined || !allowedRoles.includes(role)) {
 				response.status(403).json({ error: deniedMessage });
 				return;
 			}

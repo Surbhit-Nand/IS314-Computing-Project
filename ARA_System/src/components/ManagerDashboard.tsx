@@ -24,8 +24,10 @@ type PendingInvitation = {
 
 const apiBaseUrl = import.meta.env.VITE_API_URL ?? "http://localhost:8787";
 
-// Roles a manager/admin can assign. Order matters for the dropdown; must stay
-// in sync with staffRoles in server/src/modules/staff/staff.service.ts.
+// The only list of roles a manager/admin can assign, in dropdown order. Both
+// the invite form and the per-member role editor render from it, so adding a
+// role here is enough on the UI side. Must still stay in sync with staffRoles
+// in server/src/modules/staff/staff.service.ts, which is what the API accepts.
 const INVITABLE_ROLES: Record<string, string> = {
   staff: "Staff",
   veterinarian: "Veterinarian",
@@ -490,11 +492,11 @@ export function ManagerDashboard({ onNavigate }: ManagerDashboardProps) {
                 value={role}
                 onChange={(event) => setRole(event.target.value)}
               >
-                <option value="staff">Staff</option>
-                <option value="veterinarian">Veterinarian</option>
-                <option value="dispatcher">Dispatcher</option>
-                <option value="manager">Manager</option>
-                <option value="admin">Admin</option>
+                {Object.entries(INVITABLE_ROLES).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
               </select>
             </label>
             <button
