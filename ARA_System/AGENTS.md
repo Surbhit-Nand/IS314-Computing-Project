@@ -41,8 +41,9 @@ into a single record. Three modules, plus cross-cutting donations:
   Routes validate with **zod** before hitting the service; services hold
   business rules; repositories access the DB. Routes handle HTTP, nothing else.
 - **Mounted routers** (`server/src/app.ts`): `/api/animals`, `/api/admin`
-  (staff), `/api/rescue`, `/api/adoptions`, `/api/donations`. **Only the
-  `veterinary` router is NOT mounted** — that module is still a placeholder.
+  (staff), `/api/rescue`, `/api/adoptions`, `/api/donations`, `/api/reports`
+  (manager/admin), `/api/veterinary` (veterinarian), `/api/webhooks` (Clerk
+  webhook, mounted before the JSON body parser because it needs the raw body).
 - **No frontend router**: `src/App.tsx` switches on a `view` string in local
   state and threads `onNavigate={setView}` into every page. To add a page:
   extend the `View` union + add a branch in `App.tsx`. There are no URL params.
@@ -79,7 +80,7 @@ npm test             # node:test via tsx — server + frontend suites
 ```
 
 - **Tests**: `npm test` runs every `*.test.ts` under `server/src/**` and
-  `src/**` (93 tests / 6 files): adoptions, donations, reports, rescue, staff,
+  `src/**` (94 tests / 6 files): adoptions, donations, reports, rescue, staff,
   plus `src/utils/clerkToken.test.ts`. The script needs
   `--experimental-test-module-mocks` because the suites stub modules with
   `node:test`'s `mock.module` — running `npx tsx --test <file>` directly fails
@@ -144,13 +145,24 @@ npm test             # node:test via tsx — server + frontend suites
 - [x] Applicant tracks application status — `MyApplications.tsx`, `GET /api/adoptions/mine`
 - [x] Accepted application removes animal from public listings — partial unique index `adoption_animal_unique_active` on `(animal_id) WHERE status IN ('approved','completed')` + DB-level 23505 check in service
 
-**Veterinary & Health Management** — **NOT BUILT** (`veterinary` module is
-scaffolded service/routes/repository but never mounted in `app.ts`; no UI).
-- [ ] Vet clearance routing after intake — not built
-- [ ] Vet appointments (online + phone) — not built
-- [ ] Treatments / vaccinations / prescriptions — not built
-- [ ] Full medical history on repeat visits — not built
-- [ ] Mark animal medically cleared — not built
+**Veterinary & Health Management** — **BUILT** (merged from `origin/jasprit`
+in `672401d`). Module implemented and mounted at `/api/veterinary` in `app.ts`;
+UI lives in `src/features/veterinary/` with its own `veterinary.css`. Every
+route sits behind `requireVeterinaryAccess` (`["veterinarian"]` only — staff
+can read the vet queue but cannot issue clearance).
+- [x] Vet clearance routing after intake — 3-stage workflow (initial exam →
+      required treatments → clearance), `pages/VeterinaryCarePage.tsx`
+- [x] Vet appointments (online + phone) — `VeterinaryAppointmentBooking.tsx`,
+      `components/DateTimePicker.tsx`; `vet_appointments.source` distinguishes
+      the two
+- [x] Treatments / vaccinations / prescriptions — `veterinary_care_plans` +
+      `veterinary_treatment_history`, `treatmentOptions.tsx`
+- [x] Full medical history on repeat visits — `VeterinaryMedicalHistory.tsx`,
+      `components/ExaminationHistory.tsx`, `pages/MedicalHistoryScene.tsx`
+- [x] Mark animal medically cleared — `clearAnimal` (repository) behind
+      `POST /api/veterinary/animals/:animalId/clearance`; sets
+      `medically_cleared`, `medical_clearance_date`,
+      `medical_cleared_by_clerk_user_id`, `medical_clearance_notes`
 
 **Donations (cross-cutting)**
 - [~] Donation flow works as **card/QR data-entry** (validate + insert,
@@ -193,8 +205,12 @@ scaffolded service/routes/repository but never mounted in `app.ts`; no UI).
   `rejected`. Every transition timestamped in `adoptionStatusHistory` so both
   the adopter stepper and the staff queue show *when*, not just *what*.
 - `rejected` requires `reviewNotes` shown to the applicant.
-- **Medical-clearance gate**: `requireMedicallyCleared` returns `true` now
-  (no-op). Flip to hard gate when veterinary module ships.
+- **Medical-clearance gate**: now a **hard gate**.
+  `requireMedicallyCleared` reads `animals.medically_cleared` and throws
+  "This animal is not yet medically cleared for adoption." on
+  `under_review -> approved`. Because `medically_cleared` is only ever written
+  by the vet-only `clearAnimal`, approval is genuinely vet-gated. The same
+  flag gates the public listing - see Data model guardrails.
 - Notifications on stage change (email or in-app) — not yet wired.
 
 ## Entities & role-based access
@@ -278,11 +294,17 @@ Every route/action is gated server-side by role, not just hidden in the UI
   NOT-ACTION FKs to `animals.id` — a hard DELETE would fail or destroy the
   audit trail.
 - **Medical clearance gate**: the proposal rule is *no public listing until
-  `medically_cleared = true`*. The team deliberately **ships with this OFF**
-  (`findPublicAnimals` filters only on `status != adopted` + not deleted,
-  with an in-code comment). Annex:
-  **re-enable the gate when the Veterinary module ships** — an animal should
-  appear publicly only when a vet has set `medically_cleared`.
+  `medically_cleared = true`*. The team originally **shipped with this OFF**
+  (because the Veterinary module didn't exist yet) and the guardrail carried an
+  annex to re-enable it when that module landed. **The Veterinary module has
+  now shipped, so the gate is ON**: `findPublicAnimals` filters on
+  `medically_cleared = true` as well as `status != adopted` + not deleted, and
+  `animals.routes.ts` documents the listing as cleared-only. The flag has a
+  single writer - `clearAnimal` in the veterinary repository, reachable only
+  via `POST /api/veterinary/animals/:animalId/clearance` behind
+  `requireVeterinaryAccess`; `registerAnimal` hard-codes it to `false`, and
+  neither the registration nor the edit zod schema accepts it, so clearance is
+  genuinely vet-only. Do not add a staff path to set it.
 - On adoption acceptance, remove the animal from public listings **in the
   same transaction** as the status update, and use **database-level locking**
   (two applicants for one animal — race risk) so only one application per
