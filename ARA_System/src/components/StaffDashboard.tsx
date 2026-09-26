@@ -12,7 +12,7 @@ type StaffDashboardProps = {
 type StaffRole = "staff" | "veterinarian";
 
 const queueItems = [
-  ["Rescue reports", "6 reports need an initial review", "urgent"],
+  ["Rescue alerts", "6 alerts need an initial review", "urgent"],
   ["Animals awaiting intake", "4 animals need profile details", "active"],
   ["Adoption applications", "8 applications are ready for review", "pending"],
   ["Medical follow-ups", "3 appointments are scheduled today", "medical"],
@@ -101,7 +101,7 @@ export function StaffDashboard({ onNavigate }: StaffDashboardProps) {
             className="dashboard-action-button"
             onClick={() => onNavigate("manage-rescue-reports")}
           >
-            Rescue Reports
+            Rescue Alerts
           </button>
           <button
             type="button"
@@ -136,7 +136,7 @@ export function StaffDashboard({ onNavigate }: StaffDashboardProps) {
 
       <section className="dashboard-metrics" aria-label="Staff work summary">
         <article>
-          <span>Rescue reports</span>
+          <span>Rescue alerts</span>
           <strong>6</strong>
           <small>Awaiting initial review</small>
         </article>

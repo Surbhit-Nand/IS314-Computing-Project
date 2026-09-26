@@ -20,7 +20,7 @@ export class StaffActionError extends Error {
 }
 
 // Roles only an admin may assign or revoke. Managers can manage staff,
-// veterinarians, and rescuers; nobody (including admins) can change their own.
+// veterinarians, and dispatchers; nobody (including admins) can change their own.
 const adminOnlyRoles: readonly StaffRole[] = ["manager", "admin"];
 
 function getStaffRole(user: { publicMetadata?: { role?: unknown } }): StaffRole | undefined {
@@ -50,7 +50,7 @@ async function getUserOrThrow(targetUserId: string) {
 
 // Permission gate shared by role edits and revocations:
 // - An admin may manage anyone except themselves.
-// - A manager may manage staff/veterinarian/rescuer roles, but must never
+// - A manager may manage staff/veterinarian/dispatcher roles, but must never
 //   touch a manager/admin target nor assign toward a manager/admin role.
 async function assertCanManageTarget(
 	actorClerkUserId: string,

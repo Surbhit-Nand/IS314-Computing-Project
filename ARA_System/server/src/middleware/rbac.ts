@@ -3,7 +3,8 @@ import { env } from "../config/env.js";
 import { clerkClient } from "../services/clerkClient.js";
 import {
 	managerOrAdminRoles,
-	rescuerOrAboveRoles,
+	dispatcherRoles,
+	rescueQueueRoles,
 	staffOrAboveRoles,
 	type Role,
 } from "../shared/types/roles.js";
@@ -33,7 +34,7 @@ function requireRole(allowedRoles: readonly Role[], deniedMessage: string) {
 			}
 
 			const user = await clerkClient.users.getUser(request.clerkUserId);
-			const role = user.publicMetadata.role;
+			const role = user.publicMetadata.role === "rescuer" ? "dispatcher" : user.publicMetadata.role;
 
 			if (!allowedRoles.includes(role as Role)) {
 				response.status(403).json({ error: deniedMessage });
@@ -52,12 +53,15 @@ export const requireStaffOrAbove = requireRole(
 	"Staff, veterinarian, manager, or admin access is required",
 );
 
-// Gate for the rescue-report workflow: rescuers plus every staff-and-above
-// role, since they all dispatch reports. The rescue routes mount this as soon
-// as the veterinarian module's placeholder wiring is replaced.
-export const requireRescuerOrAbove = requireRole(
-	rescuerOrAboveRoles,
-	"Rescuer, staff, veterinarian, manager, or admin access is required",
+// Gate for rescue queue reads: dispatchers plus staff-and-above roles.
+export const requireDispatcher = requireRole(
+	dispatcherRoles,
+	"Dispatcher access is required",
+);
+
+export const requireRescueQueueAccess = requireRole(
+	rescueQueueRoles,
+	"Dispatcher, staff, veterinarian, manager, or admin access is required",
 );
 
 // Gate for manager-only actions: staff account/invitation management.

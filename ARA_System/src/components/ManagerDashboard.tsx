@@ -29,7 +29,7 @@ const apiBaseUrl = import.meta.env.VITE_API_URL ?? "http://localhost:8787";
 const INVITABLE_ROLES: Record<string, string> = {
   staff: "Staff",
   veterinarian: "Veterinarian",
-  rescuer: "Rescuer",
+  dispatcher: "Dispatcher",
   manager: "Manager",
   admin: "Admin",
 };
@@ -461,7 +461,7 @@ export function ManagerDashboard({ onNavigate }: ManagerDashboardProps) {
           </div>
           <p className="security-note">
             Use the dropdown to change a member&apos;s role or revoke their
-            access. Managers can manage staff, veterinarians, and rescuers;
+                    access. Managers can manage staff, veterinarians, and dispatchers;
             only admins can change Manager or Admin roles, and nobody can
             change their own.
           </p>
@@ -492,7 +492,7 @@ export function ManagerDashboard({ onNavigate }: ManagerDashboardProps) {
               >
                 <option value="staff">Staff</option>
                 <option value="veterinarian">Veterinarian</option>
-                <option value="rescuer">Rescuer</option>
+                <option value="dispatcher">Dispatcher</option>
                 <option value="manager">Manager</option>
                 <option value="admin">Admin</option>
               </select>

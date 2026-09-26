@@ -48,9 +48,9 @@ into a single record. Three modules, plus cross-cutting donations:
   extend the `View` union + add a branch in `App.tsx`. There are no URL params.
 - **Auth middleware**: `requireClerkSession` (`server/src/middleware/auth.ts`)
   resolves the token into `request.clerkUserId`; `requireStaffOrAbove` /
-  `requireRescuerOrAbove` / `requireManagerOrAdmin` (`middleware/rbac.ts`)
-  check Clerk `publicMetadata.role` = `staff | veterinarian | manager | admin |
-  rescuer` (`shared/types/roles.ts`). Public endpoints use
+  `requireRescueQueueAccess` / `requireDispatcher` / `requireManagerOrAdmin`
+  (`middleware/rbac.ts`) check Clerk `publicMetadata.role` = `staff |
+  veterinarian | manager | admin | dispatcher` (`shared/types/roles.ts`). Public endpoints use
   `resolveOptionalClerkUserId` so anonymous visitors still work (rescue
   reports).
 
@@ -120,7 +120,7 @@ npm run lint          # eslint .
       `RescueReportForm.tsx`
 - [x] Phone-in reports through the *same* form/schema (`source: "phone"`,
       staff variant of the same component)
-- [x] Staff review + assign rescuer — `ManageRescueReports.tsx`, `rescue.service.ts`
+- [x] Staff review + Dispatcher claim workflow — `RescueOperationsPortal.tsx` (Mission Board / Active Mission / Mission History + `/api/rescue/missions*`), `rescue.service.ts`
 - [x] Reporter tracks status — `MyReports.tsx`, `GET /api/rescue/mine`
 - [x] Registered user submits adoption application — `AdoptionApplicationForm.tsx`, `POST /api/adoptions`
 - [x] Staff review/approve/reject — `ManageAdoptionApplications.tsx`, `PATCH /api/adoptions/:id`
@@ -190,11 +190,11 @@ Every route/action is gated server-side by role, not just hidden in the UI
   report/application status.
 - **Donor** — donations via the Donate modal (card/QR; Stripe not wired yet);
   one account may be both user and donor.
-- **SPCA staff** — register animals, assign rescuers, review/reject
+- **SPCA staff** — register animals, review/reject
   applications, log phone reports/bookings (same form as online).
-- **Rescuer** — the rescue-report queue: review, assign, and dispatch reports
-  (`requireRescuerOrAbove` on the rescue routes; has its own
-  `RescuerDashboard`).
+- **Dispatcher** — claims available rescue cases and advances only their own
+  assigned reports (`requireDispatcher` on mutation routes; works inside the
+  `RescueOperationsPortal`). Staff can read the queue but cannot claim or update.
 - **Veterinarian** — medical history, treatments, medical clearance.
 - **Manager/Admin** — staff invitations (`staff` module, `/api/admin`),
   edit staff member roles, revoke member access / pending invitations
@@ -206,15 +206,15 @@ Every route/action is gated server-side by role, not just hidden in the UI
 - Everything else requires Clerk auth; RBAC enforced server-side — a
   registered user hitting a staff route must get 403.
 - **Staff-first landing**: staff-type accounts (manager/admin/staff/vet/
-  rescuer) are routed straight to their own dashboard: `App.tsx` derives a
+  dispatcher) are routed straight to their own dashboard: `App.tsx` derives a
   fresh `home` landing into the matching dashboard (a pure render derivation,
   once per session per user id — also applies on reload since `view` resets to
   `home`). Registered users stay on the public Home page.
 - `SiteHeader.tsx` renders **team navigation** (Dashboard, Rescue queue,
   Animals, Register, Adoptions + "View public site") on internal pages
-  (`dashboard`, `staff-dashboard`, `rescuer-dashboard`, `register-animal`,
+  (`dashboard`, `staff-dashboard`, `dispatcher-dashboard`, `register-animal`,
   `manage-animals`, `edit-animal`, `reports`); public pages keep the normal nav (Adopt/
-  Donate prompts hidden for staff-type accounts). Rescuers see only the
+  Donate prompts hidden for staff-type accounts). Dispatchers see only the
   rescue queue, not animal/adoption modules.
 - Staff/admin accounts need **MFA** (named risk mitigation). Never store/log
   credentials in plaintext. Card details never touch SPCA's own servers.

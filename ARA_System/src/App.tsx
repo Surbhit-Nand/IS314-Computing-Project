@@ -8,7 +8,7 @@ import { AnimalProfilePage } from "./components/AnimalProfilePage";
 import { AuthPage } from "./components/AuthPage";
 import { HomePage } from "./components/HomePage";
 import { ManagerDashboard } from "./components/ManagerDashboard";
-import { RescuerDashboard } from "./components/RescuerDashboard";
+import { RescueOperationsPortal } from "./components/RescueOperationsPortal";
 import { StaffDashboard } from "./components/StaffDashboard";
 import { UserDashboard } from "./components/UserDashboard";
 import { ReportsPage } from "./components/ReportsPage";
@@ -22,6 +22,7 @@ import { ManageRescueReports } from "./features/rescue/ManageRescueReports";
 import { MyReports } from "./features/rescue/MyReports";
 import { RescueReportForm } from "./features/rescue/RescueReportForm";
 import type { Animal } from "./types/animal";
+import { isDispatcherRole } from "./utils/roles";
 
 export type View =
   | "home"
@@ -32,7 +33,10 @@ export type View =
   | "register"
   | "dashboard"
   | "staff-dashboard"
-  | "rescuer-dashboard"
+  | "dispatcher-dashboard"
+  | "rescue-board"
+  | "rescue-active"
+  | "rescue-history"
   | "user-dashboard"
   | "register-animal"
   | "manage-animals"
@@ -72,8 +76,8 @@ function App() {
       ? null
       : role === "manager" || role === "admin"
         ? "dashboard"
-        : role === "rescuer"
-          ? "rescuer-dashboard"
+        : isDispatcherRole(role)
+          ? "dispatcher-dashboard"
           : role === "staff" || role === "veterinarian"
             ? "staff-dashboard"
             : null;
@@ -134,8 +138,8 @@ function App() {
     return <StaffDashboard onNavigate={navigate} />;
   }
 
-  if (activeView === "rescuer-dashboard") {
-    return <RescuerDashboard onNavigate={navigate} />;
+  if (activeView === "dispatcher-dashboard") {
+    return <RescueOperationsPortal page="rescue-board" onNavigate={navigate} />;
   }
 
   if (activeView === "user-dashboard") {
@@ -204,6 +208,7 @@ function App() {
       <RescueReportForm
         variant="public"
         source="online"
+        isLoaded={isLoaded}
         onNavigate={navigate}
         onShowMyReports={openMyReports}
       />
@@ -215,6 +220,7 @@ function App() {
       <RescueReportForm
         variant="staff"
         source="phone"
+        isLoaded={isLoaded}
         onNavigate={navigate}
         onShowMyReports={openMyReports}
       />
@@ -233,6 +239,10 @@ function App() {
 
   if (activeView === "manage-rescue-reports") {
     return <ManageRescueReports onNavigate={navigate} />;
+  }
+
+  if (activeView === "rescue-board" || activeView === "rescue-active" || activeView === "rescue-history") {
+    return <RescueOperationsPortal page={activeView} onNavigate={navigate} />;
   }
 
   if (activeView === "adoption-apply") {

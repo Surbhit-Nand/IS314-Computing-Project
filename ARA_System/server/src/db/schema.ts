@@ -99,15 +99,108 @@ export const rescueReports = pgTable("rescue_reports", {
 	// (see AGENTS.md "one code path" risk mitigation).
 	source: text("source").notNull().default("online"),
 	status: text("status").notNull().default("submitted"),
-	// Dispatch: which rescuer/team member the report is assigned to, plus any
-	// internal handling note. assignedTo is a free-text name because rescuers
-	// can be volunteers without a Clerk account; the clerk user id is kept
-	// separately for when the assignee is a staff account.
+	// Dispatcher assignment is kept as both a display name and Clerk id so
+	// reporter views do not need a live Clerk lookup.
 	assignedTo: text("assigned_to"),
 	assignedToClerkUserId: text("assigned_to_clerk_user_id"),
+	assignedAt: timestamp("assigned_at", { withTimezone: true }),
 	officeNote: text("office_note"),
 	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 	updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// One entry per rescue status/progress milestone - the dispatcher's claim,
+// each progress update, and the final outcome all land here as a timeline the
+// staff queue, dispatcher dashboard, and reporter view share read-only. The
+// extra columns (notes/images/outcome) turn the status-change record into a
+// full progress update so nothing lives in a parallel table.
+export const rescueReportStatusHistory = pgTable("rescue_report_status_history", {
+	id: uuid("id").defaultRandom().primaryKey(),
+	reportId: uuid("report_id").notNull().references(() => rescueReports.id),
+	fromStatus: text("from_status"),
+	toStatus: text("to_status").notNull(),
+	changedByClerkUserId: text("changed_by_clerk_user_id").notNull(),
+	// Display name of the dispatcher who made this update, denormalized like
+	// rescue_reports.assignedTo so reporter-facing views don't need a Clerk
+	// lookup. Nullable for any legacy rows written before this column existed.
+	dispatcherName: text("dispatcher_name"),
+	// Progress notes / action plan (start) or the final rescue report (resolve).
+	notes: text("notes"),
+	// Final rescue outcome, only meaningful on a resolved entry.
+	outcome: text("outcome"),
+	// Optional extra remarks (also holds the explanation when outcome is "other").
+	additionalRemarks: text("additional_remarks"),
+	// Cloudinary URLs of progress/evidence images for this update. Separate
+	// from the reporter's original rescue report photos.
+	imageUrls: jsonb("image_urls").$type<string[]>().notNull().default([]),
+	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Optional quick updates a dispatcher can file while a rescue mission is in
+// progress: a short note or an evidence photo. Each is timestamped at write
+// time (createdAt) - no status change, no forced form. Kept separate from
+// rescue_report_status_history (which records the status milestones) so
+// "during the rescue" updates never pollute the Submitted -> Assigned -> In
+// Progress -> Resolved timeline.
+export const rescueMissionUpdates = pgTable("rescue_mission_updates", {
+	id: uuid("id").defaultRandom().primaryKey(),
+	reportId: uuid("report_id").notNull().references(() => rescueReports.id),
+	// 'note' | 'photo'
+	updateType: text("update_type").notNull(),
+	message: text("message"),
+	imageUrls: jsonb("image_urls").$type<string[]>().notNull().default([]),
+	createdByClerkUserId: text("created_by_clerk_user_id").notNull(),
+	// Display name of the dispatcher who filed the update, denormalized like
+	// rescue_reports.assigned_to so reporter views never need a Clerk lookup.
+	dispatcherName: text("dispatcher_name"),
+	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// The single Post-Rescue Debrief required to complete a mission. Exactly one
+// debrief per report (reportId is UNIQUE), written together with the
+// in_progress -> resolved transition. outcome mirrors RESCUE_OUTCOMES;
+// veterinaryPriority is the intake-handoff priority and deliberately separate
+// from rescue_reports.urgency (the original rescue urgency is never
+// overwritten).
+export const rescueDebriefs = pgTable("rescue_debriefs", {
+	id: uuid("id").defaultRandom().primaryKey(),
+	reportId: uuid("report_id").notNull().unique().references(() => rescueReports.id),
+	outcome: text("outcome").notNull(),
+	animalCondition: text("animal_condition"),
+	whatHappened: text("what_happened").notNull(),
+	destinationOrHandoff: text("destination_or_handoff"),
+	// 'low' | 'moderate' | 'high' | 'critical' - handoff priority for the
+	// Animal Intake team, not the report's original urgency.
+	veterinaryPriority: text("veterinary_priority"),
+	// Extra context for unsuccessful outcomes (e.g. what was attempted).
+	unsuccessfulDetails: text("unsuccessful_details"),
+	createdByClerkUserId: text("created_by_clerk_user_id").notNull(),
+	dispatcherName: text("dispatcher_name"),
+	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// One Animal Intake handoff when a mission ends with an Animal Rescued
+// outcome. reportId is UNIQUE so a second debrief can never create a second
+// handoff - the intake team gets a single item per rescued animal. An animal
+// profile is created LATER by the Intake & Profile Management team, so no
+// animals link is required (or stored) at dispatch time.
+export const rescueIntakeHandoffs = pgTable("rescue_intake_handoffs", {
+	id: uuid("id").defaultRandom().primaryKey(),
+	reportId: uuid("report_id").notNull().unique().references(() => rescueReports.id),
+	// Copied from the original alert so the intake team has the context
+	// without joining back to the report.
+	animalType: text("animal_type"),
+	animalBreed: text("animal_breed"),
+	conditionDescription: text("condition_description"),
+	// From the debrief (veterinaryPriority), not the report's urgency.
+	veterinaryPriority: text("veterinary_priority"),
+	destination: text("destination"),
+	notes: text("notes"),
+	status: text("status").notNull().default("pending"),
+	createdByClerkUserId: text("created_by_clerk_user_id").notNull(),
+	dispatcherName: text("dispatcher_name"),
+	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+	receivedAt: timestamp("received_at", { withTimezone: true }),
 });
 
 export const adoptionApplications = pgTable(

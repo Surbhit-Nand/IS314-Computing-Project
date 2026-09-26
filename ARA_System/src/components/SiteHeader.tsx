@@ -3,6 +3,7 @@ import { useState } from "react";
 import spcaLogo from "../assets/spca-logo.png";
 import { DonateModal } from "../features/donations/DonateModal";
 import { isDevBypassEnabled } from "../utils/devBypass";
+import { isDispatcherRole } from "../utils/roles";
 
 export type SiteHeaderView =
   | "home"
@@ -12,9 +13,13 @@ export type SiteHeaderView =
   | "register"
   | "dashboard"
   | "staff-dashboard"
-  | "rescuer-dashboard"
+  | "dispatcher-dashboard"
+  | "rescue-board"
+  | "rescue-active"
+  | "rescue-history"
   | "user-dashboard"
   | "rescue-report"
+  | "my-reports"
   | "adoption-apply"
   | "my-applications"
   | "manage-adoption-applications"
@@ -46,12 +51,12 @@ export function SiteHeader({
   const [donateOpen, setDonateOpen] = useState(false);
   const userRole = user?.publicMetadata.role;
   const isAdmin = userRole === "manager" || userRole === "admin";
-  const isRescuer = userRole === "rescuer";
+  const isDispatcher = isDispatcherRole(userRole);
   // isDevBypassEnabled is OR'd in here only so the "Dashboard" nav buttons
   // appear locally without a real role - see src/utils/devBypass.ts.
-  const isStaff = isDevBypassEnabled || isRescuer || userRole === "staff" || userRole === "veterinarian";
+  const isStaff = isDevBypassEnabled || isDispatcher || userRole === "staff" || userRole === "veterinarian";
   // Module-level work (register animals, review adoptions) is staff work -
-  // rescuers keep the rescue queue and public site only.
+  // Dispatchers keep the rescue queue and public site only.
   const isStaffModuleRole =
     isDevBypassEnabled || isAdmin || userRole === "staff" || userRole === "veterinarian";
   // Internal screens rendered by account-type dashboards and staff forms swap
@@ -60,19 +65,21 @@ export function SiteHeader({
   const internalPages = new Set([
     "dashboard",
     "staff-dashboard",
-    "rescuer-dashboard",
+    "dispatcher-dashboard",
     "register-animal",
     "manage-animals",
     "edit-animal",
+    "manage-rescue-reports",
     "reports",
   ]);
   const isInternalPage = (isStaff || isAdmin) && internalPages.has(currentPage);
+  const isRescuePage = new Set(["rescue-board", "rescue-active", "rescue-history"]).has(currentPage);
 
   function dashboardView(): SiteHeaderView {
     return isAdmin
       ? "dashboard"
-      : isRescuer
-        ? "rescuer-dashboard"
+      : isDispatcher
+        ? "dispatcher-dashboard"
         : "staff-dashboard";
   }
 
@@ -107,7 +114,13 @@ export function SiteHeader({
         className={`main-nav${menuOpen ? " open" : ""}`}
         aria-label="Main navigation"
       >
-        {isInternalPage ? (
+        {isRescuePage ? (
+          <>
+            <button type="button" className={currentPage === "rescue-board" ? "nav-link active" : "nav-link"} onClick={() => navigate("rescue-board")}>Mission Board</button>
+            <button type="button" className={currentPage === "rescue-active" ? "nav-link active" : "nav-link"} onClick={() => navigate("rescue-active")}>Active Mission</button>
+            <button type="button" className={currentPage === "rescue-history" ? "nav-link active" : "nav-link"} onClick={() => navigate("rescue-history")}>Mission History</button>
+          </>
+        ) : isInternalPage ? (
           <>
             {/* Staff-first layout: signed-in staff see team navigation on
                 their internal screens, with the public site one click away. */}
@@ -216,10 +229,12 @@ export function SiteHeader({
             </button>
             <button
               type="button"
-              className="nav-link"
+              className={
+                currentPage === "rescue-report" ? "nav-link active" : "nav-link"
+              }
               onClick={() => navigate("rescue-report")}
             >
-              Rescue Report
+              Rescue Alert
             </button>
             {/* Staff, vets, and managers run the rescue operation, so the
                 public adopt and donate prompts are hidden for their accounts. */}
@@ -260,8 +275,8 @@ export function SiteHeader({
                 navigate(
                   isAdmin
                     ? "dashboard"
-                    : isRescuer
-                      ? "rescuer-dashboard"
+                    : isDispatcher
+                      ? "dispatcher-dashboard"
                       : isStaff
                         ? "staff-dashboard"
                         : "user-dashboard",
@@ -270,8 +285,8 @@ export function SiteHeader({
             >
               {isAdmin
                 ? "Admin dashboard"
-                : isRescuer
-                  ? "Rescue dashboard"
+                : isDispatcher
+                  ? "Dispatcher dashboard"
                   : isStaff
                     ? "Staff dashboard"
                     : "My dashboard"}

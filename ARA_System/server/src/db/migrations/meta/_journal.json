@@ -36,6 +36,27 @@
       "when": 1789471502807,
       "tag": "0006_lumpy_sabretooth",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789471502808,
+      "tag": "0007_dispatcher_rescue_workflow",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790058555293,
+      "tag": "0008_rescue_progress_updates",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790146949449,
+      "tag": "0009_windy_sebastian_shaw",
+      "breakpoints": true
     }
   ]
 }

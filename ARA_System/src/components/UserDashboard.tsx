@@ -12,8 +12,8 @@ const activity = [
     "pending",
   ],
   [
-    "Rescue report",
-    "Report #RR-1024 · Suva",
+    "Rescue alert",
+    "Alert #RR-1024 · Suva",
     "Assigned to SPCA staff",
     "active",
   ],
@@ -35,7 +35,7 @@ export function UserDashboard({ onNavigate }: UserDashboardProps) {
           <p className="eyebrow">Your SPCA account</p>
           <h1>Sign in to continue</h1>
           <p>
-            Log in to view your applications, reports, appointments, and saved
+            Log in to view your applications, alerts, appointments, and saved
             animals.
           </p>
           <SignInButton mode="modal">
@@ -84,9 +84,9 @@ export function UserDashboard({ onNavigate }: UserDashboardProps) {
           <small>1 under review</small>
         </article>
         <article className="user-stat-card">
-          <span>Rescue reports</span>
+          <span>Rescue alerts</span>
           <strong>1</strong>
-          <small>Latest report assigned</small>
+          <small>Latest alert assigned</small>
         </article>
         <article className="user-stat-card">
           <span>Vet appointments</span>
@@ -150,7 +150,7 @@ export function UserDashboard({ onNavigate }: UserDashboardProps) {
             className="user-action-button"
             onClick={() => onNavigate("rescue-report")}
           >
-            <strong>Submit a rescue report</strong>
+            <strong>Submit a rescue alert</strong>
             <span>Tell SPCA Fiji about an animal that needs help.</span>
           </button>
           <button type="button" className="user-action-button">
