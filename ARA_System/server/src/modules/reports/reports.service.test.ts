@@ -163,6 +163,36 @@ test("donations only count completed payments in the window", () => {
 	assert.deepEqual(report.donations.trend, [{ label: "2026-08", value: 13000 }]);
 });
 
+test("trends zero-fill quiet months between observed buckets", () => {
+	const input = baseInput();
+	input.range = "all";
+	input.donations = [
+		{
+			amountCents: 5000,
+			paymentMethod: "card",
+			status: "completed",
+			createdAt: new Date(Date.UTC(2026, 5, 10)),
+		},
+		{
+			amountCents: 8000,
+			paymentMethod: "card",
+			status: "completed",
+			createdAt: new Date(Date.UTC(2026, 8, 10)),
+		},
+	];
+
+	const report = assembleAnalytics(input, NOW);
+
+	// July and August had no income: the line drops to 0 instead of joining
+	// June straight to September. Leading/trailing emptiness stays unfilled.
+	assert.deepEqual(report.donations.trend, [
+		{ label: "2026-06", value: 5000 },
+		{ label: "2026-07", value: 0 },
+		{ label: "2026-08", value: 0 },
+		{ label: "2026-09", value: 8000 },
+	]);
+});
+
 test("adoption applications per-animal list is joined and high to low", () => {
 	const input = baseInput();
 	input.range = "all";

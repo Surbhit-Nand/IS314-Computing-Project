@@ -481,7 +481,7 @@ function AnimalPanel({ animals }: { animals: AnalyticsReport["animals"] }) {
     <PanelShell
       eyebrow="Profiles"
       title="Animal registrations"
-      note={`${animals.total} total`}
+      note={`${animals.total} all-time`}
     >
       <div className="report-kpi-row">
         <span>
@@ -496,13 +496,13 @@ function AnimalPanel({ animals }: { animals: AnalyticsReport["animals"] }) {
       </div>
       {animals.trend.length > 0 && (
         <div>
-          <p className="report-chart-title">Registrations per month</p>
+          <p className="report-chart-title">Registrations per month · in period</p>
           <TrendChart points={animals.trend} />
         </div>
       )}
       {Object.keys(animals.byType).length > 0 && (
         <div>
-          <p className="report-chart-title">Registered by type</p>
+          <p className="report-chart-title">Registered by type · all-time</p>
           <BreakdownChart record={animals.byType} labels={ANIMAL_TYPE_LABELS} />
         </div>
       )}

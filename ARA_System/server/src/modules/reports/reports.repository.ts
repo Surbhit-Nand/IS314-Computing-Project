@@ -1,3 +1,4 @@
+import { isNull } from "drizzle-orm";
 import { db } from "../../db/client.js";
 import {
 	adoptionApplications,
@@ -12,6 +13,11 @@ import {
 // full (no date filter): snapshots count everything ever recorded, and the
 // service trims the per-month trends down to the requested range - one query
 // per table no matter which range is selected.
+//
+// Soft-deleted animal profiles are excluded: they were removed by staff (the
+// animal passed away or transferred elsewhere) and must not inflate the
+// "registered" totals. Adopted/closed animals stay in - a cumulative report
+// should still count every animal the shelter ever took in.
 
 export async function listAnalyticsAnimals() {
 	return db
@@ -25,7 +31,8 @@ export async function listAnalyticsAnimals() {
 			medicallyCleared: animals.medicallyCleared,
 			createdAt: animals.createdAt,
 		})
-		.from(animals);
+		.from(animals)
+		.where(isNull(animals.deletedAt));
 }
 
 export async function listAnalyticsRescueReports() {

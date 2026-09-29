@@ -91,6 +91,28 @@ function toPoints(counts: Map<string, number>): ReportPoint[] {
 		.map((label) => ({ label, value: counts.get(label) as number }));
 }
 
+// Zero-fills months strictly between the first and last observed bucket so
+// line charts drop to 0 across quiet months instead of joining a straight
+// line over them. Leading/trailing emptiness is deliberately left unfilled:
+// a window with no activity at all still yields an empty series, which the
+// frontend renders as its "no activity" fallback rather than a flat zero.
+// Returns the same map for chaining into toPoints().
+function fillInteriorMonths(counts: Map<string, number>): Map<string, number> {
+	if (counts.size >= 2) {
+		const [first, last] = [...counts.keys()].sort();
+		const [firstYear, firstMonth] = first.split("-").map(Number);
+		const [lastYear, lastMonth] = last.split("-").map(Number);
+		const cursor = new Date(Date.UTC(firstYear, firstMonth - 1, 1));
+		const end = new Date(Date.UTC(lastYear, lastMonth - 1, 1));
+		while (cursor < end) {
+			const key = `${cursor.getUTCFullYear()}-${String(cursor.getUTCMonth() + 1).padStart(2, "0")}`;
+			if (!counts.has(key)) counts.set(key, 0);
+			cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+		}
+	}
+	return counts;
+}
+
 // Plain input shapes (structural - mirrors what the repository selects), so
 // unit tests can construct fixtures without touching a database.
 export type AnalyticsInput = {
@@ -203,26 +225,26 @@ export function assembleAnalytics(
 			vaccinated,
 			notVaccinated,
 			medicallyCleared,
-			trend: toPoints(animalTrend),
+			trend: toPoints(fillInteriorMonths(animalTrend)),
 		},
 		rescue: {
 			total: rescueTotal,
 			byStatus: toRecord(rescueStatus),
 			byUrgency: toRecord(rescueUrgency),
 			bySource: toRecord(rescueSource),
-			trend: toPoints(rescueTrend),
+			trend: toPoints(fillInteriorMonths(rescueTrend)),
 		},
 		adoptions: {
 			total: adoptionTotal,
 			byStatus: toRecord(adoptionStatus),
-			trend: toPoints(adoptionTrend),
+			trend: toPoints(fillInteriorMonths(adoptionTrend)),
 			perAnimal,
 		},
 		donations: {
 			total: donationTotal,
 			totalCents: donationTotalCents,
 			byMethod: toRecord(donationMethod),
-			trend: toPoints(donationTrend),
+			trend: toPoints(fillInteriorMonths(donationTrend)),
 		},
 	};
 }
