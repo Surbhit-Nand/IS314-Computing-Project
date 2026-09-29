@@ -1,4 +1,5 @@
 import { logAuditEntry } from "../../shared/audit/audit.service.js";
+import { notifyEmailAddress, notifyUser } from "../notifications/notifications.service.js";
 import { cloudinary, isCloudinaryConfigured } from "../../services/cloudinaryClient.js";
 import {
 	addRescueDebrief,
@@ -443,6 +444,8 @@ export async function acceptRescueMission(
 		},
 	});
 
+	await notifyReporter(current, updated.status);
+
 	return (await attachMissionDetails([updated]))[0];
 }
 
@@ -479,6 +482,8 @@ export async function startRescueMission(
 		entityId: updated.id,
 		metadata: { reference: updated.reference, fromStatus: report.status, toStatus: updated.status },
 	});
+
+	await notifyReporter(report, updated.status);
 
 	return (await attachMissionDetails([updated]))[0];
 }
@@ -526,6 +531,8 @@ export async function releaseRescueMission(
 		entityId: updated.id,
 		metadata: { reference: updated.reference, fromStatus: report.status, toStatus: updated.status, reason },
 	});
+
+	await notifyReporter(report, updated.status, reason);
 
 	return (await attachMissionDetails([updated]))[0];
 }
@@ -685,6 +692,8 @@ export async function completeRescueDebrief(
 		metadata: { reference: updated.reference, outcome: input.outcome, intakeHandoff: Boolean(intakeHandoff) },
 	});
 
+	await notifyReporter(report, "resolved", whatHappened);
+
 	const withDetails = await attachMissionDetails([updated]);
 	return withDetails[0];
 }
@@ -826,6 +835,8 @@ export async function claimRescueReport(id: string, dispatcherClerkUserId: strin
 		metadata: { reference: updated.reference, assignedTo: updated.assignedTo },
 	});
 
+	await notifyReporter(current, "assigned");
+
 	return { ...updated, progress: await getProgressForReport(updated.id) };
 }
 
@@ -863,6 +874,8 @@ export async function startRescueReport(
 		entityId: updated.id,
 		metadata: { reference: updated.reference, fromStatus: report.status, toStatus: updated.status },
 	});
+
+	await notifyReporter(report, "in_progress");
 
 	return { ...updated, progress: await getProgressForReport(updated.id) };
 }
@@ -918,6 +931,8 @@ export async function resolveRescueReport(
 		},
 	});
 
+	await notifyReporter(report, "resolved", notes);
+
 	return { ...updated, progress: await getProgressForReport(updated.id) };
 }
 
@@ -925,6 +940,38 @@ export async function resolveRescueReport(
 function assertAssignedDispatcher(report: RescueReportRow, actorClerkUserId: string) {
 	if (report.assignedToClerkUserId !== actorClerkUserId) {
 		throw new RescueWorkflowError("Only the assigned dispatcher can update this rescue case.", 403);
+	}
+}
+
+// Notifies the reporter best-effort after a status change. Signed-in
+// reporters get an in-app row (plus email copy via notifyUser); anonymous
+// and phone-in reporters have no reporterClerkUserId, so a stored
+// reporterEmail gets an email-only copy instead - there is no inbox row for
+// them. Like the adoption hook, failures never fail the transition that
+// already committed.
+async function notifyReporter(report: RescueReportRow, toStatus: string, detail?: string) {
+	const titles: Record<string, string> = {
+		assigned: `A dispatcher accepted your rescue alert ${report.reference}`,
+		in_progress: `Rescue underway for your alert ${report.reference}`,
+		awaiting_reassignment: `Your alert ${report.reference} is back on the Mission Board`,
+		resolved: `Your rescue alert ${report.reference} was resolved`,
+	};
+	const title = titles[toStatus] ?? `Update on your rescue alert ${report.reference}`;
+	try {
+		if (report.reporterClerkUserId) {
+			await notifyUser({
+				recipientClerkUserId: report.reporterClerkUserId,
+				type: "rescue.status_changed",
+				title,
+				body: detail ?? null,
+				entityType: "rescue_report",
+				entityId: report.id,
+			});
+		} else if (report.reporterEmail) {
+			await notifyEmailAddress({ email: report.reporterEmail, title, body: detail ?? null });
+		}
+	} catch {
+		// Best-effort only - the transition already succeeded.
 	}
 }
 

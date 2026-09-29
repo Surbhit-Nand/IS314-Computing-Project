@@ -18,6 +18,7 @@ import {
 	updateCarePlan,
 	updateExamination as persistExaminationUpdate,
 } from "./veterinary.repository.js";
+import { notifyUser } from "../notifications/notifications.service.js";
 
 export const CARE_REQUIREMENTS = [
 	"Initial Examination", "Core Vaccination", "Booster", "Deworming", "Flea/Tick Treatment",
@@ -116,10 +117,32 @@ export async function addTreatment(animalId: string, input: Omit<Parameters<type
 export async function bookAppointment(input: Parameters<typeof createAppointment>[0]) {
 	const record = await findMedicalRecord(input.animalId);
 	if (!record) throw new Error("Animal not found");
-	try { return await createAppointment(input); } catch (error) {
+	let appointment;
+	try { appointment = await createAppointment(input); } catch (error) {
 		if (error instanceof Error && error.message.includes("vet_appointment_slot_unique")) throw new Error("That appointment slot is already booked", { cause: error });
 		throw error;
 	}
+
+	// The booker is the interested party in every current flow (the booking
+	// form has no staff phone variant yet). Explicit phone-source rows are
+	// skipped - staff logging for an owner who may have no account - while an
+	// absent source falls through to the DB default ("online"). Best-effort:
+	// a notify failure never fails the booking.
+	if (input.bookedByClerkUserId && (input.source ?? "online") === "online") {
+		try {
+			await notifyUser({
+				recipientClerkUserId: input.bookedByClerkUserId,
+				type: "vet.appointment_booked",
+				title: `Vet appointment booked for ${record.animal.name} (${record.animal.publicId})`,
+				body: `${appointment.purpose} on ${appointment.appointmentDate.toISOString().slice(0, 10)}`,
+				entityType: "vet_appointment",
+				entityId: appointment.id,
+			});
+		} catch {
+			// Best-effort only - the booking already succeeded.
+		}
+	}
+	return appointment;
 }
 
 export async function completeAppointment(id: string, input: { visitDetails?: string; treatmentPerformed?: string }, clerkUserId: string) {
@@ -128,6 +151,26 @@ export async function completeAppointment(id: string, input: { visitDetails?: st
 	const completed = await updateAppointment(id, { ...input, status: "completed", completedAt: new Date(), completedByClerkUserId: clerkUserId });
 	if (input.visitDetails || input.treatmentPerformed) {
 		await createTreatment({ animalId: appointment.animalId, appointmentId: appointment.id, treatmentDate: appointment.appointmentDate.toISOString().slice(0, 10), details: input.treatmentPerformed ?? "Follow-up visit completed", notes: input.visitDetails, performedByClerkUserId: clerkUserId });
+	}
+
+	// Same source rule as booking: the owner who booked online learns the
+	// visit is done; phone-source rows (staff-logged) stay quiet. Best-effort.
+	if ((appointment.source ?? "online") === "online") {
+		try {
+			const record = await findMedicalRecord(appointment.animalId);
+			await notifyUser({
+				recipientClerkUserId: appointment.bookedByClerkUserId,
+				type: "vet.appointment_completed",
+				title: record
+					? `Vet visit completed for ${record.animal.name} (${record.animal.publicId})`
+					: "Your vet visit was completed",
+				body: input.treatmentPerformed ?? input.visitDetails ?? null,
+				entityType: "vet_appointment",
+				entityId: appointment.id,
+			});
+		} catch {
+			// Best-effort only - the completion already succeeded.
+		}
 	}
 	return completed;
 }

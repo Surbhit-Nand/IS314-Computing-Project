@@ -1,5 +1,6 @@
 import { logAuditEntry } from "../../shared/audit/audit.service.js";
 import { getAnimalById, updateAnimalProfile } from "../animals/animals.service.js";
+import { notifyUser } from "../notifications/notifications.service.js";
 import {
 	createAdoptionApplication,
 	createAdoptionStatusHistoryEntry,
@@ -174,6 +175,17 @@ export async function transitionAdoptionApplication(
 		},
 	});
 
+	// Notify the applicant best-effort: the status change above is already
+	// committed, so a notification failure must never fail the transition.
+	// Same-status no-ops (review-note edits) don't notify to avoid spam.
+	if (isChangingStatus) {
+		try {
+			await notifyUser(buildApplicantNotification(application, input.status, input.reviewNotes));
+		} catch {
+			// Best-effort only - the transition already succeeded.
+		}
+	}
+
 	// Re-fetch so the caller gets the animal display fields + fresh row.
 	return findAdoptionApplicationById(updated.id);
 }
@@ -181,6 +193,41 @@ export async function transitionAdoptionApplication(
 async function requireMedicallyCleared(animalId: string): Promise<boolean> {
 	const animal = await getAnimalById(animalId);
 	return animal?.medicallyCleared === true;
+}
+
+// Builds the applicant-facing notification for a status change. The animal
+// name/public id come from the joined row so the message reads "Bella
+// (ARA-001)" instead of a bare UUID. Rejections carry the staff review note
+// so the applicant knows why (rejected transitions always have one -
+// enforced above).
+function buildApplicantNotification(
+	application: {
+		id: string;
+		applicantClerkUserId: string;
+		animalId: string;
+		animal?: { name?: string | null; publicId?: string | null } | null;
+	},
+	status: AdoptionStatus,
+	reviewNotes?: string,
+) {
+	const animalLabel = application.animal?.name
+		? `${application.animal.name}${application.animal.publicId ? ` (${application.animal.publicId})` : ""}`
+		: "the animal you applied for";
+	const titles: Record<AdoptionStatus, string> = {
+		submitted: `Application received for ${animalLabel}`,
+		under_review: `Your application for ${animalLabel} is under review`,
+		approved: `Your application for ${animalLabel} was approved`,
+		completed: `Adoption of ${animalLabel} completed`,
+		rejected: `Update on your application for ${animalLabel}`,
+	};
+	return {
+		recipientClerkUserId: application.applicantClerkUserId,
+		type: "adoption.status_changed",
+		title: titles[status],
+		body: status === "rejected" && reviewNotes?.trim() ? reviewNotes.trim() : null,
+		entityType: "adoption_application",
+		entityId: application.id,
+	};
 }
 
 function throwIfInvalidTransition(from: AdoptionStatus, to: AdoptionStatus) {

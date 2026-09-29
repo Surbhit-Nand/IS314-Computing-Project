@@ -4,6 +4,7 @@ import spcaLogo from "../assets/spca-logo.png";
 import { DonateModal } from "../features/donations/DonateModal";
 import { isDevBypassEnabled } from "../utils/devBypass";
 import { isDispatcherRole } from "../utils/roles";
+import { NotificationBell } from "./NotificationBell";
 
 export type SiteHeaderView =
   | "home"
@@ -284,6 +285,7 @@ export function SiteHeader({
       <div className="header-actions">
         {!isLoaded ? null : isSignedIn ? (
           <>
+            <NotificationBell onNavigate={navigate} />
             <button
               type="button"
               className="teal-button dashboard-link"

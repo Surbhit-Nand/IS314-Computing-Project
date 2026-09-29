@@ -22,6 +22,13 @@ if (!databaseUrl) {
 // image-upload credentials. Uploads fail fast only when a route actually
 // attempts to send a file to Cloudinary.
 
+// Email (Resend) is optional the same way: when RESEND_API_KEY is absent the
+// API boots fine and notifications stay in-app only - sendEmail() skips
+// silently. Set both vars in server/.env (gitignored) to enable copies by
+// email. EMAIL_FROM must be a sender address verified in Resend.
+const resendApiKey = process.env.RESEND_API_KEY;
+const emailFrom = process.env.EMAIL_FROM ?? "SPCA Fiji <noreply@spcafiji.org>";
+
 // DEV-ONLY. Defaults to false/off whenever the variable is absent (including
 // in production, where it should never be set). Lets a developer without
 // Clerk dashboard access skip the staff-role check locally - see
@@ -46,5 +53,7 @@ export const env = {
 	cloudinaryCloudName,
 	cloudinaryApiKey,
 	cloudinaryApiSecret,
+	resendApiKey,
+	emailFrom,
 	devBypassAuth,
 };

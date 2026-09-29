@@ -2,6 +2,7 @@ import {
 	boolean,
 	date,
 	doublePrecision,
+	index,
 	integer,
 	jsonb,
 	pgEnum,
@@ -349,3 +350,26 @@ export const donations = pgTable("donations", {
 	stripeCheckoutSessionId: text("stripe_checkout_session_id"),
 	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// In-app notifications (branch 1 of the notifications stack). One row per
+// event per recipient: adoption status changes, rescue status changes, and
+// vet appointment updates all funnel through notifyUser() in the
+// notifications service. Email delivery (branch 4) is best-effort on top of
+// this table - the row is the record, email is just a copy.
+// Recipient is a Clerk user id (no role column, no legacy alias issue).
+// Anonymous rescue reporters (no Clerk id) are email-only and get no row.
+export const notifications = pgTable(
+	"notifications",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		recipientClerkUserId: text("recipient_clerk_user_id").notNull(),
+		type: text("type").notNull(),
+		title: text("title").notNull(),
+		body: text("body"),
+		entityType: text("entity_type"),
+		entityId: text("entity_id"),
+		isRead: boolean("is_read").notNull().default(false),
+		createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+	},
+	(table) => [index("notifications_recipient_idx").on(table.recipientClerkUserId)],
+);

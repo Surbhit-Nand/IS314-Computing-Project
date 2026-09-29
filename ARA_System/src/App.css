@@ -3091,6 +3091,132 @@
   }
 }
 
+/* header notification bell - dropdown sits below the modal layer (100) so it
+   never covers dialogs, above the nav (20) so it floats over page content */
+.notif-bell {
+  position: relative;
+}
+
+.notif-bell-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  border: 1px solid var(--teal);
+  background: #fff;
+  color: var(--teal-dark);
+  cursor: pointer;
+}
+
+.notif-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--red);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 800;
+  line-height: 20px;
+  text-align: center;
+}
+
+.notif-dropdown {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 50;
+  width: 360px;
+  max-width: calc(100vw - 32px);
+  max-height: 420px;
+  overflow-y: auto;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--teal-tint);
+}
+
+.notif-dropdown-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--teal-tint);
+}
+
+.notif-dropdown-head h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.notif-dropdown-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.notif-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.notif-item {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 14px;
+  border: none;
+  border-bottom: 1px solid var(--teal-tint);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  color: var(--navy);
+}
+
+.notif-item:last-child {
+  border-bottom: none;
+}
+
+.notif-item.unread {
+  background: var(--teal-ghost);
+}
+
+.notif-item-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  margin-top: 6px;
+  border-radius: 999px;
+  background: transparent;
+}
+
+.notif-item.unread .notif-item-dot {
+  background: var(--teal);
+}
+
+.notif-item-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.86rem;
+}
+
+.notif-item-text small {
+  color: var(--slate);
+}
+
+.notif-item-when {
+  font-size: 0.75rem;
+}
+
 @media (max-width: 720px) {
   .toast {
     left: 16px;

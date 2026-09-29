@@ -10,6 +10,8 @@ const deletedHistoryIds: string[] = [];
 const debriefRows: Record<string, unknown>[] = [];
 const handoffRows: Record<string, unknown>[] = [];
 const deletedDebriefIds: string[] = [];
+const notificationEntries: Record<string, unknown>[] = [];
+const emailEntries: Record<string, unknown>[] = [];
 
 function current(name: string) {
   const implementation = impls.get(name);
@@ -64,6 +66,17 @@ moduleMock("./rescue.repository.js", {
 moduleMock("../../shared/audit/audit.service.js", {
   logAuditEntry: (input: Record<string, unknown>) => {
     auditEntries.push(input);
+  },
+});
+
+moduleMock("../notifications/notifications.service.js", {
+  notifyUser: (input: Record<string, unknown>) => {
+    notificationEntries.push(input);
+    return { id: "notif-1", ...input };
+  },
+  notifyEmailAddress: (input: Record<string, unknown>) => {
+    emailEntries.push(input);
+    return true;
   },
 });
 
@@ -134,6 +147,8 @@ beforeEach(() => {
   debriefRows.length = 0;
   handoffRows.length = 0;
   deletedDebriefIds.length = 0;
+  notificationEntries.length = 0;
+  emailEntries.length = 0;
 
   impls.set("findReportById", async () => baseReport());
   impls.set("findAvailableReports", async () => []);
@@ -222,6 +237,37 @@ describe("Dispatcher rescue workflow", () => {
     assert.equal(historyEntries[0].dispatcherName, DISPATCHER_NAME);
     assert.equal(historyEntries[0].notes, "Dispatcher claimed this case.");
     assert.equal(auditEntries[0].action, "rescue.report.claimed");
+  });
+
+  test("notifies a signed-in reporter when their case is claimed", async () => {
+    impls.set("findReportById", async () => baseReport({ reporterClerkUserId: "user-reporter" }));
+
+    const result = await claimRescueReport(REPORT_ID, DISPATCHER_ID, DISPATCHER_NAME);
+
+    assert.equal(result?.status, "assigned");
+    assert.equal(notificationEntries.length, 1);
+    assert.equal(notificationEntries[0].recipientClerkUserId, "user-reporter");
+    assert.equal(notificationEntries[0].type, "rescue.status_changed");
+    assert.equal(notificationEntries[0].entityType, "rescue_report");
+    assert.equal(notificationEntries[0].entityId, REPORT_ID);
+  });
+
+  test("does not notify an anonymous reporter (no in-app row)", async () => {
+    await claimRescueReport(REPORT_ID, DISPATCHER_ID, DISPATCHER_NAME);
+
+    assert.equal(notificationEntries.length, 0);
+  });
+
+  test("emails an anonymous reporter who left an address (no in-app row)", async () => {
+    impls.set("findReportById", async () =>
+      baseReport({ reporterClerkUserId: null, reporterEmail: "anon@example.com" }),
+    );
+
+    await claimRescueReport(REPORT_ID, DISPATCHER_ID, DISPATCHER_NAME);
+
+    assert.equal(notificationEntries.length, 0);
+    assert.equal(emailEntries.length, 1);
+    assert.equal(emailEntries[0].email, "anon@example.com");
   });
 
   test("cannot claim an already-assigned case", async () => {

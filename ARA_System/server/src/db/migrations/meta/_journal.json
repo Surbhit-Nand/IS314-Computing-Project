@@ -64,6 +64,13 @@
       "when": 1790427175706,
       "tag": "0010_lean_darwin",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1790686523803,
+      "tag": "0011_bumpy_hellfire_club",
+      "breakpoints": true
     }
   ]
 }

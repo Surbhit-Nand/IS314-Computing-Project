@@ -67,6 +67,10 @@ moduleMock("../../shared/audit/audit.service.js", {
 	logAuditEntry: (input: unknown) => currentImpl("logAuditEntry")(input),
 });
 
+moduleMock("../notifications/notifications.service.js", {
+	notifyUser: (input: unknown) => currentImpl("notifyUser")(input),
+});
+
 
 const {
 	ADOPTION_STATUSES,
@@ -85,6 +89,7 @@ const ACTOR_ID = "user-staff";
 const historySpy: Array<Record<string, unknown>> = [];
 const auditSpy: Array<Record<string, unknown>> = [];
 const animalUpdateSpy: Array<Record<string, unknown>> = [];
+const notificationSpy: Array<Record<string, unknown>> = [];
 
 function baseApplication(overrides: Record<string, unknown> = {}) {
 	return {
@@ -135,6 +140,7 @@ function resetImpls() {
 	historySpy.length = 0;
 	auditSpy.length = 0;
 	animalUpdateSpy.length = 0;
+	notificationSpy.length = 0;
 
 	repo("findAllAdoptionApplications", async () => []);
 	repo("findAdoptionApplicationsByApplicant", async () => []);
@@ -155,6 +161,12 @@ function resetImpls() {
 	});
 	repo("logAuditEntry", async (entry: Record<string, unknown>) => {
 		auditSpy.push(entry);
+	});
+	// Applicant notifications are best-effort - the default stub records them
+	// so transition tests can assert exactly one row per status change.
+	repo("notifyUser", async (input: Record<string, unknown>) => {
+		notificationSpy.push(input);
+		return { id: "notif-1", ...input };
 	});
 }
 
@@ -297,6 +309,51 @@ describe("adoptions.service", () => {
 			});
 			// Nothing below the lifecycle covers, so the animal is untouched.
 			assert.equal(animalUpdateSpy.length, 0);
+			assert.equal(current.status, "under_review");
+		});
+
+		it("notifies the applicant once per status change", async () => {
+			statefulApplication("submitted");
+
+			await transitionAdoptionApplication(APPLICATION_ID, { status: "under_review" }, ACTOR_ID);
+
+			assert.equal(notificationSpy.length, 1);
+			assert.equal(notificationSpy[0].recipientClerkUserId, APPLICANT_ID);
+			assert.equal(notificationSpy[0].type, "adoption.status_changed");
+			assert.equal(notificationSpy[0].entityType, "adoption_application");
+			assert.equal(notificationSpy[0].entityId, APPLICATION_ID);
+		});
+
+		it("carries the rejection reason in the applicant notification", async () => {
+			statefulApplication("under_review");
+
+			await transitionAdoptionApplication(
+				APPLICATION_ID,
+				{ status: "rejected", reviewNotes: "The yard is not fenced." },
+				ACTOR_ID,
+			);
+
+			assert.equal(notificationSpy.length, 1);
+			assert.equal(notificationSpy[0].body, "The yard is not fenced.");
+		});
+
+		it("does not notify on a same-status no-op", async () => {
+			statefulApplication("under_review");
+
+			await transitionAdoptionApplication(APPLICATION_ID, { status: "under_review" }, ACTOR_ID);
+
+			assert.equal(notificationSpy.length, 0);
+		});
+
+		it("still completes the transition when notifying fails", async () => {
+			const current = statefulApplication("submitted");
+			repo("notifyUser", async () => {
+				throw new Error("Neon is down");
+			});
+
+			const result = await transitionAdoptionApplication(APPLICATION_ID, { status: "under_review" }, ACTOR_ID);
+
+			assert.equal(result?.status, "under_review");
 			assert.equal(current.status, "under_review");
 		});
 
