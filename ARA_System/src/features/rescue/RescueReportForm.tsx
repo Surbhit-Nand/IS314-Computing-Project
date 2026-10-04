@@ -1,12 +1,12 @@
 import { UserButton, useAuth, useUser } from "@clerk/react";
 import { useEffect, useRef, useState, type ChangeEvent, type DragEvent, type FormEvent } from "react";
 import spcaLogo from "../../assets/spca-logo.png";
-import { DonateModal } from "../donations/DonateModal";
 import { submitRescueReport, uploadRescuePhoto } from "../../services/rescueApi";
 import { reverseGeocodePlace, searchPlaces, type PlaceLookup } from "../../services/geocoding";
 import { RescueLocationMap } from "./RescueLocationMap";
 import type { RescueReportFormInput, RescueUrgency } from "../../types/rescue";
 import { Breadcrumbs } from "../../components/Breadcrumbs";
+import { SiteHeader, type SiteHeaderView } from "../../components/SiteHeader";
 
 type RescueReportFormProps = {
   // "public" renders the anonymous visitor form inside the public site shell;
@@ -14,9 +14,8 @@ type RescueReportFormProps = {
   // is logged through the identical schema/fields (one code path).
   variant: "public" | "staff";
   source: "online" | "phone";
-  onNavigate: (
-    view: "home" | "my-reports" | "manage-rescue-reports" | "staff-dashboard",
-  ) => void;
+  isLoaded: boolean;
+  onNavigate: (view: SiteHeaderView) => void;
   onShowMyReports: () => void;
 };
 
@@ -55,12 +54,11 @@ const URGENCY_DESCRIPTIONS: Record<RescueUrgency, string> = {
 // Both the public online rescue report form and the staff phone-in logging
 // form share this single component. The only difference is `source` and the
 // surrounding layout; the fields and the API call are one code path.
-export function RescueReportForm({ variant, source, onNavigate, onShowMyReports }: RescueReportFormProps) {
+export function RescueReportForm({ variant, source, isLoaded, onNavigate, onShowMyReports }: RescueReportFormProps) {
   const { isSignedIn } = useUser();
   const { getToken } = useAuth();
   const [form, setForm] = useState<RescueReportFormInput>({ ...emptyForm, source });
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [donateOpen, setDonateOpen] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -76,9 +74,10 @@ export function RescueReportForm({ variant, source, onNavigate, onShowMyReports 
   // Set when a suggestion/geocode result is applied so the programmatic
   // location update doesn't trigger another forward search of the new text.
   const skipNextPlaceSearchRef = useRef(false);
-  // Reverse geocoding fills the Location box only when it's still empty, so we
-  // read the live text via a ref (the async response may arrive later).
-  const latestLocationRef = useRef("");
+  // Reverse geocoding fills the Location box - but never overwrites an address
+  // the reporter typed themselves. The source (typed vs auto-filled) is tracked
+  // via a ref so a late async response can't clobber freshly typed text.
+  const locationManuallyEditedRef = useRef(false);
   // Nominatim allows roughly one reverse request per second; queue a trailing
   // call so dragging the marker won't hammer the API.
   const lastReverseRequestAtRef = useRef(0);
@@ -91,10 +90,6 @@ export function RescueReportForm({ variant, source, onNavigate, onShowMyReports 
       }
     };
   }, []);
-
-  useEffect(() => {
-    latestLocationRef.current = form.location;
-  }, [form.location]);
 
   function setField<K extends keyof RescueReportFormInput>(key: K, fieldValue: RescueReportFormInput[K]) {
     setForm((previous) => ({ ...previous, [key]: fieldValue }));
@@ -135,14 +130,14 @@ export function RescueReportForm({ variant, source, onNavigate, onShowMyReports 
   // Reverse-geocodes a pin / "Use My Location" result and fills the Location
   // box - but only when the reporter hasn't typed something there themselves.
   function queueReverseGeocode(pinLatitude: number, pinLongitude: number) {
-    if (latestLocationRef.current.trim() !== "") return;
+    if (locationManuallyEditedRef.current) return;
     const runReverse = async () => {
       try {
-        // Re-check before writing so a pin moved while we were looking up an
+        // Re-check before writing so a pin moved while we were fetching an
         // earlier pin can't clobber a freshly typed description.
-        if (latestLocationRef.current.trim() !== "") return;
+        if (locationManuallyEditedRef.current) return;
         const place = await reverseGeocodePlace(pinLatitude, pinLongitude);
-        if (place && latestLocationRef.current.trim() === "") {
+        if (place && !locationManuallyEditedRef.current) {
           setField("location", place.displayName);
         }
       } catch {
@@ -184,6 +179,7 @@ export function RescueReportForm({ variant, source, onNavigate, onShowMyReports 
         );
         return;
       }
+      locationManuallyEditedRef.current = false;
       setField("location", hit.displayName);
       setField("latitude", hit.latitude);
       setField("longitude", hit.longitude);
@@ -200,6 +196,7 @@ export function RescueReportForm({ variant, source, onNavigate, onShowMyReports 
   }
 
   function handleSuggestionPick(place: PlaceLookup) {
+    locationManuallyEditedRef.current = false;
     setField("location", place.displayName);
     setField("latitude", place.latitude);
     setField("longitude", place.longitude);
@@ -281,10 +278,11 @@ export function RescueReportForm({ variant, source, onNavigate, onShowMyReports 
       }
       const report = await submitRescueReport(form, token ?? undefined);
       setCreatedReference(report.reference);
+      locationManuallyEditedRef.current = false;
       setForm({ ...emptyForm, source });
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "The rescue report could not be submitted.";
+        error instanceof Error ? error.message : "The rescue alert could not be submitted.";
       window.alert(message);
       setErrorMessage(message);
     } finally {
@@ -343,6 +341,7 @@ export function RescueReportForm({ variant, source, onNavigate, onShowMyReports 
                 onChange={(event) => {
                   const value = event.target.value;
                   setField("location", value);
+                  locationManuallyEditedRef.current = true;
                   setPlaceQuery(value);
                   if (value.trim().length < 3) {
                     setPlaceSuggestions([]);
@@ -382,6 +381,7 @@ export function RescueReportForm({ variant, source, onNavigate, onShowMyReports 
           latitude={form.latitude}
           longitude={form.longitude}
           onLocationChange={(selectedLatitude, selectedLongitude) => {
+            locationManuallyEditedRef.current = false;
             setField("latitude", selectedLatitude);
             setField("longitude", selectedLongitude);
             queueReverseGeocode(selectedLatitude, selectedLongitude);
@@ -454,7 +454,7 @@ export function RescueReportForm({ variant, source, onNavigate, onShowMyReports 
         <div className="animal-photo-list">
           {form.photoUrls.map((url) => (
             <div className="animal-photo-thumb" key={url}>
-              <img src={url} alt="Rescue report" />
+              <img src={url} alt="Rescue alert" />
               <button type="button" onClick={() => removePhoto(url)} aria-label="Remove photo">
                 &times;
               </button>
@@ -506,8 +506,8 @@ export function RescueReportForm({ variant, source, onNavigate, onShowMyReports 
               <img src={spcaLogo} alt="SPCA Fiji logo" className="brand-logo" />
             </button>
             <div>
-              <p className="eyebrow">ARA operations</p>
-              <h1>Log a phone rescue report</h1>
+              <p className="eyebrow">SPCA operations</p>
+              <h1>Log a phone rescue alert</h1>
             </div>
           </div>
           <div className="dashboard-header-actions">
@@ -521,7 +521,7 @@ export function RescueReportForm({ variant, source, onNavigate, onShowMyReports 
           trail={[
             { label: "Staff Dashboard", onClick: () => onNavigate("staff-dashboard") },
             { label: "Rescue queue", onClick: () => onNavigate("manage-rescue-reports") },
-            { label: "Log phone report" },
+            { label: "Log phone alert" },
           ]}
         />
 
@@ -532,13 +532,13 @@ export function RescueReportForm({ variant, source, onNavigate, onShowMyReports 
           </p>
           {createdReference && (
             <p className="invite-feedback success">
-              Report logged. Reference: <strong>{createdReference}</strong>{" "}
+              Alert logged. Reference: <strong>{createdReference}</strong>{" "}
               <button
                 type="button"
                 className="text-button"
                 onClick={onShowMyReports}
               >
-                View in my reports
+                View in my alerts
               </button>
             </p>
           )}
@@ -549,7 +549,7 @@ export function RescueReportForm({ variant, source, onNavigate, onShowMyReports 
             {formFields}
             <div className="rescue-form-actions">
               <button type="submit" className="teal-button rescue-submit-button" disabled={isSubmitting}>
-                {isSubmitting ? "Logging report..." : "Submit rescue report"}
+                {isSubmitting ? "Logging alert..." : "Submit rescue alert"}
               </button>
             </div>
           </form>
@@ -560,60 +560,45 @@ export function RescueReportForm({ variant, source, onNavigate, onShowMyReports 
 
   return (
     <div className="home-page">
-      <header className="site-header">
-        <button
-          type="button"
-          className="brand-group brand-button"
-          onClick={() => onNavigate("home")}
-        >
-          <img src={spcaLogo} alt="SPCA Fiji logo" className="brand-logo" />
-        </button>
-        <nav className="main-nav" aria-label="Main navigation">
-          <button type="button" className="nav-link" onClick={() => onNavigate("home")}>
-            Home
-          </button>
-          <button
-            type="button"
-            className="nav-link active"
-            aria-current="page"
-          >
-            Rescue Report
-          </button>
-          <button type="button" className="nav-link" onClick={() => setDonateOpen(true)}>
-            Donate
-          </button>
-        </nav>
-        <div className="header-actions">
-          {isSignedIn && (
+      <SiteHeader
+        isLoaded={isLoaded}
+        isSignedIn={isSignedIn}
+        currentPage="rescue-report"
+        onNavigate={onNavigate}
+      />
+
+      <main className="page-shell">
+        <section className="catalog-hero">
+          <p className="eyebrow">Rescue alerts</p>
+          <h1>Report an animal in need</h1>
+          <p className="lead-copy">
+            Tell SPCA Fiji about an animal that needs help. Include a location,
+            its condition, and how urgent the situation is - our team will
+            review the alert and assign a dispatcher.
+          </p>
+        </section>
+
+        {isSignedIn && !createdReference && (
+          <div className="rescue-form-toolbar">
             <button
               type="button"
               className="teal-button"
               onClick={() => onNavigate("my-reports")}
             >
-              My reports
+              My Alerts
             </button>
-          )}
-        </div>
-      </header>
+          </div>
+        )}
 
-      <main className="page-shell">
-        <section className="catalog-hero">
-          <p className="eyebrow">Rescue reporting</p>
-          <h1>Report an animal in need</h1>
-          <p className="lead-copy">
-            Tell SPCA Fiji about an animal that needs help. Include a location,
-            its condition, and how urgent the situation is - our team will
-            review the report and assign a rescuer.
-          </p>
-        </section>
-
-        <section className="rescue-form-panel">
+        <section
+          className={`rescue-form-panel${createdReference ? " rescue-form-panel-confirm" : ""}`}
+        >
           {createdReference && (
             <div className="rescue-success">
-              <p className="eyebrow">Report received</p>
-              <h2>Thank you for reporting this animal.</h2>
+              <p className="eyebrow">Alert received</p>
+              <h2>Thank you for submitting a rescue alert.</h2>
               <p>
-                Your report reference is <strong>{createdReference}</strong>. Save
+                Your rescue alert reference is <strong>{createdReference}</strong>. Save
                 it to track progress, or follow the link below.
               </p>
               <button
@@ -621,7 +606,7 @@ export function RescueReportForm({ variant, source, onNavigate, onShowMyReports 
                 className="teal-button"
                 onClick={onShowMyReports}
               >
-                View in my reports
+                View in my alerts
               </button>
             </div>
           )}
@@ -629,14 +614,14 @@ export function RescueReportForm({ variant, source, onNavigate, onShowMyReports 
             <>
               {errorMessage && <p className="invite-feedback error">{errorMessage}</p>}
               <p className="security-note">
-                No account needed. If you are signed in, your report will link
+                No account needed. If you are signed in, your alert will link
                 to your profile so you can track it from your dashboard.
               </p>
               <form className="animal-form rescue-form" onSubmit={handleSubmit}>
                 {formFields}
                 <div className="rescue-form-actions">
                   <button type="submit" className="teal-button rescue-submit-button" disabled={isSubmitting}>
-                    {isSubmitting ? "Submitting report..." : "Submit rescue report"}
+                    {isSubmitting ? "Submitting alert..." : "Submit rescue alert"}
                   </button>
                 </div>
               </form>
@@ -655,7 +640,6 @@ export function RescueReportForm({ variant, source, onNavigate, onShowMyReports 
           </div>
         </section>
       </main>
-      <DonateModal open={donateOpen} onClose={() => setDonateOpen(false)} />
     </div>
   );
 }

@@ -1,7 +1,9 @@
 import { SignInButton, useAuth, useUser } from "@clerk/react";
 import { useEffect, useState, type FormEvent } from "react";
+import spcaLogo from "../../assets/spca-logo.png";
 import { SiteHeader, type SiteHeaderView } from "../../components/SiteHeader";
 import { Breadcrumbs } from "../../components/Breadcrumbs";
+import { SkeletonLoader } from "../../components/SkeletonLoader";
 import { SuccessToast } from "../../components/SuccessToast";
 import { fetchAnimalById, updateAnimal } from "../../services/animalsApi";
 import type { Animal, AnimalFormInput } from "../../types/animal";
@@ -33,6 +35,8 @@ function toFormInput(animal: Animal): AnimalFormInput {
     // Legacy animals registered before this field existed have size: null -
     // fall back to the unselected placeholder so staff can pick one now.
     size: animal.size ?? "",
+    // Same fallback for veterinary priority - staff can set it on an edit.
+    veterinaryPriority: animal.veterinaryPriority ?? "",
   };
 }
 
@@ -116,7 +120,11 @@ export function EditAnimalProfile({ animalId, onNavigate }: EditAnimalProfilePro
     return (
       <main className="dashboard-locked">
         <div className="dashboard-locked-card">
-          <p className="eyebrow">ARA operations</p>
+          <div className="auth-brand">
+            <img src={spcaLogo} alt="SPCA Fiji logo" className="brand-logo" />
+            <strong>SPCA Fiji</strong>
+          </div>
+          <p className="eyebrow">SPCA operations</p>
           <h1>Sign in to continue</h1>
           <p>Editing animal profiles is available to authorised team members.</p>
           <SignInButton mode="modal">
@@ -133,7 +141,11 @@ export function EditAnimalProfile({ animalId, onNavigate }: EditAnimalProfilePro
     return (
       <main className="dashboard-locked">
         <div className="dashboard-locked-card">
-          <p className="eyebrow">ARA operations</p>
+          <div className="auth-brand">
+            <img src={spcaLogo} alt="SPCA Fiji logo" className="brand-logo" />
+            <strong>SPCA Fiji</strong>
+          </div>
+          <p className="eyebrow">SPCA operations</p>
           <h1>Access restricted</h1>
           <p>Your account does not have staff, veterinary, manager, or admin permissions.</p>
           <button type="button" className="teal-button" onClick={() => onNavigate("home")}>
@@ -169,7 +181,7 @@ export function EditAnimalProfile({ animalId, onNavigate }: EditAnimalProfilePro
       />
 
       <section className="dashboard-panel">
-        {isLoading && <p className="dashboard-data-state">Loading animal profile...</p>}
+        {isLoading && <SkeletonLoader variant="card" />}
         {!isLoading && loadError && <p className="dashboard-data-state error">{loadError}</p>}
 
         {!isLoading && !loadError && form && (

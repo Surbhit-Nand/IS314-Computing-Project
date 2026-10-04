@@ -24,6 +24,10 @@ const adoptionWithAnimal = {
 		type: animals.type,
 		breed: animals.breed,
 		photoUrls: animals.photoUrls,
+		// Joined so the staff review queue can show medical status up front
+		// instead of the reviewer only discovering it by trying to approve an
+		// animal the veterinary module hasn't cleared yet.
+		medicallyCleared: animals.medicallyCleared,
 	},
 };
 

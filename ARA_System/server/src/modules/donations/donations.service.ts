@@ -1,4 +1,5 @@
-import { insertDonation } from "./donations.repository.js";
+import { logAuditEntry } from "../../shared/audit/audit.service.js";
+import { createDonationRecord } from "./donations.repository.js";
 
 export type DonationInput = {
 	amountCents: number;
@@ -51,6 +52,31 @@ export function normalizeDonationInput(input: DonationInput) {
 	};
 }
 
-export async function createDonation(input: DonationInput) {
-	return insertDonation(normalizeDonationInput(input));
+export async function createDonation(
+	input: DonationInput,
+	options: { actorClerkUserId?: string } = {},
+) {
+	const normalized = normalizeDonationInput(input);
+	const donation = await createDonationRecord({
+		...normalized,
+		donorClerkUserId: options.actorClerkUserId ?? null,
+		donorName: normalized.donorName ?? null,
+		donorEmail: normalized.donorEmail ?? null,
+		message: normalized.message ?? null,
+	});
+
+	if (options.actorClerkUserId) {
+		await logAuditEntry({
+			actorClerkUserId: options.actorClerkUserId,
+			action: "donation.created",
+			entityType: "donation",
+			entityId: donation.id,
+			metadata: {
+				amountCents: donation.amountCents,
+				currency: donation.currency,
+			},
+		});
+	}
+
+	return donation;
 }

@@ -4,6 +4,7 @@ dotenv.config({ path: ".env.local" });
 dotenv.config({ path: "server/.env" });
 
 const clerkSecretKey = process.env.CLERK_SECRET_KEY;
+const clerkWebhookSigningSecret = process.env.CLERK_WEBHOOK_SIGNING_SECRET;
 const databaseUrl = process.env.DATABASE_URL;
 const cloudinaryCloudName = process.env.CLOUDINARY_CLOUD_NAME;
 const cloudinaryApiKey = process.env.CLOUDINARY_API_KEY;
@@ -38,6 +39,7 @@ if (devBypassAuth) {
 
 export const env = {
 	clerkSecretKey,
+	clerkWebhookSigningSecret,
 	databaseUrl,
 	port: Number(process.env.API_PORT ?? 8787),
 	clientOrigin: process.env.CLIENT_ORIGIN ?? "http://localhost:5173",

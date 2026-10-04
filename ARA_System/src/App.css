@@ -1589,6 +1589,29 @@
   color: #b77700;
 }
 
+/* Role dropdown and per-row actions on the ManagerDashboard staff list. */
+.role-select {
+  flex: 0 0 auto;
+  padding: 8px 10px;
+  border: 1px solid rgba(21, 135, 195, 0.35);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--teal-dark);
+  font-size: 0.8rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.role-select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.staff-row .small-button {
+  padding: 8px 14px;
+  font-size: 0.78rem;
+}
+
 .security-note,
 .invite-help {
   margin: 18px 0 0;
@@ -1716,6 +1739,154 @@
 
 .dashboard-locked-card h1 { margin: 0; }
 .dashboard-locked-card p:not(.eyebrow) { color: var(--slate); line-height: 1.6; }
+
+/* ---------------------------------------------------------- loading states */
+/* Shared shimmer skeletons (SkeletonLoader.tsx) + the App-level auth splash. */
+
+@keyframes app-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: 0 0;
+  }
+}
+
+@keyframes app-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.skeleton-bar,
+.skeleton-metric {
+  display: block;
+  border-radius: 8px;
+  background: linear-gradient(
+    90deg,
+    var(--line) 25%,
+    #eef3f8 37%,
+    var(--line) 63%
+  );
+  background-size: 400% 100%;
+  animation: app-shimmer 1.2s ease-in-out infinite;
+}
+
+.skeleton-bar {
+  height: 14px;
+  width: 100%;
+}
+
+.skeleton-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.skeleton-width-1 {
+  width: 60%;
+}
+
+.skeleton-width-2 {
+  width: 90%;
+}
+
+.skeleton-width-3 {
+  width: 75%;
+}
+
+.skeleton-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+}
+
+.skeleton-metric-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.skeleton-metric {
+  height: 118px;
+  border: 1px solid var(--line);
+}
+
+/* Shimmer block sized to look like a big metric number while it loads. */
+.skeleton-metric-value {
+  height: 30px;
+  width: 64px;
+  max-width: 100%;
+}
+
+/* App-level pre-auth splash: logo + spinner + skeleton bars. */
+.loading-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+  padding: 40px 34px;
+}
+
+.loading-brand,
+.auth-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.loading-brand img,
+.auth-brand img {
+  height: 46px;
+}
+
+.loading-brand strong,
+.auth-brand strong {
+  font-size: 1.2rem;
+  color: var(--navy);
+}
+
+.loading-spinner {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 3px solid var(--line);
+  border-top-color: var(--teal);
+  animation: app-spin 0.9s linear infinite;
+}
+
+.loading-skeleton {
+  width: 100%;
+  margin-top: 4px;
+}
+
+@media (max-width: 900px) {
+  .skeleton-metric-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 620px) {
+  .skeleton-metric-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-bar,
+  .skeleton-metric {
+    animation: none;
+  }
+
+  .loading-spinner {
+    animation-duration: 2.5s;
+  }
+}
 
 .user-dashboard-page {
   min-height: 100vh;
@@ -3450,6 +3621,17 @@
   box-shadow: var(--shadow);
 }
 
+.rescue-form-toolbar {
+  max-width: 900px;
+  margin: 0 auto 20px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.rescue-form-panel.rescue-form-panel-confirm {
+  margin-top: 10px;
+}
+
 .rescue-success {
   text-align: center;
   padding: 26px 18px;
@@ -3767,12 +3949,18 @@
   color: #8a5b00;
 }
 
-.report-status.rescued {
+.report-status.in_progress {
   background: var(--teal);
   color: #fff;
 }
 
-.report-status.closed {
+.report-status.awaiting-reassignment {
+  background: rgba(109, 76, 201, 0.12);
+  color: #4c3a94;
+  border: 1px solid rgba(109, 76, 201, 0.35);
+}
+
+.report-status.resolved {
   background: var(--navy);
   color: #fff;
 }
@@ -4016,7 +4204,7 @@
   box-shadow: var(--shadow);
 }
 
-/* collapsed summary row */
+/* collapsed summary row (shared by the rescue queue and adoptions queue) */
 .rescue-summary {
   display: flex;
   align-items: center;
@@ -4070,6 +4258,60 @@
   flex-shrink: 0;
 }
 
+/* Rescue Reports queue only: the collapsed row becomes a six-column grid that
+   mirrors .reports-queue-head, so every badge lines up directly under its
+   heading. The adoptions queue keeps the shared flex layout above. */
+.reports-queue .rescue-summary {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.85fr) minmax(170px, 1.4fr) 120px 150px 105px;
+  align-items: center;
+  gap: 14px;
+}
+
+.reports-queue .rescue-col-report,
+.reports-queue .rescue-col-location,
+.reports-queue .rescue-col-status,
+.reports-queue .rescue-col-dispatcher,
+.reports-queue .rescue-col-urgency {
+  min-width: 0;
+}
+
+.reports-queue .rescue-col-location {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.reports-queue .rescue-col-status,
+.reports-queue .rescue-col-dispatcher,
+.reports-queue .rescue-col-urgency {
+  text-align: center;
+}
+
+/* table-style header row above the Rescue Reports queue */
+.reports-queue-head {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.85fr) minmax(170px, 1.4fr) 120px 150px 105px;
+  gap: 14px;
+  align-items: center;
+  padding: 10px 18px;
+  border: 1px solid rgba(21, 135, 195, 0.18);
+  border-radius: 12px;
+  background: rgba(21, 135, 195, 0.1);
+}
+
+.reports-queue-head span {
+  color: var(--teal-dark);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.reports-queue-head span:nth-child(n + 3) {
+  text-align: center;
+}
+
 .rescue-status-badge {
   display: inline-flex;
   align-items: center;
@@ -4091,12 +4333,18 @@
   color: #8a5b00;
 }
 
-.rescue-status-badge.rescued {
-  background: var(--teal);
-  color: #fff;
+.rescue-status-badge.in-progress {
+  background: rgba(31, 157, 85, 0.14);
+  color: #14693a;
 }
 
-.rescue-status-badge.closed {
+.rescue-status-badge.awaiting-reassignment {
+  background: rgba(109, 76, 201, 0.12);
+  color: #4c3a94;
+  border: 1px solid rgba(109, 76, 201, 0.35);
+}
+
+.rescue-status-badge.resolved {
   background: var(--navy);
   color: #fff;
 }
@@ -4105,18 +4353,20 @@
   display: inline-flex;
   align-items: center;
   padding: 6px 12px;
-  border-radius: 999px;
+  border-radius: 6px;
   font-size: 0.75rem;
   font-weight: 800;
   white-space: nowrap;
   line-height: 1;
   background: var(--bg);
   color: var(--slate);
+  border: 1px solid var(--line);
 }
 
 .rescue-assignee-badge.assigned {
-  background: rgba(21, 135, 195, 0.12);
-  color: var(--teal-dark);
+  background: rgba(109, 76, 201, 0.12);
+  color: #4c3a94;
+  border-color: rgba(109, 76, 201, 0.35);
 }
 
 .rescue-urgency-badge {
@@ -4212,6 +4462,308 @@
 .rescue-detail-body {
   padding: 8px 18px 20px;
   border-top: 1px solid var(--line);
+}
+
+.rescue-history-body {
+  padding-top: 0;
+}
+
+.rescue-history-overview,
+.rescue-history-lower-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.65fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.rescue-history-overview {
+  margin-top: 18px;
+}
+
+.rescue-history-lower-grid {
+  margin-top: 20px;
+}
+
+.rescue-history-overview > .rescue-details-card,
+.rescue-debrief-card,
+.rescue-progress-block.rescue-history-updates-card,
+.rescue-history-progress-card > .rescue-progress-block {
+  min-width: 0;
+}
+
+.rescue-debrief-card {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--white);
+}
+
+.rescue-debrief-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.rescue-debrief-card-head .eyebrow {
+  margin: 0 0 5px;
+  color: var(--teal-dark);
+}
+
+.rescue-debrief-card-head h3 {
+  margin: 0;
+  color: var(--navy);
+  font-size: 1.12rem;
+  letter-spacing: -0.02em;
+}
+
+.rescue-debrief-outcome-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 48%;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: var(--navy);
+  color: var(--white);
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.25;
+  text-align: center;
+}
+
+.rescue-debrief-outcome-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 17px 18px;
+  border: 1px solid rgba(21, 135, 195, 0.2);
+  border-radius: 14px;
+  background: rgba(21, 135, 195, 0.08);
+}
+
+.rescue-debrief-outcome-panel strong {
+  color: var(--teal-dark);
+  font-size: 1.05rem;
+  line-height: 1.35;
+}
+
+.rescue-debrief-narrative {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.rescue-debrief-narrative p,
+.rescue-debrief-extra p {
+  margin: 0;
+  color: var(--navy);
+  font-size: 0.9rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.rescue-debrief-label {
+  display: block;
+  color: var(--slate);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+.rescue-debrief-facts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--line);
+}
+
+.rescue-debrief-fact {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 15px;
+  background: var(--white);
+}
+
+.rescue-debrief-fact.wide {
+  grid-column: 1 / -1;
+}
+
+.rescue-debrief-fact strong {
+  max-width: 100%;
+  color: var(--navy);
+  font-size: 0.88rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.rescue-debrief-fact-note {
+  color: var(--slate);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+.rescue-debrief-value-muted {
+  color: var(--slate);
+  font-size: 0.85rem;
+}
+
+.rescue-debrief-priority,
+.rescue-debrief-intake-badge {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 7px 10px;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 800;
+  line-height: 1.25;
+  text-align: center;
+}
+
+.rescue-debrief-priority.critical {
+  background: rgba(217, 80, 80, 0.14);
+  color: var(--red);
+}
+
+.rescue-debrief-priority.high {
+  background: rgba(183, 119, 0, 0.14);
+  color: #8a5b00;
+}
+
+.rescue-debrief-priority.moderate {
+  background: rgba(21, 135, 195, 0.12);
+  color: var(--teal-dark);
+}
+
+.rescue-debrief-priority.low {
+  background: rgba(31, 157, 85, 0.14);
+  color: #14693a;
+}
+
+.rescue-debrief-intake-badge.pending {
+  background: rgba(183, 119, 0, 0.14);
+  color: #8a5b00;
+}
+
+.rescue-debrief-intake-badge.received {
+  background: rgba(31, 157, 85, 0.14);
+  color: #14693a;
+}
+
+.rescue-debrief-intake-badge.not-required {
+  background: var(--bg);
+  color: var(--slate);
+}
+
+.rescue-debrief-extra {
+  padding: 14px 16px;
+  border-left: 3px solid var(--teal);
+  border-radius: 0 12px 12px 0;
+  background: var(--bg);
+}
+
+.rescue-progress-block.rescue-history-updates-card {
+  margin-top: 0;
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--white);
+}
+
+.rescue-history-progress-card > .rescue-progress-block {
+  margin-top: 0;
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--white);
+}
+
+.rescue-history-empty {
+  margin: 0;
+  padding: 15px;
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--slate);
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+.rescue-progress-compact .rescue-activity-entry {
+  gap: 12px;
+  padding-bottom: 16px;
+}
+
+.rescue-progress-compact .rescue-activity-head {
+  gap: 6px;
+}
+
+.rescue-progress-compact .rescue-activity-head:has(.rescue-status-badge) .rescue-activity-phase {
+  flex-basis: auto;
+}
+
+.rescue-progress-compact .rescue-activity-entry .rescue-status-badge {
+  width: auto;
+  padding: 5px 9px;
+}
+
+.rescue-progress-compact .rescue-activity-phase {
+  font-size: 0.82rem;
+}
+
+.rescue-progress-compact .rescue-activity-meta {
+  margin-top: 4px;
+  font-size: 0.7rem;
+}
+
+@media (max-width: 900px) {
+  .rescue-history-overview,
+  .rescue-history-lower-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 620px) {
+  .rescue-history-body {
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+
+  .rescue-debrief-card,
+  .rescue-progress-block.rescue-history-updates-card,
+  .rescue-history-progress-card > .rescue-progress-block {
+    padding: 18px;
+    border-radius: 14px;
+  }
+
+  .rescue-debrief-card-head {
+    flex-direction: column;
+  }
+
+  .rescue-debrief-outcome-badge {
+    max-width: 100%;
+  }
+
+  .rescue-debrief-facts {
+    grid-template-columns: 1fr;
+  }
+
+  .rescue-debrief-fact.wide {
+    grid-column: auto;
+  }
 }
 
 .rescue-progress-tracker {
@@ -4378,19 +4930,36 @@
   .rescue-detail-columns {
     grid-template-columns: 1fr;
   }
+
+  .reports-queue-head {
+    display: none;
+  }
+
+  .reports-queue .rescue-summary {
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px 14px;
+    padding: 14px 16px;
+  }
+
+  .reports-queue .rescue-col-report,
+  .reports-queue .rescue-col-location,
+  .reports-queue .rescue-col-status,
+  .reports-queue .rescue-col-dispatcher,
+  .reports-queue .rescue-col-urgency {
+    text-align: left;
+  }
 }
 
 @media (max-width: 620px) {
-  .rescue-summary {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 12px;
+  .reports-queue .rescue-summary {
+    grid-template-columns: 1fr;
+    gap: 10px;
   }
 
-  .rescue-summary-badges {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: flex-start;
+  .reports-queue .rescue-col-status,
+  .reports-queue .rescue-col-dispatcher,
+  .reports-queue .rescue-col-urgency {
+    text-align: left;
   }
 
   .rescue-queue-controls {
@@ -4408,6 +4977,252 @@
 .rescue-detail-photos img {
     width: 160px;
     height: 160px;
+  }
+}
+
+/* Dispatcher dashboard -------------------------------------------------- */
+
+/* Tab switcher between the three rescue case lists. Counts update live as
+   reports move between states after each action. */
+.dashboard-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 18px 0 4px;
+}
+
+.dashboard-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 15px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--slate);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
+}
+
+.dashboard-tab:hover {
+  border-color: var(--teal);
+  color: var(--teal-dark);
+}
+
+.dashboard-tab.active {
+  border-color: var(--teal);
+  background: var(--teal);
+  color: #fff;
+}
+
+.dashboard-tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--navy);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.dashboard-tab.active .dashboard-tab-count {
+  background: rgba(255, 255, 255, 0.25);
+  color: #fff;
+}
+
+/* start / complete rescue forms inside the dispatch card */
+.dispatch-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.dispatch-form-hint {
+  margin: 0;
+  color: var(--slate);
+  font-size: 0.8rem;
+  line-height: 1.55;
+}
+
+.dispatch-label .optional-hint {
+  font-size: 0.68rem;
+  font-weight: 400;
+  font-style: normal;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* two-step completion summary before a case is permanently resolved */
+.rescue-confirm-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.rescue-confirm-text {
+  margin: 0;
+  color: var(--navy);
+  font-size: 0.875rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.rescue-confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* read-only progress timeline shown on the dispatcher dashboard, in the
+   staff rescue queue, and in the reporter's My Reports modal */
+.rescue-progress-block {
+  margin-top: 26px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
+.rescue-activity-timeline {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rescue-activity-entry {
+  display: flex;
+  gap: 14px;
+  position: relative;
+  padding-bottom: 20px;
+}
+
+.rescue-activity-entry:last-child {
+  padding-bottom: 0;
+}
+
+/* vertical connector joining the markers */
+.rescue-activity-entry:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 20px;
+  bottom: 0;
+  width: 2px;
+  background: var(--line);
+}
+
+.rescue-activity-marker {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  border-radius: 999px;
+  background: #fff;
+  border: 2px solid var(--line);
+  z-index: 1;
+}
+
+.rescue-activity-marker.passed,
+.rescue-activity-marker.current {
+  background: var(--teal);
+  border-color: var(--teal);
+}
+
+.rescue-activity-marker.final {
+  background: var(--navy);
+  border-color: var(--navy);
+}
+
+.rescue-activity-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.rescue-activity-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.rescue-activity-phase {
+  font-size: 0.9rem;
+  color: var(--navy);
+}
+
+/* Badged timeline rows (Rescue Progress): give every event title the same
+   column width - fitted to the longest title - so all status badges sit in
+   one vertical line after a small, consistent gap. Titles stay left-aligned.
+   On narrow screens the existing wrap drops the badge below the title.
+   Rows without a badge (Mission Updates) keep their natural layout. */
+.rescue-activity-head:has(.rescue-status-badge) .rescue-activity-phase {
+  flex: 0 0 260px;
+}
+
+/* Equal-width badges, text centred, so the pill column reads cleanly. */
+.rescue-activity-entry .rescue-status-badge {
+  width: 136px;
+  flex-shrink: 0;
+}
+
+.rescue-activity-note {
+  margin: 6px 0 0;
+  color: var(--slate);
+  font-size: 0.85rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.rescue-activity-outcome {
+  margin: 6px 0 0;
+  color: var(--teal-dark);
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.rescue-activity-meta {
+  margin: 6px 0 0;
+  color: var(--slate);
+  font-size: 0.74rem;
+}
+
+.rescue-activity-photos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.rescue-activity-photos a {
+  display: block;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  line-height: 0;
+}
+
+.rescue-activity-photos img {
+  display: block;
+  width: 84px;
+  height: 84px;
+  object-fit: cover;
+}
+
+@media (max-width: 620px) {
+  .rescue-activity-photos img {
+    width: 72px;
+    height: 72px;
   }
 }
 
@@ -4455,6 +5270,24 @@
 .adoption-status-badge.rejected {
   background: var(--red);
   color: #fff;
+}
+
+/* Vet clearance warning on an adoption application whose animal hasn't been
+   cleared yet. Amber rather than red: it's a "waiting on the vet team" state,
+   not an error the reviewer caused. */
+.adoption-clearance-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px;
+  border-radius: 999px;
+  /* Same amber pair as .adoption-status-badge.under-review directly above, so
+     the two amber badges read identically when both show. */
+  background: rgba(183, 119, 0, 0.14);
+  color: #8a5b00;
+  font-size: 0.68rem;
+  font-weight: 800;
+  white-space: nowrap;
+  line-height: 1;
 }
 
 /* badges inside the timestamped history lists are size-flexible */
@@ -4708,4 +5541,3064 @@
   .adoption-track-row {
     flex-wrap: wrap;
   }
+}
+
+/* ---------------------------------------------------------------- reports */
+/* Manager/Admin analytics page (ReportsPage.tsx). */
+
+.report-page {
+  min-height: 100vh;
+}
+
+.report-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.report-range {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--slate);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.report-range select {
+  padding: 10px 34px 10px 12px;
+  border: 1px solid var(--teal);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--navy);
+  font-family: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.report-range select:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(21, 135, 195, 0.12);
+}
+
+/* Two-up grid so each chart panel gets room to breathe. */
+.report-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.report-panel {
+  break-inside: avoid;
+}
+
+.report-chart-title {
+  margin: 18px 0 10px;
+  color: var(--slate);
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.report-kpi-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin-bottom: 4px;
+  color: var(--slate);
+  font-size: 0.85rem;
+}
+
+.report-kpi-row strong {
+  color: var(--navy);
+  font-weight: 800;
+}
+
+/* recharts needs a fixed-height parent to size its ResponsiveContainer. */
+.chart-box {
+  position: relative;
+  width: 100%;
+  height: 240px;
+}
+
+.report-per-animal table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.report-per-animal th,
+.report-per-animal td {
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+
+.report-per-animal th {
+  color: var(--slate);
+  font-size: 0.74rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.report-per-animal tr:last-child td {
+  border-bottom: none;
+}
+
+/* Print / PDF branding — screen-only by default. */
+.report-print-header {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .report-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .report-toolbar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .report-toolbar-actions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 620px) {
+  .report-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .report-page .dashboard-metrics {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* When "Download PDF" runs window.print(): strip the chrome and show the
+   branded header instead of the toolbar. */
+@media print {
+  body {
+    background: #fff;
+  }
+
+  .no-print,
+  .site-header,
+  .report-toolbar,
+  .dashboard-locked {
+    display: none !important;
+  }
+
+  .report-page {
+    padding: 0;
+  }
+
+  .report-print-header {
+    display: block;
+    margin-bottom: 26px;
+    padding-bottom: 18px;
+    border-bottom: 3px solid var(--teal);
+  }
+
+  .report-print-header h1 {
+    margin: 0 0 8px;
+    font-size: 1.8rem;
+  }
+
+  .report-print-header p {
+    margin: 0;
+    color: var(--slate);
+    font-size: 0.9rem;
+  }
+
+  .dashboard-panel,
+  .dashboard-welcome,
+  .dashboard-metrics article {
+    border-color: var(--line);
+    box-shadow: none;
+  }
+
+  .dashboard-panel,
+  .dashboard-metrics article {
+    break-inside: avoid;
+  }
+
+  .chart-box {
+    height: 200px;
+  }
+}
+
+/* Rescue Operations portal ------------------------------------------------- */
+/* The dispatch/rescue portal (RescueOperationsPortal.tsx). The shared
+   .rescue-* classes are also used by the adoptions module, so the portal looks
+   use these dedicated .ops-* classes instead of restyling the shared ones. */
+
+.rescue-workspace {
+  background: #e9f2fa;
+  /* Match the staff dashboard: a 1200px centred column with the same minimum
+     side margins, so the whole dispatcher surface aligns to the same edges. */
+  padding: 0 max(20px, calc((100% - 1200px) / 2)) 54px;
+}
+
+.rescue-workspace .site-header {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* One centred column matching the staff dashboard's width. The page heading,
+   summary cards, feedback, and the main/side content grid all share these
+   edges - nothing stretches past the 1200px content width. */
+.rescue-container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.rescue-page-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.rescue-page-head-text {
+  min-width: 0;
+}
+
+.rescue-page-head-text .eyebrow {
+  margin-bottom: 8px;
+}
+
+.rescue-page-head h1 {
+  margin: 0;
+  font-size: clamp(1.6rem, 2.4vw, 2.1rem);
+  letter-spacing: -0.03em;
+}
+
+.rescue-page-desc {
+  margin: 7px 0 0;
+  max-width: 640px;
+  color: var(--slate);
+  font-size: 0.92rem;
+}
+
+/* Workspace actions sit top-right of the page heading and share its columns. */
+.rescue-workspace-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.rescue-page-head .rescue-workspace-actions .teal-button,
+.rescue-page-head .rescue-workspace-actions .ghost-button {
+  white-space: nowrap;
+}
+
+.rescue-summary-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.rescue-stat-card {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  align-items: start;
+  column-gap: 10px;
+  min-width: 0;
+  min-height: 116px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 8px 20px rgba(15, 25, 34, 0.06);
+}
+
+.rescue-stat-card.tone-amber {
+  border-color: rgba(255, 149, 0, 0.28);
+  background: #fff8e8;
+}
+
+.rescue-stat-card.tone-red {
+  border-color: rgba(217, 80, 80, 0.25);
+  background: #fff4f4;
+}
+
+.rescue-stat-card.tone-blue {
+  border-color: rgba(21, 135, 195, 0.25);
+  background: #eef7fd;
+}
+
+.rescue-stat-card.tone-green {
+  border-color: rgba(31, 157, 85, 0.25);
+  background: #eef9f2;
+}
+
+.rescue-stat-card.tone-charcoal {
+  border-color: rgba(17, 24, 32, 0.2);
+  background: #f1f3f5;
+}
+
+.rescue-stat-icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: rgba(21, 135, 195, 0.1);
+  color: var(--teal-dark);
+}
+
+.rescue-stat-icon svg {
+  width: 17px;
+  height: 17px;
+}
+
+.rescue-stat-card.tone-amber .rescue-stat-icon {
+  background: rgba(255, 149, 0, 0.15);
+  color: #a76600;
+}
+
+.rescue-stat-card.tone-red .rescue-stat-icon {
+  background: rgba(217, 80, 80, 0.13);
+  color: var(--red);
+}
+
+.rescue-stat-card.tone-blue .rescue-stat-icon {
+  background: rgba(21, 135, 195, 0.13);
+  color: var(--teal-dark);
+}
+
+.rescue-stat-card.tone-green .rescue-stat-icon {
+  background: rgba(31, 157, 85, 0.14);
+  color: #14603a;
+}
+
+.rescue-stat-card.tone-charcoal .rescue-stat-icon {
+  background: rgba(17, 24, 32, 0.1);
+  color: var(--navy);
+}
+
+.rescue-stat-content {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.rescue-stat-label {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  line-height: 1.25;
+  text-transform: uppercase;
+  color: var(--slate);
+}
+
+.rescue-stat-value {
+  font-size: 1.7rem;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--navy);
+}
+
+.rescue-stat-hint {
+  font-size: 0.73rem;
+  line-height: 1.35;
+  color: var(--slate);
+}
+
+@media (max-width: 420px) {
+  .rescue-summary-cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+.rescue-container .invite-feedback {
+  margin: 0 0 16px;
+}
+
+/* Main panel (full list) + optional overview rail. Fills the full container
+   width instead of leaving an empty column when the rail is absent. */
+.rescue-content-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 20px;
+  align-items: start;
+}
+
+.rescue-main-panel {
+  padding: 28px;
+}
+
+.rescue-panel-heading {
+  align-items: flex-end;
+}
+
+.rescue-panel-note {
+  margin: 6px 0 0;
+  color: var(--slate);
+  font-size: 0.82rem;
+}
+
+/* Overview rail on the right of the case list. */
+.rescue-side-panel {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 24px;
+  box-shadow: 0 12px 28px rgba(15, 25, 34, 0.05);
+}
+
+.rescue-side-panel h3 {
+  margin: 0 0 4px;
+  font-size: 0.98rem;
+  letter-spacing: -0.02em;
+}
+
+.rescue-side-note {
+  margin: 0 0 16px;
+  font-size: 0.78rem;
+  color: var(--slate);
+}
+
+.rescue-side-group + .rescue-side-group {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.rescue-side-group-title {
+  margin: 0 0 12px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--slate);
+}
+
+.rescue-side-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rescue-side-row-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 0.8rem;
+  color: var(--navy);
+}
+
+.rescue-side-row-head span:last-child {
+  font-weight: 800;
+}
+
+.rescue-side-track {
+  height: 6px;
+  margin-top: 6px;
+  border-radius: 999px;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.rescue-side-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--teal);
+}
+
+.rescue-side-fill.tone-red {
+  background: var(--red);
+}
+
+.rescue-side-fill.tone-amber {
+  background: #ff9500;
+}
+
+.rescue-side-fill.tone-yellow {
+  background: #e5a500;
+}
+
+.rescue-side-fill.tone-green {
+  background: var(--success);
+}
+
+.rescue-side-fill.tone-teal {
+  background: var(--teal);
+}
+
+.rescue-side-fill.tone-blue {
+  background: var(--green);
+}
+
+.rescue-side-fill.tone-navy {
+  background: var(--navy);
+}
+
+.rescue-side-empty {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--slate);
+}
+
+.ops-active-groups {
+  display: grid;
+  gap: 18px;
+}
+
+.ops-mission-group {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #fff;
+  padding: 18px 18px 14px;
+}
+
+.ops-group-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.ops-group-heading h3 {
+  margin: 0;
+  font-size: 1.08rem;
+}
+
+.ops-group-heading h3 span {
+  display: inline-grid;
+  place-items: center;
+  min-width: 26px;
+  height: 26px;
+  margin-left: 6px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: rgba(21, 135, 195, 0.12);
+  color: var(--teal-dark);
+  font-size: 0.78rem;
+}
+
+.ops-mission-group.in-progress .ops-group-heading h3 span {
+  background: rgba(31, 157, 85, 0.14);
+  color: #14603a;
+}
+
+/* Prominent tab switcher with live counts. */
+.ops-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 18px 0 6px;
+}
+
+.ops-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  color: var(--slate);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease, transform 0.15s ease;
+}
+
+.ops-tab:hover {
+  border-color: var(--teal);
+  color: var(--teal-dark);
+  transform: translateY(-1px);
+}
+
+.ops-tab.active {
+  border-color: var(--teal);
+  background: linear-gradient(135deg, var(--teal) 0%, var(--teal-dark) 100%);
+  color: #fff;
+  box-shadow: 0 10px 22px rgba(21, 135, 195, 0.2);
+}
+
+.ops-tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--navy);
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.ops-tab.active .ops-tab-count {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+
+/* Inner Assigned / In Progress switcher with distinct accents. */
+.ops-subtabs {
+  display: flex;
+  gap: 8px;
+  margin: 14px 0 4px;
+}
+
+.ops-subtab {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--slate);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
+}
+
+.ops-subtab.assigned.active {
+  border-color: var(--teal);
+  background: rgba(21, 135, 195, 0.1);
+  color: var(--teal-dark);
+}
+
+.ops-subtab.in-progress.active {
+  border-color: var(--success);
+  background: rgba(31, 157, 85, 0.1);
+  color: #14603a;
+}
+
+.ops-subtab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid var(--line);
+  color: inherit;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+/* Search box on the panel heading, matched to the other inputs. */
+.ops-panel-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  width: 300px;
+}
+
+.ops-panel-controls .animal-search-input {
+  width: 100%;
+  min-width: 0;
+}
+
+/* Case list & rows. */
+.ops-case-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.ops-case {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.ops-case.expanded {
+  border-color: var(--teal);
+  box-shadow: 0 12px 26px rgba(15, 25, 34, 0.07);
+}
+
+/* Distinct stage accents so Assigned vs In Progress never look alike. */
+.ops-case--assigned {
+  border-left: 4px solid var(--teal);
+}
+
+.ops-case--in-progress {
+  border-left: 4px solid var(--success);
+}
+
+/* Shared 4-column grid: header labels and rows use the same template, so the
+   Urgency and View Details columns stay aligned and the action column stays
+   pinned and right-aligned on every row. Urgency and View Details use fixed
+   pixel widths so every badge (and every link) lands on the same x-position,
+   regardless of badge label or location length. The first two columns are
+   flexible with explicit mins, so content never skews the fixed columns. */
+.ops-case-grid {
+  display: grid;
+  /* Wider Case track so the reference AND a "Needs reassignment" tag sit
+     fully inside their own column - a nowrap badge had been spilling over
+     into "Location & reporter". The tag wraps rather than overlapping. */
+  grid-template-columns: minmax(170px, 1fr) minmax(230px, 1.8fr) 100px 124px;
+  gap: 20px;
+  align-items: center;
+}
+
+.ops-case-columns {
+  padding: 0 20px 10px;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--slate);
+}
+
+.ops-case-columns-board,
+.ops-case-columns-active {
+  padding: 12px 20px;
+  border: 1px solid rgba(21, 135, 195, 0.18);
+  border-radius: 12px;
+  background: rgba(21, 135, 195, 0.1);
+}
+
+.ops-case-columns-board span,
+.ops-case-columns-active span {
+  color: var(--teal-dark);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+}
+
+.ops-case-columns span:last-child {
+  text-align: right;
+}
+
+.ops-case-row {
+  width: 100%;
+  padding: 16px 20px;
+  border: none;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 12px;
+}
+
+.ops-case-row:hover {
+  background: rgba(21, 135, 195, 0.045);
+}
+
+.ops-case.expanded .ops-case-row {
+  background: rgba(21, 135, 195, 0.035);
+}
+
+/* Released / handed-over alerts waiting for a new dispatcher are tinted so
+   they stand out on the Mission Board as "needs somebody, now" rather than
+   looking like a brand-new alert. */
+.ops-case--reassign .ops-case-row {
+  border: 1px solid rgba(109, 76, 201, 0.25);
+  background: rgba(109, 76, 201, 0.05);
+}
+
+.ops-case--reassign.expanded .ops-case-row {
+  background: rgba(109, 76, 201, 0.08);
+}
+
+.ops-case--reassign .ops-case-row:hover {
+  background: rgba(109, 76, 201, 0.09);
+}
+
+.ops-case-reassign-tag {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.25;
+  text-align: left;
+  overflow-wrap: anywhere;
+  background: rgba(109, 76, 201, 0.12);
+  color: #4c3a94;
+  border: 1px solid rgba(109, 76, 201, 0.35);
+}
+
+.ops-case-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.ops-case-cell:nth-child(3) {
+  gap: 6px;
+  align-items: stretch;
+}
+
+.ops-case-ref {
+  font-size: 1.02rem;
+  letter-spacing: -0.01em;
+  color: var(--navy);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ops-case-loc {
+  font-size: 0.8rem;
+  color: var(--slate);
+}
+
+.ops-case-reporter {
+  font-size: 0.74rem;
+  color: var(--slate);
+}
+
+/* Fixed-width track + full-width badge = every urgency level ("Critical",
+   "High", "Moderate", "Low") sits in the same column, starts at the same
+   x-position, and has its text centered. Per-level colors stay as-is. */
+.ops-urgency-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  min-width: 0;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  white-space: nowrap;
+  line-height: 1;
+  border: 1px solid var(--line);
+  color: var(--slate);
+  background: #fff;
+}
+
+.ops-urgency-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--slate);
+  flex-shrink: 0;
+}
+
+.ops-urgency-badge.critical {
+  border-color: var(--red);
+  color: var(--red);
+}
+
+.ops-urgency-badge.critical .ops-urgency-dot {
+  background: var(--red);
+}
+
+.ops-urgency-badge.high {
+  border-color: #ff9500;
+  color: #b06d00;
+}
+
+.ops-urgency-badge.high .ops-urgency-dot {
+  background: #ff9500;
+}
+
+.ops-urgency-badge.moderate {
+  border-color: #e5a500;
+  color: #8a6100;
+}
+
+.ops-urgency-badge.moderate .ops-urgency-dot {
+  background: #e5a500;
+}
+
+.ops-urgency-badge.low {
+  border-color: var(--green);
+  color: var(--teal-dark);
+}
+
+.ops-urgency-badge.low .ops-urgency-dot {
+  background: var(--green);
+}
+
+.ops-view-details {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  justify-self: end;
+  align-self: center;
+  color: var(--teal);
+  font-weight: 800;
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+.ops-chevron {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(21, 135, 195, 0.12);
+  color: var(--teal-dark);
+  font-size: 1.05rem;
+  line-height: 1;
+  transition: transform 0.2s ease;
+}
+
+.ops-case.expanded .ops-chevron {
+  transform: rotate(90deg);
+}
+
+/* Empty states, one per tab / active sub-tab. */
+.ops-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin-top: 14px;
+  padding: 34px 20px;
+  border: 1px dashed var(--line);
+  border-radius: 14px;
+  background: var(--bg);
+  text-align: center;
+}
+
+.ops-empty-mark {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  margin-bottom: 6px;
+  border-radius: 50%;
+  background: rgba(21, 135, 195, 0.1);
+}
+
+.ops-empty-mark::before,
+.ops-empty-mark::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+}
+
+.ops-empty-mark::before {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--teal);
+}
+
+.ops-empty-mark::after {
+  width: 6px;
+  height: 6px;
+  background: var(--teal);
+}
+
+.ops-empty-title {
+  margin: 0;
+  font-weight: 800;
+  color: var(--navy);
+}
+
+.ops-empty-hint {
+  margin: 0;
+  max-width: 460px;
+  color: var(--slate);
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+/* Two-column main list + overview rail; the rail stacks under the list once
+   the main panel would otherwise get too narrow. */
+@media (max-width: 1180px) {
+  .rescue-content-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .rescue-workspace {
+    padding: 0 20px 36px;
+  }
+
+  .rescue-page-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+  }
+
+  .rescue-workspace-actions {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .ops-panel-controls {
+    width: 100%;
+  }
+
+  .ops-case-columns {
+    display: none;
+  }
+
+  .ops-case-row {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .ops-case-cell:nth-child(3) {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .ops-view-details {
+    align-self: flex-end;
+  }
+}
+
+/* Dedicated detail page for an Active / History mission (dispatcher module).
+   The page is owned by RescueOperationsPortal so the dispatcher navbar and
+   the list's search term survive the round trip. */
+.rescue-detail-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding-top: 34px;
+}
+
+.rescue-detail-page-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 18px;
+}
+
+.rescue-detail-page-head-text .eyebrow {
+  margin: 0 0 6px;
+}
+
+.rescue-detail-page-head h1 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 1.6rem;
+  letter-spacing: -0.03em;
+  color: var(--navy);
+}
+
+.rescue-detail-page-head .rescue-status-badge {
+  font-size: 0.72rem;
+}
+
+.rescue-detail-back {
+  white-space: nowrap;
+}
+
+/* Hero area for the page: ties the back link and status badge down on narrow
+   screens instead of letting the heading float alone above a full-width
+   action button. */
+@media (max-width: 620px) {
+  .rescue-detail-page {
+    padding-top: 24px;
+  }
+
+  .rescue-detail-page-head {
+    align-items: flex-start;
+  }
+
+  .rescue-detail-page-head h1 {
+    font-size: 1.3rem;
+  }
+}
+
+/* Board mission details modal */
+.board-mission-modal {
+  width: min(1080px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 30px;
+}
+
+.board-mission-modal .modal-header {
+  margin-bottom: 0;
+}
+
+.board-mission-header {
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.board-mission-heading {
+  min-width: 0;
+}
+
+.board-mission-heading .eyebrow {
+  margin-bottom: 7px;
+}
+
+.board-mission-heading h2 {
+  margin-bottom: 12px;
+}
+
+.board-mission-header-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.board-mission-header-badges > * {
+  flex-shrink: 0;
+}
+
+.board-mission-header-badges .rescue-status-badge,
+.board-mission-header-badges .ops-urgency-badge {
+  width: auto;
+}
+
+.board-mission-header-badges .ops-urgency-badge {
+  padding: 7px 12px;
+}
+
+.board-mission-header .modal-close {
+  font-size: 1.45rem;
+  line-height: 1;
+}
+
+.board-mission-reassign-badge {
+  white-space: nowrap;
+}
+
+.board-mission-note {
+  margin: 0;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(109, 76, 201, 0.06);
+  border: 1px solid rgba(109, 76, 201, 0.25);
+  color: var(--navy);
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+
+.board-mission-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(360px, 0.95fr);
+  gap: 20px;
+  align-items: stretch;
+}
+
+.board-mission-details-card,
+.board-mission-location-card {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 24px;
+}
+
+.board-mission-details-card {
+  background: var(--white);
+  box-shadow: var(--shadow);
+}
+
+.board-mission-location-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+
+.board-mission-section-heading {
+  margin-bottom: 22px;
+}
+
+.board-mission-section-heading .eyebrow {
+  margin-bottom: 6px;
+  font-size: 0.68rem;
+}
+
+.board-mission-section-heading h3 {
+  margin: 0;
+  font-size: 1.08rem;
+  letter-spacing: -0.02em;
+  color: var(--navy);
+}
+
+.board-mission-detail-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.board-mission-detail-group {
+  min-width: 0;
+}
+
+.board-mission-detail-group + .board-mission-detail-group {
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
+.board-mission-detail-group h4 {
+  margin: 0 0 12px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--teal-dark);
+}
+
+.board-mission-fields {
+  gap: 16px 20px;
+}
+
+.board-mission-contact-line {
+  display: block;
+}
+
+.board-mission-contact-line + .board-mission-contact-line {
+  margin-top: 4px;
+}
+
+.board-mission-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.board-mission-block.rescue-detail-photo-block {
+  margin-top: 24px;
+}
+
+.board-mission-photos {
+  gap: 10px;
+}
+
+.board-mission-photos a {
+  flex: 0 0 auto;
+}
+
+.board-mission-photos img {
+  width: 112px;
+  height: 112px;
+}
+
+.board-mission-map-address {
+  margin: -8px 0 16px;
+  color: var(--navy);
+  font-size: 0.9rem;
+  font-weight: 800;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.board-mission-map {
+  position: relative;
+}
+
+.board-mission-map .rescue-map {
+  height: 270px;
+}
+
+.board-mission-map-empty {
+  display: flex;
+  min-height: 160px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--white);
+  color: var(--slate);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.board-mission-map-empty strong {
+  color: var(--navy);
+}
+
+.board-mission-map-tools {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.board-mission-direction {
+  white-space: nowrap;
+}
+
+.board-mission-action-area {
+  margin-top: auto;
+  padding-top: 28px;
+}
+
+.board-mission-action-area .dispatch-form {
+  width: 100%;
+  gap: 12px;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.board-mission-action-area .dispatch-save {
+  width: 100%;
+  align-self: stretch;
+  padding: 14px 20px;
+}
+
+.board-mission-readonly {
+  margin: 0;
+  color: var(--slate);
+  font-size: 0.8rem;
+  line-height: 1.55;
+}
+
+@media (max-width: 900px) {
+  .board-mission-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 620px) {
+  .board-mission-modal {
+    gap: 16px;
+    padding: 22px 18px;
+  }
+
+  .board-mission-header {
+    gap: 12px;
+  }
+
+  .board-mission-heading h2 {
+    font-size: 1.35rem;
+  }
+
+  .board-mission-columns {
+    gap: 16px;
+  }
+
+  .board-mission-details-card,
+  .board-mission-location-card {
+    padding: 18px;
+    border-radius: 16px;
+  }
+
+  .board-mission-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .board-mission-map .rescue-map {
+    height: 230px;
+  }
+
+  .board-mission-map-tools {
+    justify-content: stretch;
+  }
+
+  .board-mission-direction {
+    width: 100%;
+    text-align: center;
+  }
+
+  .board-mission-action-area {
+    padding-top: 22px;
+  }
+}
+
+@media (max-width: 420px) {
+  .board-mission-modal {
+    padding: 18px 14px;
+  }
+
+  .board-mission-header-badges .rescue-status-badge,
+  .board-mission-header-badges .ops-urgency-badge {
+    padding: 6px 9px;
+    font-size: 0.68rem;
+  }
+
+  .board-mission-photos img {
+    width: 92px;
+    height: 92px;
+  }
+}
+
+/* "Show N more updates" under a long mission log on the detail page. */
+.rescue-show-more {
+  margin-top: 14px;
+}
+
+.vet-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 0 auto 24px;
+  max-width: 1180px;
+  padding: 0 24px;
+  overflow-x: auto;
+}
+.vet-tabs button {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--white);
+  color: var(--slate);
+  cursor: pointer;
+  padding: 9px 16px;
+  white-space: nowrap;
+}
+.vet-tabs button.active,
+.vet-tabs button:hover {
+  background: var(--teal);
+  border-color: var(--teal);
+  color: var(--white);
+}
+.vet-list-row {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  padding: 15px 0;
+  text-align: left;
+  width: 100%;
+}
+.vet-list-row > span:first-child {
+  display: grid;
+  gap: 3px;
+}
+.vet-animal-thumb {
+  border-radius: 8px;
+  height: 44px;
+  object-fit: cover;
+  width: 44px;
+}
+.vet-list-row small,
+.record-entry small {
+  color: var(--slate);
+}
+.status-badge {
+  background: var(--bg);
+  border-radius: 999px;
+  color: var(--slate);
+  font-size: 0.78rem;
+  font-weight: 800;
+  padding: 5px 10px;
+  white-space: nowrap;
+}
+.status-badge.completed { background: #e4f5e9; color: var(--success); }
+.status-badge.required { background: #fff1d8; color: #9a6500; }
+.status-badge.scheduled,
+.status-badge.in_progress,
+.status-badge.in-treatment { background: #e4f3fb; color: var(--teal-dark); }
+.record-header,
+.record-grid,
+.appointment-booking {
+  margin: 0 auto;
+  max-width: 1180px;
+  padding: 24px;
+}
+.record-header h1 span { color: var(--teal-dark); font-size: 0.55em; }
+.record-grid { display: grid; gap: 18px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.record-entry { border-bottom: 1px solid var(--line); display: grid; gap: 5px; padding: 12px 0; }
+.record-entry .mini-button { justify-self: start; }
+.care-options { display: grid; gap: 10px; margin: 16px 0; }
+.care-options label { align-items: center; display: flex; gap: 8px; }
+.muted-copy { color: var(--slate); }
+@media (max-width: 720px) {
+  .record-grid { grid-template-columns: 1fr; }
+  .vet-list-row { align-items: flex-start; flex-wrap: wrap; }
+}
+/* Veterinary workspace: compact, information-dense treatment of the shared
+   dashboard primitives. These rules are scoped so the public and staff pages
+   keep their existing visual rhythm. */
+.veterinary-page {
+  background: linear-gradient(180deg, #eef6fa 0, var(--bg) 250px);
+  padding-top: 18px;
+}
+.veterinary-page-header {
+  align-items: end;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  margin: 0 auto 16px;
+  max-width: 1200px;
+  padding: 16px 2px 20px;
+  position: relative;
+}
+.veterinary-page-header::after {
+  background: var(--teal);
+  border-radius: 4px;
+  bottom: -2px;
+  content: "";
+  height: 4px;
+  left: 0;
+  position: absolute;
+  width: 54px;
+}
+.veterinary-page-header h1 {
+  font-size: clamp(1.7rem, 3vw, 2.1rem);
+  letter-spacing: -0.025em;
+  margin: 0;
+}
+.veterinary-page-header p:last-child {
+  color: var(--slate);
+  margin: 6px 0 0;
+}
+.veterinary-page .vet-tabs {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  gap: 0;
+  margin-bottom: 18px;
+  padding: 4px;
+}
+.veterinary-page .vet-tabs button {
+  border: 0;
+  border-radius: 7px;
+  font-size: 0.84rem;
+  font-weight: 800;
+  padding: 9px 15px;
+}
+.veterinary-page .vet-tabs button.active,
+.veterinary-page .vet-tabs button:hover {
+  background: var(--teal);
+  color: var(--white);
+}
+.veterinary-page .dashboard-metrics {
+  gap: 12px;
+  margin-top: 0;
+}
+.veterinary-page .dashboard-metrics article {
+  min-height: 104px;
+  padding: 15px 17px;
+  position: relative;
+  overflow: hidden;
+}
+.veterinary-page .dashboard-metrics article::before {
+  background: var(--teal);
+  content: "";
+  height: 4px;
+  left: 0;
+  position: absolute;
+  right: 0;
+  top: 0;
+}
+.veterinary-page .dashboard-metrics article:nth-child(2)::before { background: #e5a500; }
+.veterinary-page .dashboard-metrics article:nth-child(3)::before { background: #7a6fc4; }
+.veterinary-page .dashboard-metrics article:nth-child(4)::before { background: var(--success); }
+.veterinary-page .dashboard-metrics strong {
+  color: var(--teal-dark);
+  font-size: 1.85rem;
+}
+.veterinary-queue-panel {
+  margin: 18px auto 0;
+  max-width: 1200px;
+  padding: 20px 22px;
+  box-shadow: 0 10px 26px rgba(15, 25, 34, 0.045);
+}
+.queue-subtitle {
+  color: var(--slate);
+  font-size: 0.78rem;
+  margin: 4px 0 0;
+}
+.queue-count {
+  background: #eaf5fb;
+  border-radius: 999px;
+  color: var(--teal-dark);
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 6px 10px;
+}
+.vet-queue-head {
+  color: var(--slate);
+  display: grid;
+  font-size: 0.65rem;
+  font-weight: 800;
+  grid-template-columns: minmax(220px, 1.4fr) minmax(130px, 0.7fr) minmax(130px, 0.7fr) auto;
+  letter-spacing: 0.06em;
+  padding: 0 2px 7px;
+  text-transform: uppercase;
+}
+.vet-queue-head span:nth-child(n + 2) {
+  padding-left: 10px;
+}
+.veterinary-page .panel-heading {
+  margin-bottom: 12px;
+}
+.veterinary-page .dashboard-panel h2,
+.veterinary-page .veterinary-side-card h2 {
+  font-size: 1.08rem;
+}
+.veterinary-page .vet-list-row {
+  align-items: center;
+  border-bottom: 1px solid #edf1f4;
+  display: grid;
+  grid-template-columns: minmax(220px, 1.4fr) minmax(130px, 0.7fr) minmax(130px, 0.7fr) auto;
+  min-height: 66px;
+  padding: 10px 2px;
+}
+.veterinary-page .vet-list-row:hover {
+  background: #f8fbfd;
+}
+.veterinary-page .vet-list-row > span:first-child {
+  align-items: center;
+  display: grid;
+  gap: 2px 10px;
+  grid-template-columns: 42px minmax(0, 1fr);
+}
+.veterinary-page .vet-list-row > span:first-child strong,
+.veterinary-page .vet-list-row > span:first-child small {
+  grid-column: 2;
+}
+.veterinary-page .vet-list-row .vet-animal-thumb {
+  grid-row: 1 / span 2;
+  height: 38px;
+  width: 38px;
+}
+.veterinary-page .status-badge {
+  font-size: 0.7rem;
+  padding: 4px 8px;
+}
+.veterinary-page .status-badge.needs_initial_examination,
+.veterinary-page .status-badge.treatment_required {
+  background: #fff3d8;
+  color: #8a5d00;
+}
+.veterinary-page .status-badge.under_assessment,
+.veterinary-page .status-badge.treatment_ongoing {
+  background: #e5f3fb;
+  color: var(--teal-dark);
+}
+.veterinary-page .status-badge.awaiting_medical_clearance {
+  background: #fff3d8;
+  color: #8a5d00;
+}
+.veterinary-page .status-badge.medically_cleared {
+  background: #e5f5e9;
+  color: #19733d;
+}
+.vet-queue-care {
+  display: grid;
+  gap: 2px;
+}
+.vet-queue-care strong {
+  color: var(--navy);
+  font-size: 0.76rem;
+}
+.vet-queue-care small {
+  color: var(--slate);
+  font-size: 0.7rem;
+}
+.veterinary-record-header {
+  align-items: center;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  display: grid;
+  gap: 3px 16px;
+  grid-template-columns: 1fr 148px;
+  margin: 0 auto 18px;
+  max-width: 1200px;
+  padding: 16px 20px;
+}
+.vet-progress-panel {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  margin: 0 auto 16px;
+  max-width: 1200px;
+  padding: 16px 20px 13px;
+}
+.vet-progress-heading {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.vet-progress-heading h2 {
+  font-size: 1.05rem;
+  margin: 0;
+}
+.vet-progress-heading .eyebrow {
+  margin-bottom: 4px;
+}
+.vet-progress-tracker {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  padding: 16px 0 3px;
+}
+.vet-progress-stage {
+  color: var(--slate);
+  min-width: 0;
+  position: relative;
+  text-align: center;
+}
+.vet-progress-stage:not(:last-child)::after {
+  background: var(--line);
+  content: "";
+  height: 2px;
+  left: calc(50% + 11px);
+  position: absolute;
+  right: calc(-50% + 11px);
+  top: 11px;
+  z-index: 0;
+}
+.vet-progress-stage.passed:not(:last-child)::after {
+  background: var(--teal);
+}
+.vet-progress-dot {
+  align-items: center;
+  background: var(--white);
+  border: 2px solid var(--line);
+  border-radius: 50%;
+  display: inline-flex;
+  font-size: 0.65rem;
+  font-weight: 800;
+  height: 24px;
+  justify-content: center;
+  position: relative;
+  width: 24px;
+  z-index: 1;
+}
+.vet-progress-stage.passed .vet-progress-dot,
+.vet-progress-stage.current .vet-progress-dot {
+  border-color: var(--teal);
+  color: var(--white);
+}
+.vet-progress-stage.passed .vet-progress-dot {
+  background: var(--teal);
+}
+.vet-progress-stage.current .vet-progress-dot {
+  background: var(--teal-dark);
+  box-shadow: 0 0 0 4px rgba(21, 135, 195, 0.12);
+}
+.vet-progress-stage.current,
+.vet-progress-stage.passed {
+  color: var(--teal-dark);
+}
+.vet-progress-label {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 800;
+  margin: 7px auto 0;
+  max-width: 100px;
+}
+.veterinary-record-header > :not(.medical-animal-photo) {
+  grid-column: 1;
+}
+.veterinary-record-header .ghost-button {
+  justify-self: start;
+  margin-bottom: 4px;
+}
+.veterinary-record-header h1 {
+  font-size: 1.65rem;
+  margin: 0;
+}
+.veterinary-record-header h1 span {
+  color: var(--teal-dark);
+  font-size: 0.58em;
+  font-weight: 700;
+}
+.veterinary-record-header p:last-of-type {
+  color: var(--slate);
+  font-size: 0.84rem;
+  margin: 3px 0 0;
+}
+.medical-animal-photo {
+  border-radius: 10px;
+  grid-column: 2;
+  grid-row: 1 / span 4;
+  height: 116px;
+  object-fit: cover;
+  width: 116px;
+}
+.record-layout {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  margin: 0 auto;
+  max-width: 1200px;
+}
+.veterinary-status-card,
+.veterinary-side-card,
+.veterinary-timeline-card {
+  grid-column: 2;
+}
+.veterinary-main-card,
+.veterinary-timeline-card {
+  grid-column: 1;
+}
+.record-layout .dashboard-panel,
+.veterinary-timeline-card .dashboard-panel {
+  border-radius: 12px;
+  padding: 18px 20px;
+}
+.record-layout .record-entry {
+  gap: 3px;
+  padding: 10px 0;
+}
+.record-layout .record-entry strong {
+  font-size: 0.84rem;
+}
+.record-layout .record-entry span,
+.record-layout .record-entry small {
+  font-size: 0.82rem;
+}
+.compact-action {
+  border-radius: 7px;
+  font-size: 0.78rem;
+  padding: 7px 10px;
+}
+.vet-inline-warning {
+  background: #fff8e8;
+  border-left: 3px solid #e5a500;
+  color: #755300;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  margin: 14px 0 0;
+  padding: 8px 10px;
+}
+.vet-empty-state {
+  align-items: flex-start;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 14px;
+}
+.vet-empty-state p {
+  color: var(--slate);
+  font-size: 0.82rem;
+  margin: 2px 0 0;
+}
+.veterinary-page .animal-form {
+  background: #f8fafb;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 14px;
+  padding: 15px;
+}
+.veterinary-page .animal-form h3,
+.veterinary-page .animal-form label:nth-of-type(n + 4),
+.veterinary-page .animal-form button {
+  grid-column: 1 / -1;
+}
+.veterinary-page .animal-form h3 {
+  font-size: 0.98rem;
+  margin: 0;
+}
+.veterinary-page .animal-form label {
+  color: var(--navy);
+  display: flex;
+  flex-direction: column;
+  font-size: 0.76rem;
+  font-weight: 800;
+  gap: 5px;
+}
+.veterinary-page .animal-form input,
+.veterinary-page .animal-form textarea,
+.veterinary-page .animal-form select {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--navy);
+  font-size: 0.84rem;
+  min-height: 36px;
+  padding: 8px 10px;
+}
+.veterinary-page .animal-form textarea {
+  min-height: 64px;
+  resize: vertical;
+}
+.veterinary-page .animal-form input:focus,
+.veterinary-page .animal-form textarea:focus,
+.veterinary-page .animal-form select:focus {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px rgba(21, 135, 195, 0.11);
+  outline: 0;
+}
+.veterinary-page .care-options {
+  background: #f8fafb;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+}
+.veterinary-page .care-options label {
+  font-size: 0.82rem;
+}
+.veterinary-page .care-options .teal-button {
+  border-radius: 7px;
+  font-size: 0.8rem;
+  padding: 9px 12px;
+}
+/* Independent stacks prevent a long clinical form from stretching short
+   sidebar cards, matching the Rescue detail page's natural card rhythm. */
+.veterinary-record-page .record-layout {
+  align-items: start;
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(260px, 0.75fr);
+}
+.veterinary-main-column,
+.veterinary-sidebar {
+  align-items: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+.veterinary-record-page .veterinary-main-column > *,
+.veterinary-record-page .veterinary-sidebar > * {
+  grid-column: auto;
+  height: auto;
+  margin: 0;
+}
+.veterinary-record-page .veterinary-main-card,
+.veterinary-record-page .vet-sidebar-card,
+.veterinary-record-page .veterinary-timeline-card .dashboard-panel {
+  padding: 16px 18px;
+}
+.veterinary-record-page .vet-sidebar-card h2 {
+  font-size: 1rem;
+}
+.vet-status-large {
+  margin: 10px 0 12px;
+}
+.compact-primary {
+  border-radius: 7px;
+  font-size: 0.8rem;
+  padding: 9px 12px;
+}
+.vet-summary-list,
+.vet-snapshot-grid {
+  display: grid;
+  gap: 9px;
+  margin: 0;
+}
+.vet-summary-list div,
+.vet-snapshot-grid div {
+  align-items: baseline;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+.vet-summary-list dt,
+.vet-snapshot-grid dt {
+  color: var(--slate);
+  font-size: 0.72rem;
+}
+.vet-summary-list dd,
+.vet-snapshot-grid dd {
+  font-size: 0.78rem;
+  font-weight: 800;
+  margin: 0;
+  text-align: right;
+}
+.vet-progress-stat {
+  align-items: baseline;
+  display: flex;
+  gap: 7px;
+  margin: 10px 0 7px;
+}
+.vet-progress-stat strong {
+  color: var(--teal-dark);
+  font-size: 1.2rem;
+}
+.vet-progress-stat span {
+  color: var(--slate);
+  font-size: 0.72rem;
+}
+.vet-progress-bar {
+  background: #e8eef2;
+  border-radius: 999px;
+  height: 7px;
+  margin-bottom: 13px;
+  overflow: hidden;
+}
+.vet-progress-bar span {
+  background: var(--teal);
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+  transition: width 0.2s ease;
+}
+.vet-task-row {
+  align-items: center;
+  border-bottom: 1px solid #edf1f4;
+  display: flex;
+  font-size: 0.8rem;
+  gap: 8px;
+  justify-content: space-between;
+  padding: 8px 0;
+}
+.vet-task-row:last-of-type {
+  border-bottom: 0;
+}
+.vet-next-appointment {
+  display: grid;
+  gap: 3px;
+  margin: 10px 0 3px;
+}
+.vet-next-appointment strong {
+  color: var(--teal-dark);
+  font-size: 1.05rem;
+}
+.vet-next-appointment span,
+.vet-next-appointment small {
+  color: var(--slate);
+  font-size: 0.78rem;
+}
+.vet-quick-actions {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+.vet-quick-actions button {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--teal-dark);
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 800;
+  padding: 8px 10px;
+  text-align: left;
+}
+.vet-quick-actions button:hover {
+  background: #eaf5fb;
+  border-color: var(--teal);
+}
+.care-plan-row {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+.treatment-row {
+  display: grid;
+  gap: 3px;
+  grid-template-columns: 80px minmax(0, 1fr);
+}
+.treatment-row small {
+  grid-column: 2;
+}
+.veterinary-record-page .veterinary-timeline-card {
+  display: block;
+}
+.veterinary-record-page .veterinary-timeline-card .dashboard-panel {
+  border-radius: 12px;
+}
+@media (max-width: 760px) {
+  .veterinary-page-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .record-layout {
+    grid-template-columns: 1fr;
+  }
+  .veterinary-main-column,
+  .veterinary-sidebar {
+    grid-column: 1;
+  }
+  .veterinary-status-card,
+  .veterinary-side-card,
+  .veterinary-timeline-card,
+  .veterinary-main-card {
+    grid-column: 1;
+  }
+  .veterinary-record-header {
+    grid-template-columns: 1fr 92px;
+  }
+  .medical-animal-photo {
+    height: 82px;
+    width: 82px;
+  }
+  .vet-progress-tracker {
+    gap: 8px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    row-gap: 12px;
+  }
+  .vet-progress-stage:nth-child(4)::after,
+  .vet-progress-stage:last-child::after {
+    display: none;
+  }
+}
+@media (max-width: 520px) {
+  .veterinary-page .vet-list-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 7px;
+  }
+  .vet-queue-head {
+    display: none;
+  }
+  .veterinary-page .vet-list-row .status-badge {
+    justify-self: start;
+  }
+  .veterinary-page .animal-form {
+    grid-template-columns: 1fr;
+  }
+  .vet-progress-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .vet-progress-tracker {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .vet-progress-stage::after {
+    display: none;
+  }
+  .veterinary-page .animal-form label,
+  .veterinary-page .animal-form label:nth-of-type(n + 4),
+  .veterinary-page .animal-form button {
+    grid-column: 1;
+  }
+  .care-plan-row {
+    align-items: start;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .care-plan-row .mini-button {
+    grid-column: 1 / -1;
+  }
+}
+/* Simplified veterinary workflow: the page is intentionally built around
+   checkup -> treatment -> clearance, with appointments as the second queue. */
+.veterinary-simple-page,
+.veterinary-record-simple {
+  background: var(--bg);
+}
+.veterinary-simple-header {
+  align-items: end;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  margin: 0 auto 18px;
+  max-width: 1120px;
+  padding: 20px 0 16px;
+}
+.veterinary-simple-header h1,
+.veterinary-record-top h1 {
+  font-size: clamp(1.7rem, 3vw, 2.2rem);
+  letter-spacing: -0.03em;
+  margin: 0;
+}
+.veterinary-simple-header p:last-child {
+  color: var(--slate);
+  margin: 6px 0 0;
+}
+.veterinary-simple-stats {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0 auto 18px;
+  max-width: 1120px;
+}
+.veterinary-simple-stats article {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  display: grid;
+  gap: 5px;
+  padding: 15px 17px;
+}
+.veterinary-simple-stats span,
+.veterinary-simple-stats small {
+  color: var(--slate);
+  font-size: 0.76rem;
+}
+.veterinary-simple-stats strong {
+  color: var(--teal-dark);
+  font-size: 1.8rem;
+  line-height: 1;
+}
+.veterinary-simple-section {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 8px 22px rgba(15, 25, 34, 0.035);
+  margin: 0 auto 16px;
+  max-width: 1120px;
+  padding: 20px 22px;
+}
+.veterinary-clearance-board {
+  background: linear-gradient(135deg, #ffffff 0%, #f8fbfd 100%);
+}
+.veterinary-stage-cards {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0 0 16px;
+}
+.veterinary-stage-card {
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-height: 82px;
+  padding: 13px 14px;
+  position: relative;
+  overflow: hidden;
+}
+.veterinary-stage-card::before {
+  background: var(--teal);
+  bottom: 0;
+  content: "";
+  left: 0;
+  position: absolute;
+  top: 0;
+  width: 4px;
+}
+.veterinary-stage-card.assess { background: #fffaf0; }
+.veterinary-stage-card.assess::before { background: #e5a500; }
+.veterinary-stage-card.treat { background: #f2f9fc; }
+.veterinary-stage-card.treat::before { background: var(--teal); }
+.veterinary-stage-card.clear { background: #f2fbf5; }
+.veterinary-stage-card.clear::before { background: var(--success); }
+.stage-card-number {
+  color: var(--slate);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+}
+.veterinary-stage-card div {
+  display: grid;
+  gap: 3px;
+}
+.veterinary-stage-card strong { font-size: 0.82rem; }
+.veterinary-stage-card small { color: var(--slate); font-size: 0.7rem; line-height: 1.35; }
+.veterinary-stage-card b { color: var(--navy); font-size: 1.45rem; }
+.veterinary-section-heading {
+  margin-bottom: 13px;
+}
+.veterinary-section-heading h2 {
+  font-size: 1.15rem;
+  margin: 0;
+}
+.veterinary-section-heading p:last-child {
+  color: var(--slate);
+  font-size: 0.8rem;
+  margin: 4px 0 0;
+}
+.veterinary-animal-list,
+.veterinary-appointment-list {
+  display: grid;
+  gap: 0;
+}
+.veterinary-animal-row {
+  align-items: center;
+  border-top: 1px solid #edf1f4;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(260px, 1.5fr) minmax(150px, 0.8fr) auto;
+  padding: 12px 0;
+}
+.veterinary-animal-identity {
+  align-items: center;
+  display: flex;
+  gap: 11px;
+  min-width: 0;
+}
+.veterinary-animal-identity img,
+.veterinary-photo-placeholder {
+  align-items: center;
+  background: #eaf3f7;
+  border-radius: 9px;
+  color: var(--teal-dark);
+  display: inline-flex;
+  flex: 0 0 46px;
+  font-weight: 800;
+  height: 46px;
+  justify-content: center;
+  object-fit: cover;
+  width: 46px;
+}
+.veterinary-animal-identity div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.veterinary-animal-identity strong {
+  font-size: 0.9rem;
+}
+.veterinary-animal-identity small,
+.veterinary-animal-identity span {
+  color: var(--slate);
+  font-size: 0.74rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.veterinary-animal-row .mini-button,
+.veterinary-appointment-row .mini-button {
+  white-space: nowrap;
+}
+.veterinary-simple-empty {
+  border-top: 1px solid #edf1f4;
+  padding: 15px 0 2px;
+}
+.veterinary-simple-empty p,
+.veterinary-empty-copy {
+  color: var(--slate);
+  font-size: 0.82rem;
+  margin: 0;
+}
+.veterinary-appointment-row {
+  align-items: center;
+  border-top: 1px solid #edf1f4;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: 120px minmax(220px, 1fr) auto auto;
+  padding: 12px 0;
+}
+.veterinary-appointment-row > div {
+  display: grid;
+  gap: 2px;
+}
+.veterinary-appointment-row > div:first-child strong {
+  color: var(--teal-dark);
+  font-size: 0.92rem;
+}
+.veterinary-appointment-row span,
+.veterinary-appointment-row small {
+  color: var(--slate);
+  font-size: 0.76rem;
+}
+.veterinary-record-simple {
+  padding-top: 14px;
+}
+.veterinary-record-top,
+.veterinary-record-layout {
+  margin-left: auto;
+  margin-right: auto;
+  max-width: 1120px;
+}
+.veterinary-record-head {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin: 0 auto 14px;
+  max-width: 1120px;
+}
+.veterinary-back-button {
+  align-items: center;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--navy);
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 800;
+  gap: 7px;
+  padding: 8px 14px;
+}
+.veterinary-back-button:hover { border-color: var(--teal); color: var(--teal-dark); }
+.veterinary-record-eyebrow {
+  color: var(--slate);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.veterinary-record-animal {
+  align-items: center;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: 0 4px 16px rgba(15, 25, 34, 0.05);
+  display: flex;
+  gap: 16px;
+  margin: 0 auto 14px;
+  max-width: 1120px;
+  padding: 16px 20px;
+}
+.veterinary-animal-photo {
+  border-radius: 14px;
+  box-shadow: 0 0 0 4px var(--white), 0 10px 24px rgba(15, 25, 34, 0.12);
+  flex: 0 0 auto;
+  height: 100px;
+  overflow: hidden;
+  width: 100px;
+}
+.veterinary-animal-photo img {
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+.veterinary-animal-photo span {
+  align-items: center;
+  background: var(--teal-tint);
+  color: var(--teal-dark);
+  display: flex;
+  font-size: 2.2rem;
+  font-weight: 800;
+  height: 100%;
+  justify-content: center;
+  width: 100%;
+}
+.veterinary-animal-identity {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.veterinary-animal-identity h1,
+.veterinary-animal-identity strong,
+.veterinary-animal-identity p {
+  margin: 0;
+}
+.veterinary-animal-identity h1 {
+  color: var(--navy);
+  font-size: 1.5rem;
+  line-height: 1.2;
+}
+.veterinary-public-id {
+  color: var(--slate);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+.veterinary-animal-meta {
+  color: var(--slate);
+  font-size: 0.82rem;
+}
+.veterinary-animal-titleline {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+}
+.veterinary-animal-titleline .eyebrow { margin: 0; }
+.veterinary-animal-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 8px;
+}
+.vet-chip {
+  align-items: center;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--slate);
+  display: inline-flex;
+  font-size: 0.72rem;
+  font-weight: 800;
+  gap: 6px;
+  padding: 5px 11px;
+}
+.vet-chip-teal {
+  background: var(--teal-tint);
+  border-color: rgba(21, 135, 195, 0.25);
+  color: var(--teal-dark);
+}
+.veterinary-record-layout {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 200px minmax(0, 1fr);
+}
+.veterinary-stage-tracker {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  padding: 14px 12px 18px;
+  position: sticky;
+  top: 14px;
+}
+.veterinary-stage {
+  align-items: flex-start;
+  appearance: none;
+  background: none;
+  border: 0;
+  color: var(--slate);
+  cursor: pointer;
+  display: flex;
+  flex: 1 1 auto;
+  font: inherit;
+  gap: 12px;
+  margin: 0;
+  min-width: 0;
+  padding: 14px 8px;
+  position: relative;
+  text-align: left;
+  width: 100%;
+}
+.veterinary-stage:first-child { padding-top: 0; }
+.veterinary-stage:last-child { padding-bottom: 0; }
+.veterinary-stage::after {
+  background: var(--line);
+  content: "";
+  height: 100%;
+  left: 21px;
+  position: absolute;
+  top: 30px;
+  width: 2px;
+}
+.veterinary-stage:last-child::after { display: none; }
+.veterinary-stage.passed:not(:last-child)::after { background: var(--teal); }
+.veterinary-stage-marker {
+  align-items: center;
+  background: var(--white);
+  border: 2px solid var(--line);
+  border-radius: 50%;
+  display: inline-flex;
+  flex: 0 0 30px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  height: 30px;
+  justify-content: center;
+  position: relative;
+  width: 30px;
+  z-index: 1;
+}
+.veterinary-stage-text {
+  align-content: start;
+  align-self: center;
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.veterinary-stage-text strong {
+  color: var(--navy);
+  font-size: 0.78rem;
+  line-height: 1.3;
+}
+.veterinary-stage-text small { font-size: 0.68rem; }
+.veterinary-stage-text em {
+  color: var(--slate-soft);
+  font-size: 0.66rem;
+  font-style: normal;
+  line-height: 1.35;
+  margin-top: 2px;
+}
+.veterinary-tracker-eyebrow {
+  color: var(--slate);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  margin: 0 0 2px;
+  padding: 0 8px 10px;
+  text-transform: uppercase;
+}
+.veterinary-stage.passed .veterinary-stage-marker,
+.veterinary-stage.current .veterinary-stage-marker {
+  background: var(--teal);
+  border-color: var(--teal);
+  color: var(--white);
+}
+.veterinary-stage.current .veterinary-stage-marker {
+  background: var(--teal-dark);
+  border-color: var(--teal-dark);
+  box-shadow: 0 0 0 4px rgba(21, 135, 195, 0.12);
+}
+.veterinary-stage.current {
+  background: rgba(21, 135, 195, 0.08);
+  border-radius: 9px;
+}
+.veterinary-stage.current .veterinary-stage-text strong { color: var(--teal-dark); }
+.veterinary-stage.locked { cursor: not-allowed; }
+.veterinary-stage.locked,
+.veterinary-stage.upcoming { color: #8aa0ad; }
+.veterinary-stage.locked .veterinary-stage-marker,
+.veterinary-stage.upcoming .veterinary-stage-marker {
+  background: #f2f5f7;
+  border-color: #d4dde3;
+  color: #8aa0ad;
+}
+.veterinary-stage.locked .veterinary-stage-text strong,
+.veterinary-stage.upcoming .veterinary-stage-text strong { color: #8aa0ad; }
+.veterinary-lock-hint {
+  align-items: center;
+  background: var(--teal-tint);
+  border: 1px solid rgba(21, 135, 195, 0.25);
+  border-radius: 9px;
+  color: var(--teal-dark);
+  display: flex;
+  font-size: 0.8rem;
+  gap: 7px;
+  line-height: 1.45;
+  margin: 0 0 14px;
+  padding: 9px 12px;
+}
+.veterinary-record-main,
+.veterinary-record-side {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.veterinary-simple-card {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px 18px;
+  position: relative;
+  overflow: hidden;
+}
+.veterinary-record-main > .veterinary-simple-card::before,
+.veterinary-record-side > .veterinary-simple-card::before {
+  background: var(--teal);
+  content: "";
+  height: 4px;
+  left: 0;
+  position: absolute;
+  right: 0;
+  top: 0;
+}
+.veterinary-stage-shell {
+  background: var(--white);
+}
+.veterinary-record-side > .veterinary-simple-card:first-child {
+  background: #f4fbf7;
+}
+.veterinary-record-side > .veterinary-simple-card:first-child::before {
+  background: var(--success);
+}
+.veterinary-card-heading {
+  align-items: start;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.veterinary-card-heading .veterinary-section-heading {
+  margin-bottom: 0;
+}
+.veterinary-checkup-summary,
+.veterinary-treatment-row,
+.veterinary-mini-appointment {
+  border-top: 1px solid #edf1f4;
+  display: grid;
+  gap: 5px;
+  padding: 12px 0;
+}
+.veterinary-checkup-summary strong { font-size: 0.86rem; }
+.veterinary-checkup-summary p { color: var(--slate); font-size: 0.8rem; margin: 0; }
+.veterinary-treatment-row {
+  align-items: center;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+.veterinary-treatment-row div { display: grid; gap: 3px; }
+.veterinary-treatment-row small,
+.veterinary-mini-appointment small { color: var(--slate); font-size: 0.74rem; }
+.treatment-check { color: var(--success); font-weight: 800; }
+.veterinary-clearance-bar {
+  background: #e8eef2;
+  border-radius: 999px;
+  height: 8px;
+  margin: 16px 0;
+  overflow: hidden;
+}
+.veterinary-clearance-bar span { background: var(--teal); border-radius: inherit; display: block; height: 100%; }
+.veterinary-clearance-warning { background: var(--amber-tint); border-left: 3px solid var(--amber); color: #765400; font-size: 0.8rem; line-height: 1.45; padding: 9px 11px; }
+.veterinary-clearance-ready { color: var(--success); font-size: 0.82rem; font-weight: 800; }
+.veterinary-clearance-review {
+  border-top: 1px solid #edf1f4;
+  display: grid;
+  gap: 6px;
+  margin-top: 14px;
+  padding-top: 12px;
+}
+.veterinary-clearance-review h4 {
+  color: var(--navy);
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  margin: 0;
+  text-transform: uppercase;
+}
+.veterinary-clearance-list {
+  display: grid;
+  gap: 8px;
+}
+.veterinary-clearance-list-row {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr);
+}
+.veterinary-clearance-list-row div { display: grid; gap: 2px; }
+.veterinary-clearance-list-row strong { font-size: 0.82rem; }
+.veterinary-clearance-list-row small { color: var(--slate); font-size: 0.72rem; }
+.veterinary-checkup-form,
+.veterinary-treatment-selector,
+.veterinary-inline-form {
+  background: #f8fafb;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  display: grid;
+  gap: 11px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 14px;
+  padding: 15px;
+}
+.veterinary-checkup-form h3,
+.veterinary-checkup-form fieldset,
+.veterinary-checkup-form .full,
+.veterinary-form-actions,
+.veterinary-treatment-selector button,
+.veterinary-inline-form button { grid-column: 1 / -1; }
+.veterinary-checkup-form label,
+.veterinary-inline-form label {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.76rem;
+  font-weight: 800;
+  gap: 5px;
+}
+.veterinary-checkup-form input,
+.veterinary-checkup-form textarea,
+.veterinary-inline-form input,
+.veterinary-inline-form textarea {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  font-size: 0.84rem;
+  padding: 8px 10px;
+}
+.veterinary-checkup-form textarea,
+.veterinary-inline-form textarea { min-height: 60px; resize: vertical; }
+.veterinary-checkup-form fieldset { border: 1px solid var(--line); border-radius: 7px; display: grid; gap: 7px; grid-template-columns: repeat(2, 1fr); padding: 10px; }
+.veterinary-checkup-form fieldset legend { color: var(--slate); font-size: 0.72rem; font-weight: 800; padding: 0 4px; }
+.veterinary-checkup-form fieldset label { flex-direction: row; font-size: 0.78rem; font-weight: 400; }
+.veterinary-form-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.veterinary-stage-nav {
+  border-top: 1px solid #edf1f4;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  margin-top: 16px;
+  padding-top: 14px;
+}
+.veterinary-stage-heading {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+.veterinary-stage-chip {
+  background: var(--teal-tint);
+  border: 1px solid rgba(21, 135, 195, 0.25);
+  border-radius: 999px;
+  color: var(--teal-dark);
+  display: inline-flex;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  padding: 4px 10px;
+  text-transform: uppercase;
+  width: fit-content;
+}
+.veterinary-stage-heading-title {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+.veterinary-stage-heading-icon {
+  align-items: center;
+  background: var(--teal-ghost);
+  border-radius: 9px;
+  color: var(--teal-dark);
+  display: inline-flex;
+  height: 34px;
+  justify-content: center;
+  width: 34px;
+}
+.veterinary-stage-heading h2 {
+  color: var(--navy);
+  font-size: 1.2rem;
+  margin: 0;
+}
+.veterinary-stage-heading p {
+  color: var(--slate);
+  font-size: 0.8rem;
+  margin: 0;
+}
+.veterinary-form-helper {
+  color: var(--slate);
+  font-size: 0.74rem;
+  font-style: normal;
+}
+.veterinary-checkup-form fieldset label.vet-treatment-tile,
+.veterinary-treatment-selector fieldset label.vet-treatment-tile {
+  align-items: center;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  cursor: pointer;
+  display: flex;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 10px;
+  position: relative;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+.veterinary-checkup-form fieldset label.vet-treatment-tile:hover,
+.veterinary-treatment-selector fieldset label.vet-treatment-tile:hover { border-color: rgba(21, 135, 195, 0.5); }
+.vet-treatment-tile input {
+  inset: 0;
+  opacity: 0;
+  position: absolute;
+}
+.vet-treatment-tile-check {
+  align-items: center;
+  background: var(--white);
+  border: 1.5px solid var(--line);
+  border-radius: 50%;
+  color: var(--white);
+  display: inline-flex;
+  flex: 0 0 18px;
+  height: 18px;
+  justify-content: center;
+  width: 18px;
+}
+.vet-treatment-tile:has(input:checked) {
+  background: var(--teal-tint);
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px rgba(21, 135, 195, 0.08);
+}
+.vet-treatment-tile:has(input:checked) .vet-treatment-tile-check {
+  background: var(--teal);
+  border-color: var(--teal);
+}
+.veterinary-checkup-form fieldset label.vet-treatment-custom {
+  align-items: start;
+  flex-direction: column;
+  font-size: 0.76rem;
+  font-weight: 800;
+  gap: 5px;
+  grid-column: 1 / -1;
+}
+.vet-treatment-custom input { width: 100%; }
+.veterinary-treatment-selector fieldset { grid-column: 1 / -1; }
+.vet-stage-empty {
+  align-items: center;
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 18px 16px;
+  text-align: center;
+}
+.vet-empty-icon {
+  align-items: center;
+  background: var(--teal-tint);
+  border-radius: 50%;
+  color: var(--teal);
+  display: inline-flex;
+  height: 46px;
+  justify-content: center;
+  width: 46px;
+}
+.vet-stage-empty p,
+.vet-empty-state p { color: var(--slate); font-size: 0.8rem; margin: 0; }
+.veterinary-support-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 14px auto 0;
+  max-width: 1120px;
+}
+.vet-support-card {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+.vet-support-heading {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.vet-support-heading h3 {
+  color: var(--navy);
+  font-size: 0.92rem;
+  margin: 0;
+}
+.vet-support-heading p {
+  color: var(--slate);
+  font-size: 0.74rem;
+  margin: 0;
+}
+.vet-support-icon {
+  align-items: center;
+  border-radius: 9px;
+  display: inline-flex;
+  flex: 0 0 32px;
+  height: 32px;
+  justify-content: center;
+  width: 32px;
+}
+.vet-support-icon-teal { background: var(--teal-tint); color: var(--teal-dark); }
+.vet-support-icon-amber { background: var(--teal-tint); color: var(--teal-dark); }
+.vet-support-icon-green { background: var(--success-tint); color: var(--success); }
+.vet-fact-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+.vet-fact-list > div {
+  align-items: baseline;
+  border-top: 1px solid #edf1f4;
+  display: flex;
+  justify-content: space-between;
+  padding-top: 9px;
+}
+.vet-fact-list dt { color: var(--slate); font-size: 0.76rem; }
+.vet-fact-list dd { font-size: 0.78rem; margin: 0; text-align: right; }
+.vet-fact-list dd strong { color: var(--navy); font-weight: 800; }
+.vet-next-body {
+  align-items: flex-start;
+  background: var(--teal-tint);
+  border-left: 3px solid var(--teal);
+  border-radius: 9px;
+  color: var(--teal-dark);
+  display: flex;
+  font-size: 0.8rem;
+  gap: 9px;
+  line-height: 1.5;
+  padding: 12px 14px;
+}
+.vet-next-body p { margin: 0; }
+.vet-summary-stats {
+  display: grid;
+  gap: 9px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.vet-summary-stat {
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  display: grid;
+  gap: 2px;
+  justify-items: center;
+  padding: 12px 6px;
+  text-align: center;
+}
+.vet-summary-icon {
+  align-items: center;
+  background: var(--bg);
+  border-radius: 50%;
+  color: var(--slate);
+  display: inline-flex;
+  font-size: 0.78rem;
+  font-weight: 800;
+  height: 28px;
+  justify-content: center;
+  margin-bottom: 4px;
+  width: 28px;
+}
+.vet-summary-icon.vet-summary-ok { background: var(--success-tint); color: var(--success); }
+.vet-summary-stat strong { color: var(--navy); font-size: 0.88rem; }
+.vet-summary-stat small { color: var(--slate); font-size: 0.68rem; }
+.vet-appointment-list { display: grid; gap: 8px; }
+.vet-appointment-row {
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  display: grid;
+  gap: 4px 12px;
+  grid-template-columns: auto minmax(0, 1fr);
+  padding: 10px 12px;
+}
+.vet-appointment-row strong { color: var(--navy); font-size: 0.82rem; }
+.vet-appointment-row small {
+  align-items: center;
+  color: var(--slate);
+  display: flex;
+  font-size: 0.72rem;
+  gap: 5px;
+}
+.vet-appointment-row .status-badge { justify-self: start; }
+.vet-empty-state {
+  align-items: center;
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 18px 16px;
+  text-align: center;
+}
+.vet-empty-state .vet-empty-icon { margin-bottom: 4px; }
+.vet-empty-state strong { color: var(--navy); font-size: 0.86rem; }
+.vet-empty-state button { margin-top: 8px; }
+.veterinary-record-head .veterinary-back-button,
+.veterinary-stage-nav button,
+.veterinary-form-actions button,
+.vet-stage-empty button,
+.vet-empty-state button {
+  align-items: center;
+  display: inline-flex;
+  gap: 7px;
+}
+@media (max-width: 760px) {
+  .veterinary-simple-header { align-items: start; flex-direction: column; gap: 12px; }
+  .veterinary-simple-stats { grid-template-columns: repeat(2, 1fr); }
+  .veterinary-record-layout { grid-template-columns: 170px minmax(0, 1fr); }
+  .veterinary-stage-cards { grid-template-columns: 1fr; }
+  .veterinary-support-grid { grid-template-columns: 1fr; }
+  .vet-summary-stats { grid-template-columns: repeat(2, 1fr); }
+  .veterinary-animal-row,
+  .veterinary-appointment-row { grid-template-columns: 1fr; }
+  .veterinary-animal-row .status-badge,
+  .veterinary-appointment-row .status-badge { justify-self: start; }
+}
+@media (max-width: 620px) {
+  .veterinary-record-layout { grid-template-columns: 1fr; }
+  .veterinary-record-head { align-items: flex-start; flex-direction: column; gap: 8px; }
+  .veterinary-stage-tracker { min-height: 0; padding: 10px 12px; position: static; }
+  .veterinary-stage { padding: 10px 6px; }
+  .veterinary-stage::after { display: none; }
+  .veterinary-stage-text strong { font-size: 0.72rem; }
+  .veterinary-stage-text em { display: none; }
+}
+@media (max-width: 500px) {
+  .veterinary-simple-stats { grid-template-columns: 1fr; }
+  .veterinary-record-animal { align-items: flex-start; gap: 14px; padding: 14px; }
+  .veterinary-animal-photo { height: 72px; width: 72px; }
+  .veterinary-stage-tracker { padding-left: 10px; padding-right: 10px; }
+  .veterinary-stage strong { font-size: 0.7rem; }
+  .veterinary-checkup-form,
+  .veterinary-treatment-selector,
+  .veterinary-inline-form { grid-template-columns: 1fr; }
+  .veterinary-checkup-form fieldset { grid-template-columns: 1fr; }
 }

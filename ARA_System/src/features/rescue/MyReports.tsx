@@ -1,7 +1,5 @@
-import { SignInButton, UserButton, useAuth, useUser } from "@clerk/react";
+import { SignInButton, useAuth } from "@clerk/react";
 import { useEffect, useId, useState } from "react";
-import spcaLogo from "../../assets/spca-logo.png";
-import { DonateModal } from "../donations/DonateModal";
 import { fetchMyRescueReports } from "../../services/rescueApi";
 import type { RescueReport, RescueReportStatus } from "../../types/rescue";
 import {
@@ -10,11 +8,13 @@ import {
 } from "../../types/rescue";
 import { SiteFooter } from "../../components/SiteFooter";
 import { Breadcrumbs } from "../../components/Breadcrumbs";
+import { RescueProgressTimeline } from "./RescueProgressTimeline";
+import { SiteHeader, type SiteHeaderView } from "../../components/SiteHeader";
 
 type MyReportsProps = {
   isLoaded: boolean;
   isSignedIn: boolean | undefined;
-  onNavigate: (view: "home" | "rescue-report" | "user-dashboard" | "staff-dashboard" | "dashboard") => void;
+  onNavigate: (view: SiteHeaderView) => void;
 };
 
 function formatDate(value: string): string {
@@ -39,12 +39,14 @@ const REPORT_TIMELINE = [
 const CURRENT_STAGE: Record<RescueReportStatus, number> = {
   submitted: 1,
   assigned: 2,
-  rescued: 3,
-  closed: 4,
+  in_progress: 3,
+  awaiting_reassignment: 2,
+  resolved: 4,
 };
 
 function reportStatusShortLabel(status: RescueReportStatus): string {
-  return REPORT_TIMELINE[CURRENT_STAGE[status]].label;
+  if (status === "awaiting_reassignment") return "Needs Dispatcher";
+  return REPORT_TIMELINE[CURRENT_STAGE[status] ?? 1]?.label ?? "Under Review";
 }
 
 // Modal pop-up with the full details of a single report, opened from the
@@ -67,7 +69,7 @@ function RescueReportDetailModal({
     return () => window.removeEventListener("keydown", handleKey);
   }, [onClose]);
 
-  const currentStage = CURRENT_STAGE[report.status];
+  const currentStage = CURRENT_STAGE[report.status] ?? 1;
   const hasPin = report.latitude != null && report.longitude != null;
 
   return (
@@ -86,20 +88,20 @@ function RescueReportDetailModal({
       >
         <header className="modal-header">
           <div>
-            <p className="eyebrow">Report details</p>
+            <p className="eyebrow">Alert details</p>
             <h2 id={headingId}>{report.reference}</h2>
           </div>
           <button
             type="button"
             className="ghost-button modal-close"
             onClick={onClose}
-            aria-label="Close rescue report details"
+            aria-label="Close rescue alert details"
           >
             ✕
           </button>
         </header>
 
-        <div className="rescue-timeline" aria-label="Report progress">
+        <div className="rescue-timeline" aria-label="Alert progress">
           {REPORT_TIMELINE.map((stage, index) => (
             <div
               key={stage.label}
@@ -175,6 +177,8 @@ function RescueReportDetailModal({
             ))}
           </div>
         )}
+
+        <RescueProgressTimeline report={report} userFacing />
       </div>
     </div>
   );
@@ -190,19 +194,11 @@ export function MyReports({
   onNavigate,
 }: MyReportsProps) {
   const { getToken } = useAuth();
-  const { user } = useUser();
-  const [donateOpen, setDonateOpen] = useState(false);
   const [myReports, setMyReports] = useState<RescueReport[]>([]);
   const [myReportsLoading, setMyReportsLoading] = useState(false);
   const [myReportsError, setMyReportsError] = useState("");
   // Report whose full details are shown in the pop-up dialog (null = closed).
   const [selectedReport, setSelectedReport] = useState<RescueReport | null>(null);
-
-  const isStaff =
-    user?.publicMetadata.role === "staff" ||
-    user?.publicMetadata.role === "veterinarian" ||
-    user?.publicMetadata.role === "manager" ||
-    user?.publicMetadata.role === "admin";
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn) return;
@@ -215,7 +211,7 @@ export function MyReports({
         setMyReports(await fetchMyRescueReports(token));
       } catch (error) {
         setMyReportsError(
-          error instanceof Error ? error.message : "Your rescue reports could not be loaded.",
+          error instanceof Error ? error.message : "Your rescue alerts could not be loaded.",
         );
       } finally {
         setMyReportsLoading(false);
@@ -229,75 +225,39 @@ export function MyReports({
 
   return (
     <div className="home-page">
-      <header className="site-header">
-        <button
-          type="button"
-          className="brand-group brand-button"
-          onClick={() => onNavigate("home")}
-        >
-          <img src={spcaLogo} alt="SPCA Fiji logo" className="brand-logo" />
-        </button>
-        <nav className="main-nav" aria-label="Main navigation">
-          <button type="button" className="nav-link" onClick={() => onNavigate("home")}>
-            Home
-          </button>
-          <button type="button" className="nav-link" onClick={() => onNavigate("rescue-report")}>
-            Rescue Report
-          </button>
-          <button type="button" className="nav-link" onClick={() => setDonateOpen(true)}>
-            Donate
-          </button>
-        </nav>
-        <div className="header-actions">
-          {!isLoaded ? null : isSignedIn ? (
-            <>
-              <button
-                type="button"
-                className="teal-button"
-                onClick={() => onNavigate(isStaff ? "staff-dashboard" : "user-dashboard")}
-              >
-                My dashboard
-              </button>
-              <div className="user-avatar-circle">
-                <UserButton />
-              </div>
-            </>
-          ) : (
-            <SignInButton mode="modal">
-              <button type="button" className="teal-button">
-                Sign in to see your reports
-              </button>
-            </SignInButton>
-          )}
-        </div>
-      </header>
+      <SiteHeader
+        isLoaded={isLoaded}
+        isSignedIn={isSignedIn}
+        currentPage="my-reports"
+        onNavigate={onNavigate}
+      />
 
       <main className="page-shell">
         <Breadcrumbs
           trail={[
             { label: "Home", onClick: () => onNavigate("home") },
-            { label: "My reports" },
+            { label: "My Alerts" },
           ]}
         />
         <section className="catalog-hero">
-          <p className="eyebrow">My reports</p>
-          <h1>Your rescue reports</h1>
+          <p className="eyebrow">My Alerts</p>
+          <h1>Your rescue alerts</h1>
           <p className="lead-copy">
-            Every rescue report you have submitted, with live status updates
+            Every rescue alert you have submitted, with live status updates
             from the SPCA Fiji team.
           </p>
         </section>
 
         {!isLoaded ? (
-          <p className="dashboard-data-state">Loading your rescue reports...</p>
+          <p className="dashboard-data-state">Loading your rescue alerts...</p>
         ) : !isSignedIn ? (
           <div className="search-card catalog-search">
             <p className="security-note">
-              Sign in to see the rescue reports you have submitted.
+              Sign in to see the rescue alerts you have submitted.
             </p>
             <SignInButton mode="modal">
               <button type="button" className="teal-button">
-                Sign in to see your reports
+                Sign in to see your alerts
               </button>
             </SignInButton>
           </div>
@@ -305,26 +265,26 @@ export function MyReports({
           <section className="tracking-results">
             <div className="catalog-results-head">
               <div>
-                <p className="eyebrow">My reports</p>
-                <h2>Rescue reports you have submitted</h2>
+                <p className="eyebrow">My Alerts</p>
+                <h2>Rescue alerts you have submitted</h2>
               </div>
               <button
                 type="button"
                 className="teal-button small-button"
                 onClick={() => onNavigate("rescue-report")}
               >
-                Submit another report
+                Submit another alert
               </button>
             </div>
             {myReportsLoading && (
-              <p className="dashboard-data-state">Loading your rescue reports...</p>
+              <p className="dashboard-data-state">Loading your rescue alerts...</p>
             )}
             {!myReportsLoading && myReportsError && (
               <p className="dashboard-data-state error">{myReportsError}</p>
             )}
             {!myReportsLoading && !myReportsError && myReports.length === 0 && (
               <p className="dashboard-data-state">
-                You have not submitted any rescue reports yet.
+                You have not submitted any rescue alerts yet.
               </p>
             )}
             {!myReportsLoading && !myReportsError && (
@@ -335,7 +295,7 @@ export function MyReports({
                     type="button"
                     className="my-report-row"
                     onClick={() => setSelectedReport(report)}
-                    aria-label={`View details for report ${report.reference}`}
+                    aria-label={`View details for alert ${report.reference}`}
                   >
                     <span className="my-report-reference">{report.reference}</span>
                     <span className={`report-status ${rescueStatusClass(report.status)}`}>
@@ -353,7 +313,6 @@ export function MyReports({
       {selectedReport && (
         <RescueReportDetailModal report={selectedReport} onClose={closeDetail} />
       )}
-      <DonateModal open={donateOpen} onClose={() => setDonateOpen(false)} />
     </div>
   );
 }

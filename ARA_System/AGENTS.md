@@ -41,17 +41,30 @@ into a single record. Three modules, plus cross-cutting donations:
   Routes validate with **zod** before hitting the service; services hold
   business rules; repositories access the DB. Routes handle HTTP, nothing else.
 - **Mounted routers** (`server/src/app.ts`): `/api/animals`, `/api/admin`
-  (staff), `/api/rescue`, `/api/adoptions`, `/api/donations`. **Only the
-  `veterinary` router is NOT mounted** — that module is still a placeholder.
+  (staff), `/api/rescue`, `/api/adoptions`, `/api/donations`, `/api/reports`
+  (manager/admin), `/api/veterinary` (veterinarian), `/api/webhooks` (Clerk
+  webhook, mounted before the JSON body parser because it needs the raw body).
 - **No frontend router**: `src/App.tsx` switches on a `view` string in local
   state and threads `onNavigate={setView}` into every page. To add a page:
   extend the `View` union + add a branch in `App.tsx`. There are no URL params.
 - **Auth middleware**: `requireClerkSession` (`server/src/middleware/auth.ts`)
   resolves the token into `request.clerkUserId`; `requireStaffOrAbove` /
-  `requireManagerOrAdmin` (`middleware/rbac.ts`) check Clerk
-  `publicMetadata.role` = `staff | veterinarian | manager | admin`
-  (`shared/types/roles.ts`). Public endpoints use `resolveOptionalClerkUserId`
-  so anonymous visitors still work (rescue reports).
+  `requireRescueQueueAccess` / `requireDispatcher` / `requireManagerOrAdmin`
+  (`middleware/rbac.ts`) check Clerk `publicMetadata.role` = `staff |
+  veterinarian | manager | admin | dispatcher` (`shared/types/roles.ts`). Public endpoints use
+  `resolveOptionalClerkUserId` so anonymous visitors still work (rescue
+  reports).
+- **Role rename (`rescuer` → `dispatcher`)**: roles live **only** in Clerk
+  `publicMetadata.role` — there is no role column in Postgres, so the rename
+  needs no migration. Accounts created before the rename still carry
+  `rescuer`, so every server-side read goes through `normalizeRole()`
+  (`shared/types/roles.ts`, which owns `legacyRoleAliases`) and the frontend
+  uses `isDispatcherRole()` (`src/utils/roles.ts`). `normalizeRole` returns
+  `undefined` for missing/unknown values, and the request schemas
+  (`z.enum(staffRoles)`) mean `rescuer` can never be **written** back. Once
+  the remaining legacy Clerk accounts are updated, delete `legacyRoleAliases`
+  and the alias arm in `isDispatcherRole`. Locked in by
+  `modules/staff/staff.service.test.ts`.
 
 ## Commands (all verified)
 
@@ -63,10 +76,16 @@ npm run db:generate   # create a Drizzle migration from schema.ts
 npm run db:migrate    # apply migrations — run AFTER every pull, BEFORE server:dev
 npm run build         # tsc -b && vite build (typechecks frontend+server)
 npm run lint          # eslint .
+npm test             # node:test via tsx — server + frontend suites
 ```
 
-- **Tests**: no `npm test` script exists. The only test is a `node:test`
-  file: `npx tsx --test server/src/modules/donations/donations.service.test.ts`.
+- **Tests**: `npm test` runs every `*.test.ts` under `server/src/**` and
+  `src/**` (94 tests / 6 files): adoptions, donations, reports, rescue, staff,
+  plus `src/utils/clerkToken.test.ts`. The script needs
+  `--experimental-test-module-mocks` because the suites stub modules with
+  `node:test`'s `mock.module` — running `npx tsx --test <file>` directly fails
+  with `TypeError: mock.module is not a function`. Add new suites as
+  `*.test.ts` anywhere under those two roots; the glob picks them up.
 - **Required order**: `db:migrate` → `server:dev`. A missing column is the #1
   cause of `column "xxx" of relation "animals" does not exist` crashes.
 - `npm run dev` does NOT start the API — run both `dev` and `server:dev`.
@@ -119,25 +138,45 @@ npm run lint          # eslint .
       `RescueReportForm.tsx`
 - [x] Phone-in reports through the *same* form/schema (`source: "phone"`,
       staff variant of the same component)
-- [x] Staff review + assign rescuer — `ManageRescueReports.tsx`, `rescue.service.ts`
+- [x] Staff review + Dispatcher claim workflow — `RescueOperationsPortal.tsx` (Mission Board / Active Mission / Mission History + `/api/rescue/missions*`), `rescue.service.ts`
 - [x] Reporter tracks status — `MyReports.tsx`, `GET /api/rescue/mine`
 - [x] Registered user submits adoption application — `AdoptionApplicationForm.tsx`, `POST /api/adoptions`
 - [x] Staff review/approve/reject — `ManageAdoptionApplications.tsx`, `PATCH /api/adoptions/:id`
 - [x] Applicant tracks application status — `MyApplications.tsx`, `GET /api/adoptions/mine`
 - [x] Accepted application removes animal from public listings — partial unique index `adoption_animal_unique_active` on `(animal_id) WHERE status IN ('approved','completed')` + DB-level 23505 check in service
 
-**Veterinary & Health Management** — **NOT BUILT** (`veterinary` module is
-scaffolded service/routes/repository but never mounted in `app.ts`; no UI).
-- [ ] Vet clearance routing after intake — not built
-- [ ] Vet appointments (online + phone) — not built
-- [ ] Treatments / vaccinations / prescriptions — not built
-- [ ] Full medical history on repeat visits — not built
-- [ ] Mark animal medically cleared — not built
+**Veterinary & Health Management** — **BUILT** (merged from `origin/jasprit`
+in `672401d`). Module implemented and mounted at `/api/veterinary` in `app.ts`;
+UI lives in `src/features/veterinary/` with its own `veterinary.css`. Every
+route sits behind `requireVeterinaryAccess` (`["veterinarian"]` only — staff
+can read the vet queue but cannot issue clearance).
+- [x] Vet clearance routing after intake — 3-stage workflow (initial exam →
+      required treatments → clearance), `pages/VeterinaryCarePage.tsx`
+- [x] Vet appointments (online + phone) — `VeterinaryAppointmentBooking.tsx`,
+      `components/DateTimePicker.tsx`; `vet_appointments.source` distinguishes
+      the two
+- [x] Treatments / vaccinations / prescriptions — `veterinary_care_plans` +
+      `veterinary_treatment_history`, `treatmentOptions.tsx`
+- [x] Full medical history on repeat visits — `VeterinaryMedicalHistory.tsx`,
+      `components/ExaminationHistory.tsx`, `pages/MedicalHistoryScene.tsx`
+- [x] Mark animal medically cleared — `clearAnimal` (repository) behind
+      `POST /api/veterinary/animals/:animalId/clearance`; sets
+      `medically_cleared`, `medical_clearance_date`,
+      `medical_cleared_by_clerk_user_id`, `medical_clearance_notes`
 
 **Donations (cross-cutting)**
 - [~] Donation flow works as **card/QR data-entry** (validate + insert,
       `donations.service.ts`); **no Stripe SDK / hosted checkout exists** —
       `stripe_checkout_session_id` is a reserved column only.
+
+**Reports & analytics (cross-cutting)**
+- [x] Manager/Admin analytics + PDF report — `server/src/modules/reports/{routes,service,repository}.ts`
+      mounted at `/api/reports`; `GET /api/reports/analytics?range=30d|90d|12m|all`
+      (default `90d`), gated `requireClerkSession` + `requireManagerOrAdmin`.
+      Live KPIs + recharts trends/breakdowns + `window.print()` PDF export in
+      `src/components/ReportsPage.tsx`; "reports" nav link is manager/admin-only
+      (`SiteHeader.tsx`). Data is read-only over `animals` / `rescue_reports` /
+      `adoption_applications` / `donations` (completed only).
 
 ## Adoption module (spec: `Adoption.md`)
 
@@ -166,8 +205,12 @@ scaffolded service/routes/repository but never mounted in `app.ts`; no UI).
   `rejected`. Every transition timestamped in `adoptionStatusHistory` so both
   the adopter stepper and the staff queue show *when*, not just *what*.
 - `rejected` requires `reviewNotes` shown to the applicant.
-- **Medical-clearance gate**: `requireMedicallyCleared` returns `true` now
-  (no-op). Flip to hard gate when veterinary module ships.
+- **Medical-clearance gate**: now a **hard gate**.
+  `requireMedicallyCleared` reads `animals.medically_cleared` and throws
+  "This animal is not yet medically cleared for adoption." on
+  `under_review -> approved`. Because `medically_cleared` is only ever written
+  by the vet-only `clearAnimal`, approval is genuinely vet-gated. The same
+  flag gates the public listing - see Data model guardrails.
 - Notifications on stage change (email or in-app) — not yet wired.
 
 ## Entities & role-based access
@@ -180,17 +223,36 @@ Every route/action is gated server-side by role, not just hidden in the UI
   report/application status.
 - **Donor** — donations via the Donate modal (card/QR; Stripe not wired yet);
   one account may be both user and donor.
-- **SPCA staff** — register animals, assign rescuers, review/reject
+- **SPCA staff** — register animals, review/reject
   applications, log phone reports/bookings (same form as online).
+- **Dispatcher** — claims available rescue cases and advances only their own
+  assigned reports (`requireDispatcher` on mutation routes; works inside the
+  `RescueOperationsPortal`). Staff can read the queue but cannot claim or update.
 - **Veterinarian** — medical history, treatments, medical clearance.
 - **Manager/Admin** — staff invitations (`staff` module, `/api/admin`),
-  metrics, wage payments.
+  edit staff member roles, revoke member access / pending invitations
+  (admins rule managers/admin; no self-changes), metrics, wage payments.
+  The assignable-role list lives once in the UI (`INVITABLE_ROLES`,
+  `ManagerDashboard.tsx`) and is rendered by both the invite form and the
+  per-member role editor; a test in `modules/staff/staff.service.test.ts`
+  asserts it still matches the server's `invitationalStaffRoles`.
 
 ## Login & authentication
 
 - Public listing/browsing must work with **no account**.
 - Everything else requires Clerk auth; RBAC enforced server-side — a
   registered user hitting a staff route must get 403.
+- **Staff-first landing**: staff-type accounts (manager/admin/staff/vet/
+  dispatcher) are routed straight to their own dashboard: `App.tsx` derives a
+  fresh `home` landing into the matching dashboard (a pure render derivation,
+  once per session per user id — also applies on reload since `view` resets to
+  `home`). Registered users stay on the public Home page.
+- `SiteHeader.tsx` renders **team navigation** (Dashboard, Rescue queue,
+  Animals, Register, Adoptions + "View public site") on internal pages
+  (`dashboard`, `staff-dashboard`, `dispatcher-dashboard`, `register-animal`,
+  `manage-animals`, `edit-animal`, `reports`); public pages keep the normal nav (Adopt/
+  Donate prompts hidden for staff-type accounts). Dispatchers see only the
+  rescue queue, not animal/adoption modules.
 - Staff/admin accounts need **MFA** (named risk mitigation). Never store/log
   credentials in plaintext. Card details never touch SPCA's own servers.
 
@@ -232,11 +294,17 @@ Every route/action is gated server-side by role, not just hidden in the UI
   NOT-ACTION FKs to `animals.id` — a hard DELETE would fail or destroy the
   audit trail.
 - **Medical clearance gate**: the proposal rule is *no public listing until
-  `medically_cleared = true`*. The team deliberately **ships with this OFF**
-  (`findPublicAnimals` filters only on `status != adopted` + not deleted,
-  with an in-code comment). Annex:
-  **re-enable the gate when the Veterinary module ships** — an animal should
-  appear publicly only when a vet has set `medically_cleared`.
+  `medically_cleared = true`*. The team originally **shipped with this OFF**
+  (because the Veterinary module didn't exist yet) and the guardrail carried an
+  annex to re-enable it when that module landed. **The Veterinary module has
+  now shipped, so the gate is ON**: `findPublicAnimals` filters on
+  `medically_cleared = true` as well as `status != adopted` + not deleted, and
+  `animals.routes.ts` documents the listing as cleared-only. The flag has a
+  single writer - `clearAnimal` in the veterinary repository, reachable only
+  via `POST /api/veterinary/animals/:animalId/clearance` behind
+  `requireVeterinaryAccess`; `registerAnimal` hard-codes it to `false`, and
+  neither the registration nor the edit zod schema accepts it, so clearance is
+  genuinely vet-only. Do not add a staff path to set it.
 - On adoption acceptance, remove the animal from public listings **in the
   same transaction** as the status update, and use **database-level locking**
   (two applicants for one animal — race risk) so only one application per
@@ -284,3 +352,7 @@ keyword match, not an external AI provider.
 - Branches are per-teammate (`main`, `alvin`, `dante-feature`, `jas`, `kara`,
   `surbhit`) and merged into the working branch — keep `Adoption.md`'s "what
   NOT to touch" (search module, report generation) off your plate unless asked.
+  **Reconcile at merge**: the reports/analytics module (`server/src/modules/reports/*`,
+  `src/components/ReportsPage.tsx`) overlaps `Adoption.md`'s "report generation"
+  but was built on `surbhit` deliberately **at the user's request** — QA it in
+  that context, not as an Alvin duplicate.

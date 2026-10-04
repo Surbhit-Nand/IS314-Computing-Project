@@ -151,9 +151,14 @@ export function HomePage({ isLoaded, isSignedIn, currentPage, onNavigate, onView
             </button>
           </div>
           <div className="animals-summary">
-            {animalsLoading
-              ? "Loading available animals..."
-              : `${animals.length} animals currently available for adoption`}
+            {animalsLoading ? (
+              <span
+                className="skeleton-bar skeleton-width-3"
+                aria-hidden="true"
+              />
+            ) : (
+              `${animals.length} animals currently available for adoption`
+            )}
           </div>
           <div className="filter-row" aria-label="Animal categories">
             <button type="button" className="chip active">
@@ -279,7 +284,7 @@ export function HomePage({ isLoaded, isSignedIn, currentPage, onNavigate, onView
               className="teal-button"
               onClick={() => onNavigate("rescue-report")}
             >
-              Submit rescue report
+              Submit rescue alert
             </button>
             <button
               type="button"

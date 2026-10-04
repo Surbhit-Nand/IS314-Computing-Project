@@ -1,4 +1,5 @@
 import { SignInButton, useAuth, useUser } from "@clerk/react";
+import spcaLogo from "../assets/spca-logo.png";
 import { isDevBypassEnabled } from "../utils/devBypass";
 import { SiteHeader, type SiteHeaderView } from "./SiteHeader";
 
@@ -11,7 +12,7 @@ type StaffDashboardProps = {
 type StaffRole = "staff" | "veterinarian";
 
 const queueItems = [
-  ["Rescue reports", "6 reports need an initial review", "urgent"],
+  ["Rescue alerts", "6 alerts need an initial review", "urgent"],
   ["Animals awaiting intake", "4 animals need profile details", "active"],
   ["Adoption applications", "8 applications are ready for review", "pending"],
   ["Medical follow-ups", "3 appointments are scheduled today", "medical"],
@@ -32,7 +33,11 @@ export function StaffDashboard({ onNavigate }: StaffDashboardProps) {
     return (
       <main className="dashboard-locked">
         <div className="dashboard-locked-card">
-          <p className="eyebrow">ARA operations</p>
+          <div className="auth-brand">
+            <img src={spcaLogo} alt="SPCA Fiji logo" className="brand-logo" />
+            <strong>SPCA Fiji</strong>
+          </div>
+          <p className="eyebrow">SPCA operations</p>
           <h1>Sign in to continue</h1>
           <p>
             Staff and veterinary workspaces are available to authorised team
@@ -52,7 +57,11 @@ export function StaffDashboard({ onNavigate }: StaffDashboardProps) {
     return (
       <main className="dashboard-locked">
         <div className="dashboard-locked-card">
-          <p className="eyebrow">ARA operations</p>
+          <div className="auth-brand">
+            <img src={spcaLogo} alt="SPCA Fiji logo" className="brand-logo" />
+            <strong>SPCA Fiji</strong>
+          </div>
+          <p className="eyebrow">SPCA operations</p>
           <h1>Access restricted</h1>
           <p>Your account does not have staff or veterinary permissions.</p>
           <button
@@ -92,7 +101,7 @@ export function StaffDashboard({ onNavigate }: StaffDashboardProps) {
             className="dashboard-action-button"
             onClick={() => onNavigate("manage-rescue-reports")}
           >
-            Rescue Reports
+            Rescue Alerts
           </button>
           <button
             type="button"
@@ -127,7 +136,7 @@ export function StaffDashboard({ onNavigate }: StaffDashboardProps) {
 
       <section className="dashboard-metrics" aria-label="Staff work summary">
         <article>
-          <span>Rescue reports</span>
+          <span>Rescue alerts</span>
           <strong>6</strong>
           <small>Awaiting initial review</small>
         </article>

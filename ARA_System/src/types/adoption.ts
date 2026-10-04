@@ -25,6 +25,9 @@ export type AdoptionAnimalSummary = {
   type: "dog" | "cat" | "rabbit" | "other";
   breed: string | null;
   photoUrls: string[];
+  // Vet-issued medical clearance. Staff can't approve an application for an
+  // un-cleared animal, so the review queue reads this to warn them up front.
+  medicallyCleared: boolean;
 };
 
 export type AdoptionApplication = {

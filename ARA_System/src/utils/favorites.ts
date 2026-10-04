@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 
 // Per-browser "saved animals" list. There is no backend favorites table (and
 // none of AGENTS.md's three modules call for one), so this is intentionally

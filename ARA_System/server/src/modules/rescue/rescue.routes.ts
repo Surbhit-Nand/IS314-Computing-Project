@@ -1,15 +1,38 @@
-import { Router } from "express";
+import { Router, type NextFunction, type Response } from "express";
 import multer from "multer";
 import { z } from "zod";
 import { requireClerkSession, resolveOptionalClerkUserId } from "../../middleware/auth.js";
-import { requireStaffOrAbove } from "../../middleware/rbac.js";
 import {
-	dispatchRescueReport,
+	requireDispatcher,
+	requireRescueQueueAccess,
+	requireStaffOrAbove,
+} from "../../middleware/rbac.js";
+import { clerkClient } from "../../services/clerkClient.js";
+import {
+	acceptRescueMission,
+	addRescueUpdate,
+	claimRescueReport,
+	completeRescueDebrief,
+	getRescueMissionById,
 	getRescueReportById,
+	listAvailableRescueReports,
+	listIntakeHandoffs,
+	listMissionBoard,
+	listMissionHistory,
+	listMyActiveMissions,
+	listMyAssignedRescueReports,
 	listMyRescueReports,
+	listMyResolvedRescueReports,
 	listRescueReports,
-	RESCUE_REPORT_STATUSES,
+	markIntakeHandoffReceived,
+	startRescueMission,
+	startRescueReport,
 	submitRescueReport,
+	resolveRescueReport,
+	releaseRescueMission,
+	RESCUE_OUTCOMES,
+	RESCUE_UPDATE_TYPES,
+	RescueWorkflowError,
 	uploadRescuePhoto,
 } from "./rescue.service.js";
 
@@ -55,18 +78,73 @@ const reportSchema = z
 		},
 	);
 
-// Staff dispatch: any subset of the dispatch fields, but at least one change.
-const dispatchSchema = z
+const progressImageUrls = z.array(z.string().url()).default([]);
+
+// Start Rescue: notes/action plan are required; images optional. The new
+// status is always "in_progress" - a dispatcher cannot choose it.
+const startProgressSchema = z.object({
+	notes: z.string().trim().min(1, "Progress notes are required."),
+	imageUrls: progressImageUrls,
+});
+
+// Complete Rescue: the final report and outcome are required, images and
+// remarks optional - except that choosing "other" requires an explanation,
+// which rides in additionalRemarks so there's still a single report field.
+const resolveProgressSchema = z
 	.object({
-		status: z.enum(RESCUE_REPORT_STATUSES).optional(),
-		assignedTo: optionalText,
-		assignedToClerkUserId: optionalText,
-		officeNote: optionalText,
-		animalId: z.string().uuid("Link a valid animal").optional(),
+		notes: z.string().trim().min(1, "A final rescue report is required."),
+		outcome: z.enum(RESCUE_OUTCOMES),
+		additionalRemarks: optionalText,
+		imageUrls: progressImageUrls,
 	})
-	.refine((value) => Object.values(value).some((field) => field !== undefined), {
-		message: "Provide at least one dispatch update (status, assignment, note, or animal link)",
-	});
+	.refine(
+		(value) => value.outcome !== "other" || Boolean(value.additionalRemarks),
+		{
+			message: 'Please explain the "Other" outcome in the additional remarks.',
+			path: ["additionalRemarks"],
+		},
+	);
+
+// Start a mission. Notes are OPTIONAL - a dispatcher en route must not be
+// blocked at a form. Anything entered here is still saved to the timeline.
+const startMissionSchema = z.object({
+	notes: optionalText,
+	imageUrls: progressImageUrls,
+});
+
+// Release Mission / Request Handover. A reason is required - the next
+// dispatcher sees it on the timeline, so "why was this alert passed back"
+// must never be a mystery.
+const releaseMissionSchema = z.object({
+	reason: z.string().trim().min(1, "A short reason is required."),
+});
+
+// Quick update filed while a rescue is in progress: note / photo. Never
+// changes status and never requires a form.
+const missionUpdateSchema = z.object({
+	updateType: z.enum(RESCUE_UPDATE_TYPES),
+	message: optionalText,
+	imageUrls: progressImageUrls,
+});
+
+// Veterinary priority for the intake handoff. Accepts an empty string as
+// "not chosen" so an untouched dropdown doesn't fail the whole debrief.
+const optionalPriority = z.preprocess(
+	(value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+	z.enum(["low", "moderate", "high", "critical"]).optional(),
+);
+
+// The single Post-Rescue Debrief. whatHappened always; veterinary priority is
+// required in the service layer when the outcome is a rescued animal (so the
+// intake handoff is complete). Destination is no longer collected - a rescued
+// animal always goes to SPCA Fiji.
+const debriefSchema = z.object({
+	outcome: z.enum(RESCUE_OUTCOMES),
+	whatHappened: z.string().trim().min(1, "A debrief of what happened is required."),
+	animalCondition: optionalText,
+	veterinaryPriority: optionalPriority,
+	unsuccessfulDetails: optionalText,
+});
 
 // In-memory storage: the file lives briefly in a request buffer, streams
 // straight to Cloudinary, and never touches disk.
@@ -92,6 +170,24 @@ function getIdParam(value: string | string[]): string {
 	return Array.isArray(value) ? value[0] : value;
 }
 
+// Picks the human-readable display name for the acting dispatcher (used for
+// the assignedTo denormalization and every progress-timeline entry).
+async function resolveDispatcherName(clerkUserId: string): Promise<string> {
+	const user = await clerkClient.users.getUser(clerkUserId);
+	return [user.firstName, user.lastName].filter(Boolean).join(" ") || user.username || "Dispatcher";
+}
+
+// The workflow validator errors (409: race, 403: not your case, 400: bad
+// input) are all safe to show the dispatcher verbatim; anything else falls
+// through to the Express error handler.
+function sendRescueError(error: unknown, response: Response, next: NextFunction) {
+	if (error instanceof RescueWorkflowError) {
+		response.status(error.status).json({ error: error.message });
+		return;
+	}
+	next(error);
+}
+
 export const rescueRouter = Router();
 
 // Public: upload one photo for a rescue report and return its URL. Available
@@ -108,6 +204,29 @@ rescueRouter.post(
 
 		try {
 			const url = await uploadRescuePhoto(request.file.buffer);
+			response.status(201).json({ url });
+		} catch (error) {
+			next(error);
+		}
+	},
+);
+
+// Dispatcher-only: upload progress/evidence images for a case update. Kept
+// separate from the reporter photo endpoint so progress images land in their
+// own Cloudinary folder and only a dispatcher can add them.
+rescueRouter.post(
+	"/upload-progress-photo",
+	requireClerkSession,
+	requireDispatcher,
+	upload.single("photo"),
+	async (request, response, next) => {
+		if (!request.file) {
+			response.status(400).json({ error: "A photo file is required" });
+			return;
+		}
+
+		try {
+			const url = await uploadRescuePhoto(request.file.buffer, "ara/rescue-progress");
 			response.status(201).json({ url });
 		} catch (error) {
 			next(error);
@@ -149,13 +268,307 @@ rescueRouter.get("/mine", requireClerkSession, async (request, response, next) =
 	}
 });
 
-// Public: track a report by its reference code. Internal fields (staff
-// notes) are stripped by the service before it's returned.
-// (Removed alongside the public "Track a report" page - the signed-in
-// reporter now sees their own reports via GET /mine.)
+// Dispatcher-only tabs. Registered before the "/:id" routes below so the
+// literal "dispatcher" segment is never captured as an id.
+rescueRouter.get(
+	"/dispatcher/available",
+	requireClerkSession,
+	requireDispatcher,
+	async (_request, response, next) => {
+		try {
+			response.json(await listAvailableRescueReports());
+		} catch (error) {
+			next(error);
+		}
+	},
+);
+
+rescueRouter.get(
+	"/dispatcher/mine",
+	requireClerkSession,
+	requireDispatcher,
+	async (request, response, next) => {
+		try {
+			response.json(await listMyAssignedRescueReports(request.clerkUserId as string));
+		} catch (error) {
+			next(error);
+		}
+	},
+);
+
+rescueRouter.get(
+	"/dispatcher/resolved",
+	requireClerkSession,
+	requireDispatcher,
+	async (request, response, next) => {
+		try {
+			response.json(await listMyResolvedRescueReports(request.clerkUserId as string));
+		} catch (error) {
+			next(error);
+		}
+	},
+);
+
+// ---- Rescue Mission workflow (Mission Board / Active Mission / History) ----
+// Registered before the "/:id" routes below so the literal "missions" and
+// "handoffs" segments are never captured as ids.
+
+// Staff + dispatchers: the Mission Board - active alerts ranked Critical ->
+// High -> Moderate -> Low, with search/filtering done client-side.
+rescueRouter.get(
+	"/missions",
+	requireClerkSession,
+	requireRescueQueueAccess,
+	async (_request, response, next) => {
+		try {
+			response.json(await listMissionBoard());
+		} catch (error) {
+			next(error);
+		}
+	},
+);
+
+// Staff + dispatchers: resolved missions, newest first.
+rescueRouter.get(
+	"/missions/history",
+	requireClerkSession,
+	requireRescueQueueAccess,
+	async (_request, response, next) => {
+		try {
+			response.json(await listMissionHistory());
+		} catch (error) {
+			next(error);
+		}
+	},
+);
+
+// Dispatcher-only: their own active missions (assigned + in progress) for the
+// Active Mission workspace.
+rescueRouter.get(
+	"/missions/mine",
+	requireClerkSession,
+	requireDispatcher,
+	async (request, response, next) => {
+		try {
+			response.json(await listMyActiveMissions(request.clerkUserId as string));
+		} catch (error) {
+			next(error);
+		}
+	},
+);
+
+// Staff + dispatchers: full detail for one mission - report, timeline, quick
+// updates, debrief, intake handoff, generated summary.
+rescueRouter.get(
+	"/missions/:id",
+	requireClerkSession,
+	requireRescueQueueAccess,
+	async (request, response, next) => {
+		try {
+			const mission = await getRescueMissionById(getIdParam(request.params.id));
+			if (!mission) {
+				response.status(404).json({ error: "Rescue mission not found" });
+				return;
+			}
+			response.json(mission);
+		} catch (error) {
+			next(error);
+		}
+	},
+);
+
+// Dispatcher-only: Accept Mission. Backed by the guarded single-assignment
+// claim, so two dispatchers clicking Accept together cannot both win.
+rescueRouter.post(
+	"/missions/:id/accept",
+	requireClerkSession,
+	requireDispatcher,
+	async (request, response, next) => {
+		try {
+			const name = await resolveDispatcherName(request.clerkUserId as string);
+			const mission = await acceptRescueMission(
+				getIdParam(request.params.id),
+				request.clerkUserId as string,
+				name,
+			);
+			if (!mission) {
+				response.status(404).json({ error: "Rescue mission not found" });
+				return;
+			}
+			response.json(mission);
+		} catch (error) {
+			sendRescueError(error, response, next);
+		}
+	},
+);
+
+// Dispatcher-only: Start Mission. Notes are optional - en-route dispatchers
+// must never be blocked at a form.
+rescueRouter.post(
+	"/missions/:id/start",
+	requireClerkSession,
+	requireDispatcher,
+	async (request, response, next) => {
+		const parsed = startMissionSchema.safeParse(request.body);
+		if (!parsed.success) {
+			response.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid start mission details" });
+			return;
+		}
+		try {
+			const name = await resolveDispatcherName(request.clerkUserId as string);
+			const mission = await startRescueMission(
+				getIdParam(request.params.id),
+				request.clerkUserId as string,
+				name,
+				parsed.data,
+			);
+			if (!mission) {
+				response.status(404).json({ error: "Rescue mission not found" });
+				return;
+			}
+			response.json(mission);
+		} catch (error) {
+			sendRescueError(error, response, next);
+		}
+	},
+);
+
+// Dispatcher-only: Release Mission (Assigned) / Request Handover (In
+// Progress). Only the currently assigned dispatcher may give the alert up; a
+// reason is required and shown to the next dispatcher on the timeline. The
+// alert clears back to the Mission Board as "awaiting_reassignment".
+rescueRouter.post(
+	"/missions/:id/release",
+	requireClerkSession,
+	requireDispatcher,
+	async (request, response, next) => {
+		const parsed = releaseMissionSchema.safeParse(request.body);
+		if (!parsed.success) {
+			response.status(400).json({ error: parsed.error.issues[0]?.message ?? "A short reason is required." });
+			return;
+		}
+		try {
+			const name = await resolveDispatcherName(request.clerkUserId as string);
+			const mission = await releaseRescueMission(
+				getIdParam(request.params.id),
+				request.clerkUserId as string,
+				name,
+				parsed.data,
+			);
+			if (!mission) {
+				response.status(404).json({ error: "Rescue mission not found" });
+				return;
+			}
+			response.json(mission);
+		} catch (error) {
+			sendRescueError(error, response, next);
+		}
+	},
+);
+
+// Dispatcher-only: optional quick update while the rescue is in progress
+// (note / photo). Timestamped server-side, no status
+// change.
+rescueRouter.post(
+	"/missions/:id/updates",
+	requireClerkSession,
+	requireDispatcher,
+	async (request, response, next) => {
+		const parsed = missionUpdateSchema.safeParse(request.body);
+		if (!parsed.success) {
+			response.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid mission update" });
+			return;
+		}
+		try {
+			const name = await resolveDispatcherName(request.clerkUserId as string);
+			const result = await addRescueUpdate(
+				getIdParam(request.params.id),
+				request.clerkUserId as string,
+				name,
+				parsed.data,
+			);
+			if (!result) {
+				response.status(404).json({ error: "Rescue mission not found" });
+				return;
+			}
+			response.status(201).json(result);
+		} catch (error) {
+			sendRescueError(error, response, next);
+		}
+	},
+);
+
+// Dispatcher-only: the single Post-Rescue Debrief that completes a mission.
+// Only the assigned dispatcher, and only from In Progress - the service's
+// guarded transition rejects stale or duplicate submissions.
+rescueRouter.post(
+	"/missions/:id/debrief",
+	requireClerkSession,
+	requireDispatcher,
+	async (request, response, next) => {
+		const parsed = debriefSchema.safeParse(request.body);
+		if (!parsed.success) {
+			response.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid rescue debrief" });
+			return;
+		}
+		try {
+			const name = await resolveDispatcherName(request.clerkUserId as string);
+			const mission = await completeRescueDebrief(
+				getIdParam(request.params.id),
+				request.clerkUserId as string,
+				name,
+				parsed.data,
+			);
+			if (!mission) {
+				response.status(404).json({ error: "Rescue mission not found" });
+				return;
+			}
+			response.json(mission);
+		} catch (error) {
+			sendRescueError(error, response, next);
+		}
+	},
+);
+
+// Staff and above: the open Animal Intake queue (rescued animals awaiting
+// intake). Dispatchers hand off; the intake & profile team receives.
+rescueRouter.get(
+	"/handoffs",
+	requireClerkSession,
+	requireStaffOrAbove,
+	async (_request, response, next) => {
+		try {
+			response.json(await listIntakeHandoffs());
+		} catch (error) {
+			next(error);
+		}
+	},
+);
+
+// Staff and above: mark an intake handoff as received (receivedAt recorded).
+rescueRouter.patch(
+	"/handoffs/:id",
+	requireClerkSession,
+	requireStaffOrAbove,
+	async (request, response, next) => {
+		try {
+			const handoff = await markIntakeHandoffReceived(
+				getIdParam(request.params.id),
+				request.clerkUserId as string,
+			);
+			if (!handoff) {
+				response.status(404).json({ error: "Intake handoff not found" });
+				return;
+			}
+			response.json(handoff);
+		} catch (error) {
+			next(error);
+		}
+	},
+);
 
 // Staff-only: the full rescue queue for the dispatch dashboard.
-rescueRouter.get("/", requireClerkSession, requireStaffOrAbove, async (_request, response, next) => {
+rescueRouter.get("/", requireClerkSession, requireRescueQueueAccess, async (_request, response, next) => {
 	try {
 		response.json(await listRescueReports());
 	} catch (error) {
@@ -167,7 +580,7 @@ rescueRouter.get("/", requireClerkSession, requireStaffOrAbove, async (_request,
 rescueRouter.get(
 	"/:id",
 	requireClerkSession,
-	requireStaffOrAbove,
+		requireRescueQueueAccess,
 	async (request, response, next) => {
 		try {
 			const report = await getRescueReportById(getIdParam(request.params.id));
@@ -182,32 +595,83 @@ rescueRouter.get(
 	},
 );
 
-// Staff-only: dispatch update - assign a rescuer, attach an animal, add a
-// note, or move the report through its lifecycle. Audited.
-rescueRouter.patch(
-	"/:id",
-	requireClerkSession,
-	requireStaffOrAbove,
-	async (request, response, next) => {
-		const parsed = dispatchSchema.safeParse(request.body);
-		if (!parsed.success) {
-			response.status(400).json({ error: "Invalid rescue report update" });
+// Dispatcher-only claim. The service performs a conditional update, so this
+// endpoint is safe when multiple dispatchers click Take Case together.
+rescueRouter.post("/:id/claim", requireClerkSession, requireDispatcher, async (request, response, next) => {
+	try {
+		const name = await resolveDispatcherName(request.clerkUserId as string);
+		const report = await claimRescueReport(getIdParam(request.params.id), request.clerkUserId as string, name);
+		if (!report) {
+			response.status(404).json({ error: "Rescue report not found" });
 			return;
 		}
-
-		try {
-			const report = await dispatchRescueReport(
-				getIdParam(request.params.id),
-				parsed.data,
-				request.clerkUserId as string,
-			);
-			if (!report) {
-				response.status(404).json({ error: "Rescue report not found" });
-				return;
-			}
-			response.json(report);
-		} catch (error) {
-			next(error);
+		response.json(report);
+	} catch (error) {
+		if (error instanceof RescueWorkflowError) {
+			response.status(error.status).json({ error: error.message });
+			return;
 		}
-	},
-);
+		next(error);
+	}
+});
+
+// Dispatcher-only Start Rescue: requires progress notes, self-sets the
+// status to In Progress (the client cannot choose it).
+rescueRouter.post("/:id/start", requireClerkSession, requireDispatcher, async (request, response, next) => {
+	const parsed = startProgressSchema.safeParse(request.body);
+	if (!parsed.success) {
+		response.status(400).json({ error: parsed.error.issues[0]?.message ?? "Progress notes are required." });
+		return;
+	}
+	try {
+		const name = await resolveDispatcherName(request.clerkUserId as string);
+		const report = await startRescueReport(
+			getIdParam(request.params.id),
+			request.clerkUserId as string,
+			name,
+			parsed.data,
+		);
+		if (!report) {
+			response.status(404).json({ error: "Rescue report not found" });
+			return;
+		}
+		response.json(report);
+	} catch (error) {
+		if (error instanceof RescueWorkflowError) {
+			response.status(error.status).json({ error: error.message });
+			return;
+		}
+		next(error);
+	}
+});
+
+// Dispatcher-only Complete Rescue: requires a final report and outcome, and
+// only then moves the case to Resolved. There is intentionally no bare
+// status-PATCH route - progress always carries a report with it.
+rescueRouter.post("/:id/resolve", requireClerkSession, requireDispatcher, async (request, response, next) => {
+	const parsed = resolveProgressSchema.safeParse(request.body);
+	if (!parsed.success) {
+		response.status(400).json({ error: parsed.error.issues[0]?.message ?? "A final rescue report is required." });
+		return;
+	}
+	try {
+		const name = await resolveDispatcherName(request.clerkUserId as string);
+		const report = await resolveRescueReport(
+			getIdParam(request.params.id),
+			request.clerkUserId as string,
+			name,
+			parsed.data,
+		);
+		if (!report) {
+			response.status(404).json({ error: "Rescue report not found" });
+			return;
+		}
+		response.json(report);
+	} catch (error) {
+		if (error instanceof RescueWorkflowError) {
+			response.status(error.status).json({ error: error.message });
+			return;
+		}
+		next(error);
+	}
+});

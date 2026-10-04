@@ -5,6 +5,7 @@ import { DonateModal } from "../donations/DonateModal";
 import { submitAdoptionApplication } from "../../services/adoptionsApi";
 import type { Animal } from "../../types/animal";
 import { Breadcrumbs } from "../../components/Breadcrumbs";
+import { SkeletonLoader } from "../../components/SkeletonLoader";
 
 type AdoptionApplicationFormProps = {
   // The animal being applied for (the one whose profile "Adopt" was clicked
@@ -146,7 +147,7 @@ export function AdoptionApplicationForm({
           </section>
         ) : !isLoaded ? (
           <section className="rescue-form-panel">
-            <p className="dashboard-data-state">Loading...</p>
+            <SkeletonLoader variant="card" />
           </section>
         ) : !isSignedIn ? (
           <section className="rescue-form-panel">

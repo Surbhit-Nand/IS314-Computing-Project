@@ -9,9 +9,11 @@ import {
 import {
   adoptionStatusClass,
   adoptionStatusLabel,
+  type AdoptionAnimalSummary,
   type AdoptionApplication,
   type AdoptionStatus,
 } from "../../types/adoption";
+import { SkeletonLoader } from "../../components/SkeletonLoader";
 import { isDevBypassEnabled } from "../../utils/devBypass";
 import { Breadcrumbs } from "../../components/Breadcrumbs";
 
@@ -40,6 +42,27 @@ const NEXT_STATUSES: Record<AdoptionStatus, AdoptionStatus[]> = {
   completed: [],
   rejected: [],
 };
+
+// Copy for the "Medical clearance" row. Lifted out of the JSX because the
+// three-way branch reads as an unreadable nested ternary inline.
+function clearanceDetail(animal: AdoptionAnimalSummary | null) {
+  if (!animal) return "Unknown - animal no longer on record";
+  return animal.medicallyCleared
+    ? "Cleared by the veterinary team - eligible for approval."
+    : "Not yet cleared - a veterinarian must clear this animal before the application can be approved.";
+}
+
+// The warning appended to a "Move to" option. Approval reads differently
+// depending on whether the vet has cleared the animal yet.
+function transitionHint(status: AdoptionStatus, awaitingClearance: boolean) {
+  if (status === "approved") {
+    return awaitingClearance
+      ? " (blocked - animal not medically cleared)"
+      : " (this animal can only be approved once)";
+  }
+  if (status === "completed") return " (removes the animal from public listings)";
+  return "";
+}
 
 function formatDate(value: string): string {
   return new Date(value).toLocaleString(undefined, {
@@ -173,7 +196,11 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
     return (
       <main className="dashboard-locked">
         <div className="dashboard-locked-card">
-          <p className="eyebrow">ARA operations</p>
+          <div className="auth-brand">
+            <img src={spcaLogo} alt="SPCA Fiji logo" className="brand-logo" />
+            <strong>SPCA Fiji</strong>
+          </div>
+          <p className="eyebrow">SPCA operations</p>
           <h1>Sign in to continue</h1>
           <p>Reviewing adoption applications is available to authorised team members.</p>
           <SignInButton mode="modal">
@@ -190,7 +217,11 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
     return (
       <main className="dashboard-locked">
         <div className="dashboard-locked-card">
-          <p className="eyebrow">ARA operations</p>
+          <div className="auth-brand">
+            <img src={spcaLogo} alt="SPCA Fiji logo" className="brand-logo" />
+            <strong>SPCA Fiji</strong>
+          </div>
+          <p className="eyebrow">SPCA operations</p>
           <h1>Access restricted</h1>
           <p>Your account does not have staff, veterinary, manager, or admin permissions.</p>
           <button type="button" className="teal-button" onClick={() => onNavigate("home")}>
@@ -209,7 +240,7 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
             <img src={spcaLogo} alt="SPCA Fiji logo" className="brand-logo" />
           </button>
           <div>
-            <p className="eyebrow">ARA operations</p>
+            <p className="eyebrow">SPCA operations</p>
             <h1>Adoption applications</h1>
           </div>
         </div>
@@ -261,7 +292,7 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
         {savingMessage && <p className="invite-feedback success">{savingMessage}</p>}
         {savingError && <p className="invite-feedback error">{savingError}</p>}
 
-        {isLoading && <p className="dashboard-data-state">Loading adoption applications...</p>}
+        {isLoading && <SkeletonLoader variant="card" />}
         {!isLoading && loadError && <p className="dashboard-data-state error">{loadError}</p>}
         {!isLoading && !loadError && visibleApplications.length === 0 && (
           <p className="dashboard-data-state">No adoption applications match your filters.</p>
@@ -273,6 +304,13 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
               const isExpanded = expandedId === application.id;
               const detail = detailById[application.id] ?? application;
               const nextStatuses = NEXT_STATUSES[application.status] ?? [];
+
+              // Only a veterinarian can set animals.medically_cleared (clearAnimal,
+              // behind requireVeterinaryAccess) and the server refuses
+              // under_review -> approved without it, so flag it here rather than
+              // let the reviewer find out from a rejected save. Read off `detail`
+              // so an expanded row uses the freshest fetch.
+              const awaitingClearance = !!detail.animal && !detail.animal.medicallyCleared;
               return (
                 <div key={application.id} className={`rescue-card${isExpanded ? " expanded" : ""}`}>
                   <button
@@ -297,6 +335,14 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
                       </span>
                     </div>
                     <div className="rescue-summary-badges">
+                      {awaitingClearance && (
+                        <span
+                          className="adoption-clearance-badge"
+                          title="A veterinarian has not cleared this animal yet, so this application cannot be approved."
+                        >
+                          Not cleared
+                        </span>
+                      )}
                       <span className={`adoption-status-badge ${adoptionStatusClass(application.status)}`}>
                         {SHORT_STATUS_LABEL[application.status]}
                       </span>
@@ -321,6 +367,10 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
                                   ? `${application.animal.name} (${application.animal.publicId})`
                                   : "Animal no longer on record"}
                               </dd>
+                            </div>
+                            <div className="rescue-detail-field">
+                              <dt>Medical clearance</dt>
+                              <dd>{clearanceDetail(detail.animal)}</dd>
                             </div>
                             <div className="rescue-detail-field">
                               <dt>Date submitted</dt>
@@ -387,10 +437,13 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
                                 {SHORT_STATUS_LABEL[application.status]}
                               </option>
                               {nextStatuses.map((status) => (
-                                <option key={status} value={status}>
+                                <option
+                                  key={status}
+                                  value={status}
+                                  disabled={status === "approved" && awaitingClearance}
+                                >
                                   Move to: {SHORT_STATUS_LABEL[status]}
-                                  {status === "approved" ? " (this animal can only be approved once)" : ""}
-                                  {status === "completed" ? " (removes the animal from public listings)" : ""}
+                                  {transitionHint(status, awaitingClearance)}
                                 </option>
                               ))}
                             </select>
@@ -416,6 +469,15 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
                           {application.status === "rejected" && application.reviewNotes && (
                             <p className="dispatch-hint">
                               Already rejected - this application is closed.
+                            </p>
+                          )}
+
+                          {awaitingClearance && (
+                            <p className="dispatch-hint">
+                              {detail.animal?.name} has not been medically cleared by a
+                              veterinarian yet, so this application cannot be approved. Ask the
+                              veterinary team to issue clearance first - you can still move it to
+                              Under Review or reject it in the meantime.
                             </p>
                           )}
 
