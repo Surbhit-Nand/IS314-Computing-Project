@@ -80,12 +80,25 @@ npm test             # node:test via tsx — server + frontend suites
 ```
 
 - **Tests**: `npm test` runs every `*.test.ts` under `server/src/**` and
-  `src/**` (94 tests / 6 files): adoptions, donations, reports, rescue, staff,
-  plus `src/utils/clerkToken.test.ts`. The script needs
+  `src/**`: adoptions, animals, donations, reports, rescue, staff, plus
+  `src/utils/clerkToken.test.ts`. The script needs
   `--experimental-test-module-mocks` because the suites stub modules with
   `node:test`'s `mock.module` — running `npx tsx --test <file>` directly fails
   with `TypeError: mock.module is not a function`. Add new suites as
   `*.test.ts` anywhere under those two roots; the glob picks them up.
+- **⚠️ `mock.module` does not work on Node v22.20.0** (verified with an isolated
+  probe, with and without `tsx`): the mocks are ignored and every mock-based
+  suite dies at import time with
+  `SyntaxError: The requested module '...' does not provide an export named
+  '...'`. On that Node version `npm test` therefore fails **adoptions, rescue and
+  staff** — pre-existing and unrelated to any current work. Donations, reports,
+  clerkToken and animals all pass.
+  **Do not write new suites with `mock.module`.** Take the collaborator
+  functions as an optional parameter instead (see the `SearchDependencies`
+  parameter on the animals service, which is what `animals.service.test.ts`
+  stubs). Also set `process.env.CLERK_SECRET_KEY` / `DATABASE_URL` to dummies at
+  the top of the file before importing anything, so the suite doesn't need a
+  real `.env` or a live database.
 - **Required order**: `db:migrate` → `server:dev`. A missing column is the #1
   cause of `column "xxx" of relation "animals" does not exist` crashes.
 - `npm run dev` does NOT start the API — run both `dev` and `server:dev`.
@@ -129,9 +142,21 @@ npm test             # node:test via tsx — server + frontend suites
       filters `status != adopted` + not soft-deleted; **medical-clearance gate
       is intentionally OFF** — see Data model guardrails
 - [x] Search + filters (type, gender, breed, behaviour, size, colour, vaccination)
-- [~] Natural-language search — client-side free-text match over name/breed/
-      colour/behaviour/description/size (`AnimalListings.tsx`). Assistive
-      filter only — no AI provider, never auto-decides.
+- [x] Natural-language search — backend Gemini embeddings + Neon pgvector.
+      `POST /api/animals/ai-search` (public) → `searchAnimalsWithAI`
+      (`animals.service.ts`) → `findSimilarPublicAnimals`
+      (`animals.repository.ts`, cosine `<=>` over `animals.search_embedding`).
+      Provider isolated in `services/aiSearchClient.ts`, keyed by
+      `GEMINI_API_KEY` (backend only), 768-dim `gemini-embedding-001`. Text fed
+      to the provider comes from `animalSearchText.ts` — public profile fields
+      only, never rescue history/medical/staff data. Embeddings are written on
+      register and on edits that touch a searchable field, and backfilled with
+      `npm run ai:backfill` (migration `0011_*` adds the `vector` extension +
+      column; it must be applied before searching). Assistive filter only — the
+      provider never decides anything, and `publicAnimalVisibility()` is the same
+      predicate the normal listing uses, so an adopted/uncleared/deleted animal
+      can never be returned. `AnimalListings.tsx` only reorders the profiles it
+      already loaded; if the provider is down it falls back to the full listing.
 
 **Adoption Application & Rescue Reporting**
 - [x] Public rescue report form (photos, location, condition, urgency) —
@@ -321,8 +346,31 @@ Every route/action is gated server-side by role, not just hidden in the UI
 
 Natural-language queries map to the same filters (species, breed, age, size,
 temperament…). **Assistive only** — it narrows results, never makes or
-overrides an adoption decision. Current implementation is a client-side
-keyword match, not an external AI provider.
+overrides an adoption decision.
+
+Implementation: the visitor's sentence is embedded by Gemini
+(`gemini-embedding-001`, 768 dimensions, `RETRIEVAL_QUERY`) and compared in
+Neon with pgvector cosine distance against each animal's stored vector
+(`RETRIEVAL_DOCUMENT`). Rules that must hold for any future change:
+
+- **The provider only ever scores text.** It receives no animal data beyond the
+  fields `animalSearchText.ts` lists, it returns no animal, and it never
+  influences availability — that is `publicAnimalVisibility()` in SQL, shared
+  with the normal listing.
+- **A `null` embedding means "not searchable yet", never "no match".** Animals
+  registered before this feature (or whose embedding failed) only appear after
+  `npm run ai:backfill`. Search is best-effort: it never rejects a registration
+  or an edit.
+- **Provider down ≠ no results.** The route returns 503, not an empty list, so
+  the frontend can fall back to the full listing + filters. Silently returning
+  "no animals" would be the one genuinely harmful failure mode.
+- `GEMINI_API_KEY` is **backend only** — never `VITE_`-prefixed, never sent to
+  the browser. The browser gets ids only; it renders the profiles it already
+  loaded from `GET /api/animals`.
+- `AI_SEARCH_MIN_SIMILARITY` defaults to `0` (ranking + limit only). Tune it
+  against real records before changing it — embedding models give unrelated
+  sentences a non-trivial baseline similarity, so a guessed cut-off hides valid
+  matches.
 
 ## Payments & third-party dependencies
 
