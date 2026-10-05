@@ -18,10 +18,33 @@ import {
 export type SubmitAdoptionApplicationInput = Pick<
 	Parameters<typeof createAdoptionApplication>[0],
 	| "animalId"
-	| "homeDetails"
-	| "familyDetails"
-	| "existingPets"
-	| "animalExperience"
+	| "fullName"
+	| "contactNumber"
+	| "applicantEmail"
+	| "residentialAddress"
+	| "dateOfBirth"
+	| "housingType"
+	| "tenure"
+	| "landlordPetsAllowed"
+	| "fencedYard"
+	| "householdSize"
+	| "childrenAges"
+	| "petAllergies"
+	| "ownedPetsBefore"
+	| "previousPetOutcome"
+	| "hasCurrentPets"
+	| "currentPetsDetails"
+	| "aloneHours"
+	| "primaryCaregiver"
+	| "dailyRoutine"
+	| "vetCostPlan"
+	| "travelCarePlan"
+	| "adoptionMotivation"
+	| "adoptionFor"
+	| "householdAgreement"
+	| "consentHomeVisit"
+	| "agreeReturnToSpca"
+	| "confirmAccurate"
 >;
 
 // The single adopted lifecycle for an application: submitted -> under_review
@@ -82,10 +105,37 @@ export async function submitAdoptionApplication(
 	const application = await createAdoptionApplication({
 		animalId: input.animalId,
 		applicantClerkUserId,
-		homeDetails: input.homeDetails,
-		familyDetails: input.familyDetails,
-		existingPets: input.existingPets ?? null,
-		animalExperience: input.animalExperience ?? null,
+		homeDetails: null,
+		familyDetails: null,
+		existingPets: null,
+		animalExperience: null,
+		fullName: input.fullName,
+		contactNumber: input.contactNumber,
+		applicantEmail: input.applicantEmail,
+		residentialAddress: input.residentialAddress,
+		dateOfBirth: input.dateOfBirth,
+		housingType: input.housingType,
+		tenure: input.tenure,
+		landlordPetsAllowed: input.landlordPetsAllowed ?? null,
+		fencedYard: input.fencedYard,
+		householdSize: input.householdSize,
+		childrenAges: input.childrenAges ?? null,
+		petAllergies: input.petAllergies,
+		ownedPetsBefore: input.ownedPetsBefore,
+		previousPetOutcome: input.previousPetOutcome ?? null,
+		hasCurrentPets: input.hasCurrentPets,
+		currentPetsDetails: input.currentPetsDetails ?? null,
+		aloneHours: input.aloneHours,
+		primaryCaregiver: input.primaryCaregiver,
+		dailyRoutine: input.dailyRoutine,
+		vetCostPlan: input.vetCostPlan,
+		travelCarePlan: input.travelCarePlan,
+		adoptionMotivation: input.adoptionMotivation,
+		adoptionFor: input.adoptionFor,
+		householdAgreement: input.householdAgreement,
+		consentHomeVisit: input.consentHomeVisit,
+		agreeReturnToSpca: input.agreeReturnToSpca,
+		confirmAccurate: input.confirmAccurate,
 		status: "submitted",
 		reviewNotes: null,
 	});

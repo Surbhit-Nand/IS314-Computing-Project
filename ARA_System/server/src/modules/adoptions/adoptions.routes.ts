@@ -19,13 +19,70 @@ const optionalText = z
 	.optional()
 	.transform((value) => (value && value !== "" ? value : undefined));
 
-const applicationSchema = z.object({
-	animalId: z.string().uuid("Link a valid animal"),
-	homeDetails: z.string().trim().min(1, "Tell us about your home"),
-	familyDetails: z.string().trim().min(1, "Tell us about your family"),
-	existingPets: optionalText,
-	animalExperience: optionalText,
-});
+const yesNo = z.enum(["yes", "no"]);
+
+const applicationSchema = z
+	.object({
+		animalId: z.string().uuid("Link a valid animal"),
+		// Section 1: applicant information.
+		fullName: z.string().trim().min(1, "Tell us your full name"),
+		contactNumber: z.string().trim().min(1, "Tell us your contact number"),
+		applicantEmail: z.string().trim().email("Enter a valid email address"),
+		residentialAddress: z.string().trim().min(1, "Tell us your residential address"),
+		dateOfBirth: z.string().trim().min(1, "Tell us your date of birth or age"),
+		// Section 2: household & living situation.
+		housingType: z.enum(["house", "apartment", "other"], "Choose your housing type"),
+		tenure: z.enum(["own", "rent"], "Choose whether you own or rent"),
+		landlordPetsAllowed: z.enum(["yes", "no", "not_sure"]).optional(),
+		fencedYard: z.enum(["yes", "no", "na"], "Tell us about your outdoor space"),
+		householdSize: z.coerce.number().int().min(1, "Enter the number of people in your household"),
+		childrenAges: optionalText,
+		petAllergies: yesNo,
+		// Section 3: pet experience.
+		ownedPetsBefore: yesNo,
+		previousPetOutcome: optionalText,
+		hasCurrentPets: yesNo,
+		currentPetsDetails: optionalText,
+		// Section 4: lifestyle & care plan.
+		aloneHours: z.string().trim().min(1, "Tell us how long the animal would be alone each day"),
+		primaryCaregiver: z.string().trim().min(1, "Tell us who will be the primary caregiver"),
+		dailyRoutine: z.string().trim().min(1, "Describe the daily exercise and care routine"),
+		vetCostPlan: z.string().trim().min(1, "Tell us how you will cover veterinary costs"),
+		travelCarePlan: z.string().trim().min(1, "Tell us your care plan when you travel"),
+		// Section 5: motivation.
+		adoptionMotivation: z.string().trim().min(1, "Tell us why you want to adopt this animal"),
+		adoptionFor: z.enum(["self", "gift"], "Choose who this adoption is for"),
+		householdAgreement: yesNo,
+		// Section 6: required acknowledgements.
+		consentHomeVisit: z.literal(true, "Please consent to a potential home visit"),
+		agreeReturnToSpca: z.literal(true, "Please agree to return the animal to SPCA Fiji if needed"),
+		confirmAccurate: z.literal(true, "Please confirm your information is accurate"),
+	})
+	// Conditional fields: renting requires the landlord question; past pets
+	// require the outcome; current pets require their details.
+	.superRefine((data, ctx) => {
+		if (data.tenure === "rent" && !data.landlordPetsAllowed) {
+			ctx.addIssue({
+				code: "custom",
+				path: ["landlordPetsAllowed"],
+				message: "Renters must tell us whether pets are allowed",
+			});
+		}
+		if (data.ownedPetsBefore === "yes" && !data.previousPetOutcome) {
+			ctx.addIssue({
+				code: "custom",
+				path: ["previousPetOutcome"],
+				message: "Tell us what happened to your previous pet(s)",
+			});
+		}
+		if (data.hasCurrentPets === "yes" && !data.currentPetsDetails) {
+			ctx.addIssue({
+				code: "custom",
+				path: ["currentPetsDetails"],
+				message: "Tell us about your current pets",
+			});
+		}
+	});
 
 const transitionSchema = z.object({
 	status: z.enum(ADOPTION_STATUSES),

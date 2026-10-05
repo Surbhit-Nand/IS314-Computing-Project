@@ -13,6 +13,10 @@ import {
   type AdoptionApplication,
   type AdoptionStatus,
 } from "../../types/adoption";
+import {
+  isGiftAdoption,
+  questionnaireSections,
+} from "./AdoptionQuestionnaireAnswers";
 import { SkeletonLoader } from "../../components/SkeletonLoader";
 import { isDevBypassEnabled } from "../../utils/devBypass";
 import { Breadcrumbs } from "../../components/Breadcrumbs";
@@ -343,6 +347,14 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
                           Not cleared
                         </span>
                       )}
+                      {isGiftAdoption(application) && (
+                        <span
+                          className="adoption-clearance-badge"
+                          title="This adoption is a gift for someone else - confirm the recipient is ready for a pet."
+                        >
+                          Gift - extra review
+                        </span>
+                      )}
                       <span className={`adoption-status-badge ${adoptionStatusClass(application.status)}`}>
                         {SHORT_STATUS_LABEL[application.status]}
                       </span>
@@ -381,22 +393,18 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
                                   : ""}
                               </dd>
                             </div>
-                            <div className="rescue-detail-field full">
-                              <dt>About their home</dt>
-                              <dd>{application.homeDetails}</dd>
-                            </div>
-                            <div className="rescue-detail-field full">
-                              <dt>About their family</dt>
-                              <dd>{application.familyDetails}</dd>
-                            </div>
-                            <div className="rescue-detail-field full">
-                              <dt>Existing pets</dt>
-                              <dd>{application.existingPets || "None mentioned"}</dd>
-                            </div>
-                            <div className="rescue-detail-field full">
-                              <dt>Experience with animals</dt>
-                              <dd>{application.animalExperience || "None mentioned"}</dd>
-                            </div>
+                            {questionnaireSections(detail).map((section) => (
+                              <div key={section.title} className="rescue-detail-field full">
+                                <dt>{section.title}</dt>
+                                <dd>
+                                  {section.rows.map((row) => (
+                                    <p key={row.label} className="adoption-answer-row">
+                                      <strong>{row.label}:</strong> {row.value}
+                                    </p>
+                                  ))}
+                                </dd>
+                              </div>
+                            ))}
                           </dl>
 
                           {detail.history && detail.history.length > 0 && (

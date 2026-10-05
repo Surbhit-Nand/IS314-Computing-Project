@@ -8804,3 +8804,71 @@
   font-size: 0.72rem;
   opacity: 0.7;
 }
+
+/* Adoption questionnaire sections - headings, radio groups, and consent
+   checkboxes inside .animal-form-grid. Tokens only; radios/checkboxes keep
+   their native size (the grid's width:100% input rule is scoped out). */
+.form-section-title {
+  margin: 8px 0 0;
+  color: var(--navy);
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.animal-form-grid fieldset.radio-group {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  padding: 12px 14px;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  color: var(--navy);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.animal-form-grid fieldset.radio-group legend {
+  padding: 0 6px;
+}
+
+.animal-form-grid label.radio-option {
+  flex-direction: row;
+  align-items: center;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.animal-form-grid input[type="radio"],
+.animal-form-grid input[type="checkbox"] {
+  width: auto;
+  padding: 0;
+  accent-color: var(--teal);
+}
+
+.animal-form-grid label.checkbox-option {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 10px;
+  font-weight: 400;
+  cursor: pointer;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  padding: 12px 14px;
+}
+
+.animal-form-grid label.checkbox-option input {
+  margin-top: 2px;
+}
+
+/* Questionnaire answers in the staff review queue and applicant detail
+   modal - one compact row per answer inside the shared detail lists. */
+.adoption-answer-row {
+  margin: 0 0 6px;
+}
+
+.adoption-answer-row:last-child {
+  margin-bottom: 0;
+}

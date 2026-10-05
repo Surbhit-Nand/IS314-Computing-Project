@@ -17,6 +17,7 @@ import {
   type AdoptionStatus,
   type AdoptionStatusHistoryEntry,
 } from "../../types/adoption";
+import { questionnaireSections } from "./AdoptionQuestionnaireAnswers";
 
 type MyApplicationsProps = {
   isLoaded: boolean;
@@ -136,28 +137,24 @@ function AdoptionApplicationDetailModal({
             <dt>Date submitted</dt>
             <dd>{formatDate(application.createdAt)}</dd>
           </div>
-          <div className="rescue-detail-item">
+          <div className="rescue-detail-item full">
             <dt>Animal</dt>
             <dd>
               {application.animal ? application.animal.name : "Animal no longer on record"}
             </dd>
           </div>
-          <div className="rescue-detail-item full">
-            <dt>About your home</dt>
-            <dd>{application.homeDetails}</dd>
-          </div>
-          <div className="rescue-detail-item full">
-            <dt>About your family</dt>
-            <dd>{application.familyDetails}</dd>
-          </div>
-          <div className="rescue-detail-item full">
-            <dt>Existing pets</dt>
-            <dd>{application.existingPets || "None mentioned"}</dd>
-          </div>
-          <div className="rescue-detail-item full">
-            <dt>Experience with animals</dt>
-            <dd>{application.animalExperience || "None mentioned"}</dd>
-          </div>
+          {questionnaireSections(application).map((section) => (
+            <div key={section.title} className="rescue-detail-item full">
+              <dt>{section.title}</dt>
+              <dd>
+                {section.rows.map((row) => (
+                  <p key={row.label} className="adoption-answer-row">
+                    <strong>{row.label}:</strong> {row.value}
+                  </p>
+                ))}
+              </dd>
+            </div>
+          ))}
           {application.reviewNotes && application.status !== "rejected" && (
             <div className="rescue-detail-item full">
               <dt>Review note from our team</dt>

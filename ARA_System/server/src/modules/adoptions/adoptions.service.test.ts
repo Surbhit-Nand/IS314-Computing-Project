@@ -113,10 +113,37 @@ function baseApplication(overrides: Record<string, unknown> = {}) {
 		id: APPLICATION_ID,
 		animalId: ANIMAL_ID,
 		applicantClerkUserId: APPLICANT_ID,
-		homeDetails: "A fenced yard",
-		familyDetails: "Two adults",
+		homeDetails: null,
+		familyDetails: null,
 		existingPets: null,
 		animalExperience: null,
+		fullName: "Mere Koro",
+		contactNumber: "9900000",
+		applicantEmail: "mere@example.com",
+		residentialAddress: "Suva",
+		dateOfBirth: "1995",
+		housingType: "house",
+		tenure: "own",
+		landlordPetsAllowed: null,
+		fencedYard: "yes",
+		householdSize: 4,
+		childrenAges: null,
+		petAllergies: "no",
+		ownedPetsBefore: "no",
+		previousPetOutcome: null,
+		hasCurrentPets: "no",
+		currentPetsDetails: null,
+		aloneHours: "4 hours",
+		primaryCaregiver: "Mere Koro",
+		dailyRoutine: "Morning walk",
+		vetCostPlan: "Savings",
+		travelCarePlan: "Neighbour",
+		adoptionMotivation: "Companion",
+		adoptionFor: "self",
+		householdAgreement: "yes",
+		consentHomeVisit: true,
+		agreeReturnToSpca: true,
+		confirmAccurate: true,
 		status: "submitted",
 		reviewNotes: null,
 		createdAt: new Date("2026-01-01T00:00:00Z"),
@@ -251,12 +278,35 @@ describe("adoptions.service", () => {
 	});
 
 	describe("submitAdoptionApplication", () => {
-		const input = {
+		const input: Parameters<typeof submitAdoptionApplication>[0] = {
 			animalId: ANIMAL_ID,
-			homeDetails: "A fenced yard",
-			familyDetails: "Two adults",
-			existingPets: undefined,
-			animalExperience: undefined,
+			fullName: "Mere Koro",
+			contactNumber: "9900000",
+			applicantEmail: "mere@example.com",
+			residentialAddress: "Suva",
+			dateOfBirth: "1995",
+			housingType: "house",
+			tenure: "own",
+			landlordPetsAllowed: undefined,
+			fencedYard: "yes",
+			householdSize: 4,
+			childrenAges: undefined,
+			petAllergies: "no",
+			ownedPetsBefore: "no",
+			previousPetOutcome: undefined,
+			hasCurrentPets: "no",
+			currentPetsDetails: undefined,
+			aloneHours: "4 hours",
+			primaryCaregiver: "Mere Koro",
+			dailyRoutine: "Morning walk",
+			vetCostPlan: "Savings",
+			travelCarePlan: "Neighbour",
+			adoptionMotivation: "Companion",
+			adoptionFor: "self",
+			householdAgreement: "yes",
+			consentHomeVisit: true,
+			agreeReturnToSpca: true,
+			confirmAccurate: true,
 		};
 
 		it("creates a submitted application and its first history entry", async () => {
@@ -270,8 +320,9 @@ describe("adoptions.service", () => {
 			assert.equal(app.animalId, ANIMAL_ID);
 			assert.equal(app.applicantClerkUserId, APPLICANT_ID);
 			assert.equal(app.status, "submitted");
-			assert.equal(app.existingPets, null);
-			assert.equal(app.animalExperience, null);
+			assert.equal(app.fullName, "Mere Koro");
+			assert.equal(app.adoptionFor, "self");
+			assert.equal(app.consentHomeVisit, true);
 			assert.equal(historySpy.length, 1);
 			assert.deepEqual(historySpy[0], {
 				applicationId: APPLICATION_ID,
