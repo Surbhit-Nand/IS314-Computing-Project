@@ -10,8 +10,10 @@ import {
 	timestamp,
 	uniqueIndex,
 	uuid,
+	vector,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
+import { ANIMAL_SEARCH_EMBEDDING_DIMENSIONS } from "../config/aiSearchConfig.js";
 
 export const animalStatus = pgEnum("animal_status", [
 	"intake",
@@ -77,6 +79,18 @@ export const animals = pgTable("animals", {
 	// so deleting a row with any history would fail with a raw DB
 	// constraint error, and would destroy the audit trail for rows with none.
 	deletedAt: timestamp("deleted_at", { withTimezone: true }),
+	// Semantic-search vector for the AI listing search: the embedding of
+	// buildAnimalSearchText() (module animals/animalSearchText.ts), compared
+	// against a searcher's sentence with pgvector cosine distance.
+	//
+	// Nullable on purpose. Existing animals have no embedding until
+	// `npm run ai:backfill` runs, and an animal whose embedding could not be
+	// generated (provider outage at registration time) stays null rather than
+	// blocking its registration. Search simply ignores null rows, so a missing
+	// embedding costs an animal its AI visibility and nothing else.
+	searchEmbedding: vector("search_embedding", {
+		dimensions: ANIMAL_SEARCH_EMBEDDING_DIMENSIONS,
+	}),
 	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 	updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
