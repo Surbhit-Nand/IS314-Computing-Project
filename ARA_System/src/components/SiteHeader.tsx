@@ -22,6 +22,7 @@ export type SiteHeaderView =
   | "my-reports"
   | "adoption-apply"
   | "my-applications"
+  | "my-profile"
   | "manage-adoption-applications"
   | "register-animal"
   | "manage-animals"

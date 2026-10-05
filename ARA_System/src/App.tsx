@@ -9,6 +9,7 @@ import { AnimalProfilePage } from "./components/AnimalProfilePage";
 import { AuthPage } from "./components/AuthPage";
 import { HomePage } from "./components/HomePage";
 import { ManagerDashboard } from "./components/ManagerDashboard";
+import { MyProfilePage } from "./components/MyProfilePage";
 import { RescueOperationsPortal } from "./components/RescueOperationsPortal";
 import { StaffDashboard } from "./components/StaffDashboard";
 import { UserDashboard } from "./components/UserDashboard";
@@ -53,6 +54,7 @@ export type View =
   | "manage-rescue-reports"
   | "adoption-apply"
   | "my-applications"
+  | "my-profile"
   | "manage-adoption-applications"
   | "reports"
   | "veterinary-dashboard"
@@ -329,6 +331,10 @@ function App() {
         onNavigate={navigate}
       />
     );
+  }
+
+  if (activeView === "my-profile") {
+    return <MyProfilePage onNavigate={navigate} />;
   }
 
   if (activeView === "manage-adoption-applications") {
