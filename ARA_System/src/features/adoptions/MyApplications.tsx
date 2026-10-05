@@ -1,9 +1,8 @@
-import { SignInButton, UserButton, useAuth, useUser } from "@clerk/react";
+import { SignInButton, useAuth } from "@clerk/react";
 import { useEffect, useId, useState } from "react";
-import spcaLogo from "../../assets/spca-logo.png";
-import { DonateModal } from "../donations/DonateModal";
 import { Breadcrumbs } from "../../components/Breadcrumbs";
 import { SiteFooter } from "../../components/SiteFooter";
+import { SiteHeader, type SiteHeaderView } from "../../components/SiteHeader";
 import { SkeletonLoader } from "../../components/SkeletonLoader";
 import {
   fetchAdoptionApplicationDetail,
@@ -22,9 +21,7 @@ import {
 type MyApplicationsProps = {
   isLoaded: boolean;
   isSignedIn: boolean | undefined;
-  onNavigate: (
-    view: "home" | "animal-listings" | "user-dashboard" | "staff-dashboard" | "dashboard",
-  ) => void;
+  onNavigate: (view: SiteHeaderView) => void;
 };
 
 function formatDate(value: string): string {
@@ -194,8 +191,6 @@ function AdoptionApplicationDetailModal({
 // user, as a compact list. Clicking a row opens the stepper modal above.
 export function MyApplications({ isLoaded, isSignedIn, onNavigate }: MyApplicationsProps) {
   const { getToken } = useAuth();
-  const { user } = useUser();
-  const [donateOpen, setDonateOpen] = useState(false);
   const [applications, setApplications] = useState<AdoptionApplication[]>([]);
   const [applicationsLoading, setApplicationsLoading] = useState(false);
   const [applicationsError, setApplicationsError] = useState("");
@@ -203,12 +198,6 @@ export function MyApplications({ isLoaded, isSignedIn, onNavigate }: MyApplicati
   // fetched from the detail endpoint so "when" every step happened is shown.
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedDetail, setSelectedDetail] = useState<AdoptionApplication | null>(null);
-
-  const isStaff =
-    user?.publicMetadata.role === "staff" ||
-    user?.publicMetadata.role === "veterinarian" ||
-    user?.publicMetadata.role === "manager" ||
-    user?.publicMetadata.role === "admin";
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn) return;
@@ -251,48 +240,12 @@ export function MyApplications({ isLoaded, isSignedIn, onNavigate }: MyApplicati
 
   return (
     <div className="home-page">
-      <header className="site-header">
-        <button
-          type="button"
-          className="brand-group brand-button"
-          onClick={() => onNavigate("home")}
-        >
-          <img src={spcaLogo} alt="SPCA Fiji logo" className="brand-logo" />
-        </button>
-        <nav className="main-nav" aria-label="Main navigation">
-          <button type="button" className="nav-link" onClick={() => onNavigate("home")}>
-            Home
-          </button>
-          <button type="button" className="nav-link" onClick={() => onNavigate("animal-listings")}>
-            Animals
-          </button>
-          <button type="button" className="nav-link" onClick={() => setDonateOpen(true)}>
-            Donate
-          </button>
-        </nav>
-        <div className="header-actions">
-          {!isLoaded ? null : isSignedIn ? (
-            <>
-              <button
-                type="button"
-                className="teal-button"
-                onClick={() => onNavigate(isStaff ? "staff-dashboard" : "user-dashboard")}
-              >
-                My dashboard
-              </button>
-              <div className="user-avatar-circle">
-                <UserButton />
-              </div>
-            </>
-          ) : (
-            <SignInButton mode="modal">
-              <button type="button" className="teal-button">
-                Sign in to see your applications
-              </button>
-            </SignInButton>
-          )}
-        </div>
-      </header>
+      <SiteHeader
+        isLoaded={isLoaded}
+        isSignedIn={isSignedIn}
+        currentPage="my-applications"
+        onNavigate={onNavigate}
+      />
 
       <main className="page-shell">
         <Breadcrumbs
@@ -394,7 +347,6 @@ export function MyApplications({ isLoaded, isSignedIn, onNavigate }: MyApplicati
           onClose={closeDetail}
         />
       )}
-      <DonateModal open={donateOpen} onClose={() => setDonateOpen(false)} />
     </div>
   );
 }

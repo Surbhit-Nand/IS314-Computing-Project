@@ -8693,3 +8693,114 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Header notification bell - shared inbox for adoption status moves.
+   Tokens only (var(--teal)/--navy/--line/--bg); panel sits above page
+   content (z-index 60) but below modals (100) and toasts (1000). */
+.notification-bell-wrap {
+  position: relative;
+}
+
+.notification-bell {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--navy);
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+
+.notification-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--red);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.notification-panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: min(360px, 86vw);
+  max-height: 420px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 12px 32px rgba(15, 60, 90, 0.16);
+  z-index: 60;
+  padding: 8px;
+}
+
+.notification-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  color: var(--navy);
+}
+
+.notification-empty {
+  padding: 16px 10px;
+  color: var(--navy);
+  font-size: 0.88rem;
+  text-align: center;
+}
+
+.notification-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.notification-item {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  color: var(--navy);
+}
+
+.notification-item.unread {
+  background: var(--bg);
+  border-color: var(--line);
+}
+
+.notification-item-title {
+  font-weight: 800;
+  font-size: 0.86rem;
+}
+
+.notification-item-body {
+  font-size: 0.8rem;
+  opacity: 0.85;
+}
+
+.notification-item-time {
+  font-size: 0.72rem;
+  opacity: 0.7;
+}

@@ -1,10 +1,10 @@
-import { SignInButton, UserButton, useAuth, useUser } from "@clerk/react";
+import { SignInButton, useAuth, useUser } from "@clerk/react";
 import { useState, type FormEvent } from "react";
-import spcaLogo from "../../assets/spca-logo.png";
-import { DonateModal } from "../donations/DonateModal";
 import { submitAdoptionApplication } from "../../services/adoptionsApi";
 import type { Animal } from "../../types/animal";
 import { Breadcrumbs } from "../../components/Breadcrumbs";
+import { SiteFooter } from "../../components/SiteFooter";
+import { SiteHeader, type SiteHeaderView } from "../../components/SiteHeader";
 import { SkeletonLoader } from "../../components/SkeletonLoader";
 
 type AdoptionApplicationFormProps = {
@@ -15,9 +15,7 @@ type AdoptionApplicationFormProps = {
   isLoaded: boolean;
   isSignedIn: boolean | undefined;
   onShowMyApplications: () => void;
-  onNavigate: (
-    view: "home" | "animal-listings" | "animal-profile" | "my-applications",
-  ) => void;
+  onNavigate: (view: SiteHeaderView) => void;
 };
 
 // Public, signed-in apply-to-adopt form for one animal. Mirrors the rescue
@@ -32,7 +30,6 @@ export function AdoptionApplicationForm({
 }: AdoptionApplicationFormProps) {
   const { getToken } = useAuth();
   const { user } = useUser();
-  const [donateOpen, setDonateOpen] = useState(false);
   const [homeDetails, setHomeDetails] = useState("");
   const [familyDetails, setFamilyDetails] = useState("");
   const [existingPets, setExistingPets] = useState("");
@@ -73,41 +70,12 @@ export function AdoptionApplicationForm({
 
   return (
     <div className="home-page">
-      <header className="site-header">
-        <button
-          type="button"
-          className="brand-group brand-button"
-          onClick={() => onNavigate("home")}
-        >
-          <img src={spcaLogo} alt="SPCA Fiji logo" className="brand-logo" />
-        </button>
-        <nav className="main-nav" aria-label="Main navigation">
-          <button type="button" className="nav-link" onClick={() => onNavigate("animal-listings")}>
-            Animals
-          </button>
-          <button type="button" className="nav-link active" aria-current="page">
-            Adopt
-          </button>
-        </nav>
-        <div className="header-actions">
-          {!isLoaded ? null : isSignedIn ? (
-            <>
-              <button type="button" className="teal-button" onClick={onShowMyApplications}>
-                My applications
-              </button>
-              <div className="user-avatar-circle">
-                <UserButton />
-              </div>
-            </>
-          ) : (
-            <SignInButton mode="modal">
-              <button type="button" className="teal-button">
-                Sign in to adopt
-              </button>
-            </SignInButton>
-          )}
-        </div>
-      </header>
+      <SiteHeader
+        isLoaded={isLoaded}
+        isSignedIn={isSignedIn}
+        currentPage="adoption-apply"
+        onNavigate={onNavigate}
+      />
 
       <main className="page-shell">
         <Breadcrumbs
@@ -266,7 +234,7 @@ export function AdoptionApplicationForm({
           </section>
         )}
       </main>
-      <DonateModal open={donateOpen} onClose={() => setDonateOpen(false)} />
+      <SiteFooter />
     </div>
   );
 }

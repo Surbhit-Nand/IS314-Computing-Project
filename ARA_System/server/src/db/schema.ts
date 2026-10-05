@@ -349,3 +349,20 @@ export const donations = pgTable("donations", {
 	stripeCheckoutSessionId: text("stripe_checkout_session_id"),
 	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// In-app notifications (bell/badge in the UI). Recipients are Clerk user ids -
+// there is deliberately no FK because Clerk identities don't live in Postgres.
+// Email delivery is a separate best-effort step in services/email.ts; this row
+// is the durable record the UI reads, so a failed email never loses the
+// notification itself.
+export const notifications = pgTable("notifications", {
+	id: uuid("id").defaultRandom().primaryKey(),
+	recipientClerkUserId: text("recipient_clerk_user_id").notNull(),
+	type: text("type").notNull().default("adoption.status_changed"),
+	title: text("title").notNull(),
+	body: text("body"),
+	entityType: text("entity_type"),
+	entityId: text("entity_id"),
+	readAt: timestamp("read_at", { withTimezone: true }),
+	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});

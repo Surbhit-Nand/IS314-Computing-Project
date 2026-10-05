@@ -1,5 +1,8 @@
 import { logAuditEntry } from "../../shared/audit/audit.service.js";
+import { clerkClient } from "../../services/clerkClient.js";
+import { sendAdoptionStatusEmail } from "../../services/email.js";
 import { getAnimalById, updateAnimalProfile } from "../animals/animals.service.js";
+import { createAdoptionStatusNotification } from "../notifications/notifications.service.js";
 import {
 	createAdoptionApplication,
 	createAdoptionStatusHistoryEntry,
@@ -98,6 +101,17 @@ export async function submitAdoptionApplication(
 		note: null,
 	});
 
+	// Tell the applicant their application landed (in-app row + email).
+	// Best-effort: notification/email failure must never fail the submission.
+	await notifyApplicantBestEffort({
+		recipientClerkUserId: applicantClerkUserId,
+		animalName: animal.name ?? null,
+		fromStatus: "",
+		toStatus: "submitted",
+		reviewNote: null,
+		applicationId: application.id,
+	});
+
 	return application;
 }
 
@@ -174,13 +188,63 @@ export async function transitionAdoptionApplication(
 		},
 	});
 
+	// Tell the applicant about the move (in-app row + email). Best-effort, so
+	// a mail outage or Clerk lookup failure never rolls back the transition.
+	const refreshed = await findAdoptionApplicationById(updated.id);
+	const animalName =
+		(refreshed as { animal?: { name?: string | null } } | undefined)?.animal?.name ??
+		(application as { animal?: { name?: string | null } }).animal?.name ??
+		null;
+	await notifyApplicantBestEffort({
+		recipientClerkUserId: application.applicantClerkUserId,
+		animalName,
+		fromStatus: current,
+		toStatus: input.status,
+		reviewNote: input.reviewNotes ?? null,
+		applicationId: updated.id,
+	});
+
 	// Re-fetch so the caller gets the animal display fields + fresh row.
-	return findAdoptionApplicationById(updated.id);
+	return refreshed;
 }
 
 async function requireMedicallyCleared(animalId: string): Promise<boolean> {
 	const animal = await getAnimalById(animalId);
 	return animal?.medicallyCleared === true;
+}
+
+// In-app row first (durable, the UI reads this), email second (transient).
+// Every step is wrapped so a failure notifies nobody but breaks nothing -
+// the status move itself already committed above.
+async function notifyApplicantBestEffort(input: {
+	recipientClerkUserId: string;
+	animalName: string | null;
+	fromStatus: string;
+	toStatus: string;
+	reviewNote?: string | null;
+	applicationId: string;
+}) {
+	try {
+		await createAdoptionStatusNotification(input);
+	} catch (error) {
+		console.error("[notifications] failed to create adoption notification", error);
+	}
+	try {
+		const clerkUser = await clerkClient.users.getUser(input.recipientClerkUserId);
+		const emailAddress =
+			clerkUser.primaryEmailAddress?.emailAddress ??
+			clerkUser.emailAddresses?.[0]?.emailAddress;
+		if (!emailAddress) return;
+		await sendAdoptionStatusEmail({
+			to: emailAddress,
+			animalName: input.animalName,
+			toStatus: input.toStatus,
+			reviewNote: input.reviewNote,
+			applicationId: input.applicationId,
+		});
+	} catch (error) {
+		console.error("[notifications] failed to send adoption email", error);
+	}
 }
 
 function throwIfInvalidTransition(from: AdoptionStatus, to: AdoptionStatus) {

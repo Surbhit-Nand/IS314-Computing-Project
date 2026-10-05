@@ -9,6 +9,11 @@ const databaseUrl = process.env.DATABASE_URL;
 const cloudinaryCloudName = process.env.CLOUDINARY_CLOUD_NAME;
 const cloudinaryApiKey = process.env.CLOUDINARY_API_KEY;
 const cloudinaryApiSecret = process.env.CLOUDINARY_API_SECRET;
+// Optional transactional-mail config (adoption status emails). Absent in local
+// dev/CI on purpose - services/email.ts skips sending and logs instead, so
+// the API boots and tests run without mail credentials.
+const resendApiKey = process.env.RESEND_API_KEY;
+const emailFrom = process.env.EMAIL_FROM;
 
 if (!clerkSecretKey) {
 	throw new Error("CLERK_SECRET_KEY is required to start the API");
@@ -46,5 +51,7 @@ export const env = {
 	cloudinaryCloudName,
 	cloudinaryApiKey,
 	cloudinaryApiSecret,
+	resendApiKey,
+	emailFrom,
 	devBypassAuth,
 };

@@ -67,6 +67,26 @@ moduleMock("../../shared/audit/audit.service.js", {
 	logAuditEntry: (input: unknown) => currentImpl("logAuditEntry")(input),
 });
 
+// Notification + email side-effects of submit/transition are stubbed the same
+// way: the service must notify best-effort, so tests assert the calls happen
+// without ever touching a database, Clerk, or mail provider.
+moduleMock("../notifications/notifications.service.js", {
+	createAdoptionStatusNotification: (input: unknown) =>
+		currentImpl("createAdoptionStatusNotification")(input),
+});
+
+moduleMock("../../services/email.js", {
+	sendAdoptionStatusEmail: (input: unknown) => currentImpl("sendAdoptionStatusEmail")(input),
+});
+
+moduleMock("../../services/clerkClient.js", {
+	clerkClient: {
+		users: {
+			getUser: (id: string) => currentImpl("clerkGetUser")(id),
+		},
+	},
+});
+
 
 const {
 	ADOPTION_STATUSES,
@@ -85,6 +105,8 @@ const ACTOR_ID = "user-staff";
 const historySpy: Array<Record<string, unknown>> = [];
 const auditSpy: Array<Record<string, unknown>> = [];
 const animalUpdateSpy: Array<Record<string, unknown>> = [];
+const notificationSpy: Array<Record<string, unknown>> = [];
+const emailSpy: Array<Record<string, unknown>> = [];
 
 function baseApplication(overrides: Record<string, unknown> = {}) {
 	return {
@@ -135,6 +157,8 @@ function resetImpls() {
 	historySpy.length = 0;
 	auditSpy.length = 0;
 	animalUpdateSpy.length = 0;
+	notificationSpy.length = 0;
+	emailSpy.length = 0;
 
 	repo("findAllAdoptionApplications", async () => []);
 	repo("findAdoptionApplicationsByApplicant", async () => []);
@@ -156,6 +180,18 @@ function resetImpls() {
 	repo("logAuditEntry", async (entry: Record<string, unknown>) => {
 		auditSpy.push(entry);
 	});
+	repo("createAdoptionStatusNotification", async (entry: Record<string, unknown>) => {
+		notificationSpy.push(entry);
+		return entry;
+	});
+	repo("sendAdoptionStatusEmail", async (entry: Record<string, unknown>) => {
+		emailSpy.push(entry);
+		return { sent: true };
+	});
+	repo("clerkGetUser", async () => ({
+		primaryEmailAddress: { emailAddress: "applicant@example.com" },
+		emailAddresses: [],
+	}));
 }
 
 beforeEach(resetImpls);
@@ -268,6 +304,20 @@ describe("adoptions.service", () => {
 			repo("findActiveAdoptionApplication", async () => baseApplication());
 
 			await assert.rejects(submitAdoptionApplication(input, APPLICANT_ID), /already applied/);
+		});
+
+		it("notifies the applicant in-app and by email on submit", async () => {
+			repo("getAnimalById", async () => baseAnimal());
+			repo("findActiveAdoptionApplication", async () => undefined);
+			repo("createAdoptionApplication", async (data: Record<string, unknown>) => ({ id: APPLICATION_ID, ...data }));
+
+			await submitAdoptionApplication(input, APPLICANT_ID);
+
+			assert.equal(notificationSpy.length, 1);
+			assert.equal(notificationSpy[0].recipientClerkUserId, APPLICANT_ID);
+			assert.equal(notificationSpy[0].toStatus, "submitted");
+			assert.equal(emailSpy.length, 1);
+			assert.equal(emailSpy[0].to, "applicant@example.com");
 		});
 	});
 
@@ -414,6 +464,34 @@ describe("adoptions.service", () => {
 			assert.equal(historySpy[0].note, null);
 			assert.equal(auditSpy.length, 1);
 			assert.deepEqual(auditSpy[0].metadata, { animalId: ANIMAL_ID, fromStatus: "submitted", toStatus: "submitted" });
+		});
+
+		it("notifies the applicant in-app and by email on every transition", async () => {
+			statefulApplication("submitted");
+
+			await transitionAdoptionApplication(APPLICATION_ID, { status: "under_review" }, ACTOR_ID);
+
+			assert.equal(notificationSpy.length, 1);
+			assert.equal(notificationSpy[0].recipientClerkUserId, APPLICANT_ID);
+			assert.equal(notificationSpy[0].toStatus, "under_review");
+			assert.equal(emailSpy.length, 1);
+			assert.equal(emailSpy[0].toStatus, "under_review");
+		});
+
+		it("still completes the transition when notification and email fail", async () => {
+			statefulApplication("submitted");
+			repo("createAdoptionStatusNotification", async () => {
+				throw new Error("db down");
+			});
+			repo("sendAdoptionStatusEmail", async () => {
+				throw new Error("mail down");
+			});
+
+			const result = await transitionAdoptionApplication(APPLICATION_ID, { status: "under_review" }, ACTOR_ID);
+
+			assert.equal(result?.status, "under_review");
+			assert.equal(historySpy.length, 1);
+			assert.equal(auditSpy.length, 1);
 		});
 	});
 });
