@@ -1,7 +1,8 @@
 import * as dotenv from "dotenv";
-import { neon } from "@neondatabase/serverless";
+import { neon, neonConfig } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
 import { migrate } from "drizzle-orm/neon-http/migrator";
+import { retryTransient } from "../shared/retry/retry.js";
 
 // drizzle-kit's own `migrate` CLI command auto-selects the
 // '@neondatabase/serverless' WEBSOCKET driver for Neon connection strings,
@@ -21,6 +22,11 @@ const databaseUrl = process.env.DATABASE_URL_UNPOOLED ?? process.env.DATABASE_UR
 if (!databaseUrl) {
 	throw new Error("DATABASE_URL_UNPOOLED or DATABASE_URL is required to run migrations");
 }
+
+// Same transient retry as runtime queries (db/client.ts) - DDL over HTTP
+// hits the same cold-start timeouts.
+neonConfig.fetchFunction = (url: string, init?: RequestInit) =>
+	retryTransient(() => fetch(url, init));
 
 const sql = neon(databaseUrl);
 const db = drizzle(sql);

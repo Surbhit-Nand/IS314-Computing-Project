@@ -97,7 +97,7 @@ The threshold is environment-driven; the code fallback is 0 if omitted. Set
 the current small dataset, not a universal cutoff; re-evaluate it as the
 adoptable dataset becomes substantially larger.
 
-Apply required database migrations (including `0011_*` for pgvector) before
+Apply required database migrations (including `0013_*` for pgvector) before
 starting the API. Coordinate migrations against the shared development database.
 Run `npm run server:dev` for the API (8787) and `npm run dev` separately for
 the frontend (5173). The committed server command is `tsx server/src/server.ts`;

@@ -125,6 +125,14 @@ npm test             # node:test via tsx — server + frontend suites
   columns are missing on the live DB (`server/src/db/drift-check.ts`) — warns,
   never crashes.
 - One person should own applying migrations so the journal stays consistent.
+- **Skipped-migration trap (hit Oct 2026 with `0012`)**: drizzle's migrator
+  applies only migrations with a journal `when` NEWER than the single latest
+  applied row — on this shared DB a teammate's newer migration makes yours
+  silently skipped while `db:migrate` still reports success. If the boot
+  drift warning names your columns after a migrate, your file was skipped:
+  run its statements manually against the live DB, then record the journal
+  row exactly as the migrator would (`hash` = sha256 of the raw `.sql` file,
+  `created_at` = the journal `when`) into `drizzle.__drizzle_migrations`.
 
 ## Core functionality status (build/test checklist)
 
@@ -150,7 +158,7 @@ npm test             # node:test via tsx — server + frontend suites
       register and on edits that touch a searchable field. Missing embeddings
       are retried on eligible profile updates and successful medical clearance,
       and backfilled with
-      `npm run ai:backfill` (migration `0011_*` adds the `vector` extension +
+      `npm run ai:backfill` (migration `0013_*` adds the `vector` extension +
       column; it must be applied before searching). Assistive filter only — the
       provider never decides anything, and `publicAnimalVisibility()` is the same
       predicate the normal listing uses, so an adopted/uncleared/deleted animal

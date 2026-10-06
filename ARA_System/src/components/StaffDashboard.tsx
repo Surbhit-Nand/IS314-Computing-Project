@@ -94,6 +94,13 @@ export function StaffDashboard({ onNavigate }: StaffDashboardProps) {
             Welcome back, {user?.firstName ?? "team member"}. Review the queue
             and keep rescue, intake, adoption, and medical records up to date.
           </p>
+          <button
+            type="button"
+            className="text-button"
+            onClick={() => onNavigate("my-profile")}
+          >
+            Edit my profile
+          </button>
         </div>
         <div className="dashboard-actions">
           <button
