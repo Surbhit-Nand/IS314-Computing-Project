@@ -5,12 +5,15 @@ import {
 	animals,
 	auditLogs,
 	donations,
+	notifications,
 	rescueReports,
 	vetAppointments,
 } from "./schema.js";
 
-// The six tables the app owns. Kept explicit (rather than reflecting over the
+// The tables the app owns. Kept explicit (rather than reflecting over the
 // schema module) so enum objects never leak into the column comparison.
+// `notifications` is included because a teammate's slimmer variant of the
+// table once shipped without our columns while drift stayed silent.
 const tables = [
 	animals,
 	rescueReports,
@@ -18,6 +21,7 @@ const tables = [
 	vetAppointments,
 	auditLogs,
 	donations,
+	notifications,
 ] as const;
 
 type ColumnRow = { table_name: string; column_name: string };

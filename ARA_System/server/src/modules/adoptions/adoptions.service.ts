@@ -1,5 +1,12 @@
 import { logAuditEntry } from "../../shared/audit/audit.service.js";
+import { clerkClient } from "../../services/clerkClient.js";
+import { sendAdoptionStatusEmail, sendAdoptionSubmittedStaffEmail } from "../../services/email.js";
+import { listStaffContacts } from "../../services/staffDirectory.js";
 import { getAnimalById, updateAnimalProfile } from "../animals/animals.service.js";
+import {
+	createAdoptionStatusNotification,
+	createAdoptionSubmittedStaffNotifications,
+} from "../notifications/notifications.service.js";
 import {
 	createAdoptionApplication,
 	createAdoptionStatusHistoryEntry,
@@ -15,10 +22,33 @@ import {
 export type SubmitAdoptionApplicationInput = Pick<
 	Parameters<typeof createAdoptionApplication>[0],
 	| "animalId"
-	| "homeDetails"
-	| "familyDetails"
-	| "existingPets"
-	| "animalExperience"
+	| "fullName"
+	| "contactNumber"
+	| "applicantEmail"
+	| "residentialAddress"
+	| "dateOfBirth"
+	| "housingType"
+	| "tenure"
+	| "landlordPetsAllowed"
+	| "fencedYard"
+	| "householdSize"
+	| "childrenAges"
+	| "petAllergies"
+	| "ownedPetsBefore"
+	| "previousPetOutcome"
+	| "hasCurrentPets"
+	| "currentPetsDetails"
+	| "aloneHours"
+	| "primaryCaregiver"
+	| "dailyRoutine"
+	| "vetCostPlan"
+	| "travelCarePlan"
+	| "adoptionMotivation"
+	| "adoptionFor"
+	| "householdAgreement"
+	| "consentHomeVisit"
+	| "agreeReturnToSpca"
+	| "confirmAccurate"
 >;
 
 // The single adopted lifecycle for an application: submitted -> under_review
@@ -79,10 +109,37 @@ export async function submitAdoptionApplication(
 	const application = await createAdoptionApplication({
 		animalId: input.animalId,
 		applicantClerkUserId,
-		homeDetails: input.homeDetails,
-		familyDetails: input.familyDetails,
-		existingPets: input.existingPets ?? null,
-		animalExperience: input.animalExperience ?? null,
+		homeDetails: null,
+		familyDetails: null,
+		existingPets: null,
+		animalExperience: null,
+		fullName: input.fullName,
+		contactNumber: input.contactNumber,
+		applicantEmail: input.applicantEmail,
+		residentialAddress: input.residentialAddress,
+		dateOfBirth: input.dateOfBirth,
+		housingType: input.housingType,
+		tenure: input.tenure,
+		landlordPetsAllowed: input.landlordPetsAllowed ?? null,
+		fencedYard: input.fencedYard,
+		householdSize: input.householdSize,
+		childrenAges: input.childrenAges ?? null,
+		petAllergies: input.petAllergies,
+		ownedPetsBefore: input.ownedPetsBefore,
+		previousPetOutcome: input.previousPetOutcome ?? null,
+		hasCurrentPets: input.hasCurrentPets,
+		currentPetsDetails: input.currentPetsDetails ?? null,
+		aloneHours: input.aloneHours,
+		primaryCaregiver: input.primaryCaregiver,
+		dailyRoutine: input.dailyRoutine,
+		vetCostPlan: input.vetCostPlan,
+		travelCarePlan: input.travelCarePlan,
+		adoptionMotivation: input.adoptionMotivation,
+		adoptionFor: input.adoptionFor,
+		householdAgreement: input.householdAgreement,
+		consentHomeVisit: input.consentHomeVisit,
+		agreeReturnToSpca: input.agreeReturnToSpca,
+		confirmAccurate: input.confirmAccurate,
 		status: "submitted",
 		reviewNotes: null,
 	});
@@ -96,6 +153,24 @@ export async function submitAdoptionApplication(
 		status: "submitted",
 		changedByClerkUserId: null,
 		note: null,
+	});
+
+	// Tell the applicant their application landed (in-app row + email).
+	// Best-effort: notification/email failure must never fail the submission.
+	await notifyApplicantBestEffort({
+		recipientClerkUserId: applicantClerkUserId,
+		animalName: animal.name ?? null,
+		toStatus: "submitted",
+		reviewNote: null,
+		applicationId: application.id,
+	});
+
+	// Tell the review team a new application is waiting (in-app row per
+	// staff member + email each). Best-effort like the applicant notify.
+	await notifyStaffOfSubmissionBestEffort({
+		animalName: animal.name ?? null,
+		applicantName: input.fullName ?? null,
+		applicationId: application.id,
 	});
 
 	return application;
@@ -174,13 +249,60 @@ export async function transitionAdoptionApplication(
 		},
 	});
 
+	// Tell the applicant about the move (in-app row + email). Best-effort, so
+	// a mail outage or Clerk lookup failure never rolls back the transition.
+	const refreshed = await findAdoptionApplicationById(updated.id);
+	const animalName =
+		(refreshed as { animal?: { name?: string | null } } | undefined)?.animal?.name ??
+		(application as { animal?: { name?: string | null } }).animal?.name ??
+		null;
+	await notifyApplicantBestEffort({
+		recipientClerkUserId: application.applicantClerkUserId,
+		animalName,
+		toStatus: input.status,
+		reviewNote: input.reviewNotes ?? null,
+		applicationId: updated.id,
+	});
+
 	// Re-fetch so the caller gets the animal display fields + fresh row.
-	return findAdoptionApplicationById(updated.id);
+	return refreshed;
 }
 
 async function requireMedicallyCleared(animalId: string): Promise<boolean> {
 	const animal = await getAnimalById(animalId);
 	return animal?.medicallyCleared === true;
+}
+
+// In-app row first (durable, the UI reads this), email second (transient).
+// Every step is wrapped so a failure notifies nobody but breaks nothing -
+// the status move itself already committed above.
+async function notifyApplicantBestEffort(input: {
+	recipientClerkUserId: string;
+	animalName: string | null;
+	toStatus: string;
+	reviewNote?: string | null;
+	applicationId: string;
+}) {
+	try {
+		await createAdoptionStatusNotification(input);
+	} catch (error) {
+		console.error("[notifications] failed to create adoption notification", error);
+	}
+	try {
+		const clerkUser = await clerkClient.users.getUser(input.recipientClerkUserId);
+		const emailAddress =
+			clerkUser.primaryEmailAddress?.emailAddress ??
+			clerkUser.emailAddresses?.[0]?.emailAddress;
+		if (!emailAddress) return;
+		await sendAdoptionStatusEmail({
+			to: emailAddress,
+			animalName: input.animalName,
+			toStatus: input.toStatus,
+			reviewNote: input.reviewNote,
+		});
+	} catch (error) {
+		console.error("[notifications] failed to send adoption email", error);
+	}
 }
 
 function throwIfInvalidTransition(from: AdoptionStatus, to: AdoptionStatus) {
@@ -189,5 +311,46 @@ function throwIfInvalidTransition(from: AdoptionStatus, to: AdoptionStatus) {
 		throw new Error(
 			`Adoption application cannot move from "${from}" to "${to}" - only ${allowed.length > 0 ? allowed.join(" -> ") : "(terminal state)"} is allowed.`,
 		);
+	}
+}
+
+// New submissions are made by applicants, so the review team would otherwise
+// only discover them by opening the queue. Broadcast one in-app row per staff
+// member plus an email each - all best-effort, never failing the submission.
+async function notifyStaffOfSubmissionBestEffort(input: {
+	animalName: string | null;
+	applicantName: string | null;
+	applicationId: string;
+}) {
+	let staff: Awaited<ReturnType<typeof listStaffContacts>>;
+	try {
+		staff = await listStaffContacts();
+	} catch (error) {
+		console.error("[notifications] failed to list staff contacts", error);
+		return;
+	}
+	if (staff.length === 0) return;
+	try {
+		await createAdoptionSubmittedStaffNotifications({
+			staffClerkUserIds: staff.map((member) => member.clerkUserId),
+			animalName: input.animalName,
+			applicantName: input.applicantName,
+			applicationId: input.applicationId,
+		});
+	} catch (error) {
+		console.error("[notifications] failed to create staff notifications", error);
+	}
+	for (const member of staff) {
+		if (!member.email) continue;
+		try {
+			await sendAdoptionSubmittedStaffEmail({
+				to: member.email,
+				animalName: input.animalName,
+				applicantName: input.applicantName,
+				applicationId: input.applicationId,
+			});
+		} catch (error) {
+			console.error("[notifications] failed to send staff email", error);
+		}
 	}
 }

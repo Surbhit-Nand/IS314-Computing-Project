@@ -1,13 +1,20 @@
-import { SignInButton, SignUpButton, UserButton, useUser } from "@clerk/react";
-import { useState } from "react";
+import { SignInButton, SignUpButton, UserButton, useAuth, useUser } from "@clerk/react";
+import { useEffect, useState } from "react";
 import spcaLogo from "../assets/spca-logo.png";
 import { DonateModal } from "../features/donations/DonateModal";
+import {
+  fetchMyNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
+} from "../services/notificationsApi";
+import type { NotificationsInbox } from "../types/notification";
 import { isDevBypassEnabled } from "../utils/devBypass";
 import { isDispatcherRole } from "../utils/roles";
 
 export type SiteHeaderView =
   | "home"
   | "animal-listings"
+  | "animal-profile"
   | "about"
   | "login"
   | "register"
@@ -22,6 +29,7 @@ export type SiteHeaderView =
   | "my-reports"
   | "adoption-apply"
   | "my-applications"
+  | "my-profile"
   | "manage-adoption-applications"
   | "register-animal"
   | "manage-animals"
@@ -56,8 +64,77 @@ export function SiteHeader({
   hideSiteNav = false,
 }: SiteHeaderProps) {
   const { user } = useUser();
+  const { getToken } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [donateOpen, setDonateOpen] = useState(false);
+  // Applicant inbox for the header bell. Fetched on sign-in and refreshed
+  // every minute so adoption status moves surface without a page reload.
+  // Failures stay silent - the bell just shows nothing rather than breaking
+  // the header when the API is down.
+  const [inbox, setInbox] = useState<NotificationsInbox | null>(null);
+  const [bellOpen, setBellOpen] = useState(false);
+
+  useEffect(() => {
+    // The bell only renders for signed-in sessions, so nothing needs clearing
+    // on sign-out - the next sign-in overwrites the inbox below.
+    if (!isLoaded || !isSignedIn) return;
+    let cancelled = false;
+    async function loadInbox() {
+      try {
+        const token = await getToken();
+        if (!token || cancelled) return;
+        const data = await fetchMyNotifications(token);
+        if (!cancelled) setInbox(data);
+      } catch {
+        if (!cancelled) setInbox(null);
+      }
+    }
+    void loadInbox();
+    const timer = window.setInterval(() => void loadInbox(), 60000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [getToken, isLoaded, isSignedIn]);
+
+  async function handleMarkAllRead() {
+    try {
+      const token = await getToken();
+      if (!token) return;
+      await markAllNotificationsRead(token);
+      setInbox((previous) =>
+        previous
+          ? { items: previous.items.map((item) => ({ ...item, readAt: item.readAt ?? new Date().toISOString() })), unreadCount: 0 }
+          : previous,
+      );
+    } catch {
+      // Leave the bell as-is; the next poll retries.
+    }
+  }
+
+  async function handleOpenNotification(id: string, entityType: string | null) {
+    setBellOpen(false);
+    try {
+      const token = await getToken();
+      if (!token) return;
+      await markNotificationRead(token, id);
+      setInbox((previous) =>
+        previous
+          ? {
+              items: previous.items.map((item) =>
+                item.id === id ? { ...item, readAt: item.readAt ?? new Date().toISOString() } : item,
+              ),
+              unreadCount: Math.max(0, previous.unreadCount - 1),
+            }
+          : previous,
+      );
+    } catch {
+      // Read state syncs on the next poll.
+    }
+    if (entityType === "adoption_application") {
+      navigate("my-applications");
+    }
+  }
   const userRole = user?.publicMetadata.role;
   const isAdmin = userRole === "manager" || userRole === "admin";
   const isDispatcher = isDispatcherRole(userRole);
@@ -257,9 +334,17 @@ export function SiteHeader({
               <button
                 type="button"
                 className={
-                  currentPage === "animal-listings" ? "nav-link active" : "nav-link"
+                  currentPage === "adoption-apply" || currentPage === "my-applications"
+                    ? "nav-link active"
+                    : "nav-link"
                 }
-                onClick={() => navigate("animal-listings")}
+                onClick={() => {
+                  navigate("animal-listings");
+                  // Adopt points at the listings page, so clicking it while
+                  // already there is a same-view no-op - scroll to top so it
+                  // still feels responsive.
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
               >
                 Adopt
               </button>
@@ -284,6 +369,60 @@ export function SiteHeader({
       <div className="header-actions">
         {!isLoaded ? null : isSignedIn ? (
           <>
+            <div className="notification-bell-wrap">
+              <button
+                type="button"
+                className="notification-bell"
+                onClick={() => setBellOpen((open) => !open)}
+                aria-label={inbox && inbox.unreadCount > 0 ? `Notifications, ${inbox.unreadCount} unread` : "Notifications"}
+                aria-expanded={bellOpen}
+              >
+                <span aria-hidden="true">🔔</span>
+                {inbox && inbox.unreadCount > 0 && (
+                  <span className="notification-badge" aria-hidden="true">
+                    {inbox.unreadCount > 9 ? "9+" : inbox.unreadCount}
+                  </span>
+                )}
+              </button>
+              {bellOpen && (
+                <div className="notification-panel" role="dialog" aria-label="Notifications">
+                  <div className="notification-panel-head">
+                    <strong>Notifications</strong>
+                    {inbox && inbox.unreadCount > 0 && (
+                      <button type="button" className="mini-button" onClick={() => void handleMarkAllRead()}>
+                        Mark all read
+                      </button>
+                    )}
+                  </div>
+                  {!inbox || inbox.items.length === 0 ? (
+                    <p className="notification-empty">You are all caught up.</p>
+                  ) : (
+                    <ul className="notification-list">
+                      {inbox.items.slice(0, 10).map((item) => (
+                        <li key={item.id}>
+                          <button
+                            type="button"
+                            className={`notification-item${item.readAt ? "" : " unread"}`}
+                            onClick={() => void handleOpenNotification(item.id, item.entityType)}
+                          >
+                            <span className="notification-item-title">{item.title}</span>
+                            {item.body && <span className="notification-item-body">{item.body}</span>}
+                            <span className="notification-item-time">
+                              {new Date(item.createdAt).toLocaleString(undefined, {
+                                day: "numeric",
+                                month: "short",
+                                hour: "numeric",
+                                minute: "2-digit",
+                              })}
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
             <button
               type="button"
               className="teal-button dashboard-link"

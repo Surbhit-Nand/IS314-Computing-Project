@@ -67,6 +67,34 @@ moduleMock("../../shared/audit/audit.service.js", {
 	logAuditEntry: (input: unknown) => currentImpl("logAuditEntry")(input),
 });
 
+// Notification + email side-effects of submit/transition are stubbed the same
+// way: the service must notify best-effort, so tests assert the calls happen
+// without ever touching a database, Clerk, or mail provider.
+moduleMock("../notifications/notifications.service.js", {
+	createAdoptionStatusNotification: (input: unknown) =>
+		currentImpl("createAdoptionStatusNotification")(input),
+	createAdoptionSubmittedStaffNotifications: (input: unknown) =>
+		currentImpl("createAdoptionSubmittedStaffNotifications")(input),
+});
+
+moduleMock("../../services/email.js", {
+	sendAdoptionStatusEmail: (input: unknown) => currentImpl("sendAdoptionStatusEmail")(input),
+	sendAdoptionSubmittedStaffEmail: (input: unknown) =>
+		currentImpl("sendAdoptionSubmittedStaffEmail")(input),
+});
+
+moduleMock("../../services/staffDirectory.js", {
+	listStaffContacts: () => currentImpl("listStaffContacts")(),
+});
+
+moduleMock("../../services/clerkClient.js", {
+	clerkClient: {
+		users: {
+			getUser: (id: string) => currentImpl("clerkGetUser")(id),
+		},
+	},
+});
+
 
 const {
 	ADOPTION_STATUSES,
@@ -85,16 +113,47 @@ const ACTOR_ID = "user-staff";
 const historySpy: Array<Record<string, unknown>> = [];
 const auditSpy: Array<Record<string, unknown>> = [];
 const animalUpdateSpy: Array<Record<string, unknown>> = [];
+const notificationSpy: Array<Record<string, unknown>> = [];
+const emailSpy: Array<Record<string, unknown>> = [];
+const staffNotificationSpy: Array<Record<string, unknown>> = [];
+const staffEmailSpy: Array<Record<string, unknown>> = [];
 
 function baseApplication(overrides: Record<string, unknown> = {}) {
 	return {
 		id: APPLICATION_ID,
 		animalId: ANIMAL_ID,
 		applicantClerkUserId: APPLICANT_ID,
-		homeDetails: "A fenced yard",
-		familyDetails: "Two adults",
+		homeDetails: null,
+		familyDetails: null,
 		existingPets: null,
 		animalExperience: null,
+		fullName: "Mere Koro",
+		contactNumber: "9900000",
+		applicantEmail: "mere@example.com",
+		residentialAddress: "Suva",
+		dateOfBirth: "1995",
+		housingType: "house",
+		tenure: "own",
+		landlordPetsAllowed: null,
+		fencedYard: "yes",
+		householdSize: 4,
+		childrenAges: null,
+		petAllergies: "no",
+		ownedPetsBefore: "no",
+		previousPetOutcome: null,
+		hasCurrentPets: "no",
+		currentPetsDetails: null,
+		aloneHours: "4 hours",
+		primaryCaregiver: "Mere Koro",
+		dailyRoutine: "Morning walk",
+		vetCostPlan: "Savings",
+		travelCarePlan: "Neighbour",
+		adoptionMotivation: "Companion",
+		adoptionFor: "self",
+		householdAgreement: "yes",
+		consentHomeVisit: true,
+		agreeReturnToSpca: true,
+		confirmAccurate: true,
 		status: "submitted",
 		reviewNotes: null,
 		createdAt: new Date("2026-01-01T00:00:00Z"),
@@ -135,6 +194,10 @@ function resetImpls() {
 	historySpy.length = 0;
 	auditSpy.length = 0;
 	animalUpdateSpy.length = 0;
+	notificationSpy.length = 0;
+	emailSpy.length = 0;
+	staffNotificationSpy.length = 0;
+	staffEmailSpy.length = 0;
 
 	repo("findAllAdoptionApplications", async () => []);
 	repo("findAdoptionApplicationsByApplicant", async () => []);
@@ -156,6 +219,30 @@ function resetImpls() {
 	repo("logAuditEntry", async (entry: Record<string, unknown>) => {
 		auditSpy.push(entry);
 	});
+	repo("createAdoptionStatusNotification", async (entry: Record<string, unknown>) => {
+		notificationSpy.push(entry);
+		return entry;
+	});
+	repo("createAdoptionSubmittedStaffNotifications", async (entry: Record<string, unknown>) => {
+		staffNotificationSpy.push(entry);
+		return [];
+	});
+	repo("sendAdoptionSubmittedStaffEmail", async (entry: Record<string, unknown>) => {
+		staffEmailSpy.push(entry);
+		return { sent: true };
+	});
+	repo("listStaffContacts", async () => [
+		{ clerkUserId: "user-staff-1", email: "staff1@example.com", role: "staff" },
+		{ clerkUserId: "user-manager-1", email: null, role: "manager" },
+	]);
+	repo("sendAdoptionStatusEmail", async (entry: Record<string, unknown>) => {
+		emailSpy.push(entry);
+		return { sent: true };
+	});
+	repo("clerkGetUser", async () => ({
+		primaryEmailAddress: { emailAddress: "applicant@example.com" },
+		emailAddresses: [],
+	}));
 }
 
 beforeEach(resetImpls);
@@ -215,12 +302,35 @@ describe("adoptions.service", () => {
 	});
 
 	describe("submitAdoptionApplication", () => {
-		const input = {
+		const input: Parameters<typeof submitAdoptionApplication>[0] = {
 			animalId: ANIMAL_ID,
-			homeDetails: "A fenced yard",
-			familyDetails: "Two adults",
-			existingPets: undefined,
-			animalExperience: undefined,
+			fullName: "Mere Koro",
+			contactNumber: "9900000",
+			applicantEmail: "mere@example.com",
+			residentialAddress: "Suva",
+			dateOfBirth: "1995",
+			housingType: "house",
+			tenure: "own",
+			landlordPetsAllowed: undefined,
+			fencedYard: "yes",
+			householdSize: 4,
+			childrenAges: undefined,
+			petAllergies: "no",
+			ownedPetsBefore: "no",
+			previousPetOutcome: undefined,
+			hasCurrentPets: "no",
+			currentPetsDetails: undefined,
+			aloneHours: "4 hours",
+			primaryCaregiver: "Mere Koro",
+			dailyRoutine: "Morning walk",
+			vetCostPlan: "Savings",
+			travelCarePlan: "Neighbour",
+			adoptionMotivation: "Companion",
+			adoptionFor: "self",
+			householdAgreement: "yes",
+			consentHomeVisit: true,
+			agreeReturnToSpca: true,
+			confirmAccurate: true,
 		};
 
 		it("creates a submitted application and its first history entry", async () => {
@@ -234,8 +344,9 @@ describe("adoptions.service", () => {
 			assert.equal(app.animalId, ANIMAL_ID);
 			assert.equal(app.applicantClerkUserId, APPLICANT_ID);
 			assert.equal(app.status, "submitted");
-			assert.equal(app.existingPets, null);
-			assert.equal(app.animalExperience, null);
+			assert.equal(app.fullName, "Mere Koro");
+			assert.equal(app.adoptionFor, "self");
+			assert.equal(app.consentHomeVisit, true);
 			assert.equal(historySpy.length, 1);
 			assert.deepEqual(historySpy[0], {
 				applicationId: APPLICATION_ID,
@@ -268,6 +379,50 @@ describe("adoptions.service", () => {
 			repo("findActiveAdoptionApplication", async () => baseApplication());
 
 			await assert.rejects(submitAdoptionApplication(input, APPLICANT_ID), /already applied/);
+		});
+
+		it("notifies the applicant in-app and by email on submit", async () => {
+			repo("getAnimalById", async () => baseAnimal());
+			repo("findActiveAdoptionApplication", async () => undefined);
+			repo("createAdoptionApplication", async (data: Record<string, unknown>) => ({ id: APPLICATION_ID, ...data }));
+
+			await submitAdoptionApplication(input, APPLICANT_ID);
+
+			assert.equal(notificationSpy.length, 1);
+			assert.equal(notificationSpy[0].recipientClerkUserId, APPLICANT_ID);
+			assert.equal(notificationSpy[0].toStatus, "submitted");
+			assert.equal(emailSpy.length, 1);
+			assert.equal(emailSpy[0].to, "applicant@example.com");
+		});
+
+		it("notifies the review team in-app and by email on submit", async () => {
+			repo("getAnimalById", async () => baseAnimal());
+			repo("findActiveAdoptionApplication", async () => undefined);
+			repo("createAdoptionApplication", async (data: Record<string, unknown>) => ({ id: APPLICATION_ID, ...data }));
+
+			await submitAdoptionApplication(input, APPLICANT_ID);
+
+			assert.equal(staffNotificationSpy.length, 1);
+			assert.deepEqual(staffNotificationSpy[0].staffClerkUserIds, ["user-staff-1", "user-manager-1"]);
+			assert.equal(staffNotificationSpy[0].applicationId, APPLICATION_ID);
+			// Only the staffer with an email address gets mail.
+			assert.equal(staffEmailSpy.length, 1);
+			assert.equal(staffEmailSpy[0].to, "staff1@example.com");
+		});
+
+		it("still completes the submit when staff notification fails", async () => {
+			repo("getAnimalById", async () => baseAnimal());
+			repo("findActiveAdoptionApplication", async () => undefined);
+			repo("createAdoptionApplication", async (data: Record<string, unknown>) => ({ id: APPLICATION_ID, ...data }));
+			repo("listStaffContacts", async () => {
+				throw new Error("clerk down");
+			});
+
+			const app = await submitAdoptionApplication(input, APPLICANT_ID);
+
+			assert.equal(app.id, APPLICATION_ID);
+			assert.equal(notificationSpy.length, 1);
+			assert.equal(staffNotificationSpy.length, 0);
 		});
 	});
 
@@ -414,6 +569,34 @@ describe("adoptions.service", () => {
 			assert.equal(historySpy[0].note, null);
 			assert.equal(auditSpy.length, 1);
 			assert.deepEqual(auditSpy[0].metadata, { animalId: ANIMAL_ID, fromStatus: "submitted", toStatus: "submitted" });
+		});
+
+		it("notifies the applicant in-app and by email on every transition", async () => {
+			statefulApplication("submitted");
+
+			await transitionAdoptionApplication(APPLICATION_ID, { status: "under_review" }, ACTOR_ID);
+
+			assert.equal(notificationSpy.length, 1);
+			assert.equal(notificationSpy[0].recipientClerkUserId, APPLICANT_ID);
+			assert.equal(notificationSpy[0].toStatus, "under_review");
+			assert.equal(emailSpy.length, 1);
+			assert.equal(emailSpy[0].toStatus, "under_review");
+		});
+
+		it("still completes the transition when notification and email fail", async () => {
+			statefulApplication("submitted");
+			repo("createAdoptionStatusNotification", async () => {
+				throw new Error("db down");
+			});
+			repo("sendAdoptionStatusEmail", async () => {
+				throw new Error("mail down");
+			});
+
+			const result = await transitionAdoptionApplication(APPLICATION_ID, { status: "under_review" }, ACTOR_ID);
+
+			assert.equal(result?.status, "under_review");
+			assert.equal(historySpy.length, 1);
+			assert.equal(auditSpy.length, 1);
 		});
 	});
 });
