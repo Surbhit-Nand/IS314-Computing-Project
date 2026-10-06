@@ -33,12 +33,14 @@ process.env.DATABASE_URL = "postgresql://test:test@localhost:5432/ara_test";
 
 const {
 	backfillMissingAnimalEmbeddings,
+	ensureMissingAnimalSearchEmbedding,
 	normalizeSearchQuery,
 	registerAnimal,
 	searchAnimalsWithAI,
 	updateAnimalProfile,
 } = await import("./animals.service.js");
 const { buildAnimalSearchText, touchesSearchableField } = await import("./animalSearchText.js");
+const { medicallyClear } = await import("../veterinary/veterinary.service.js");
 
 // An animal row exactly as animals.repository.ts returns it, and the shape a
 // registration is given - derived from the schema rather than restated here.
@@ -144,6 +146,7 @@ function dependencies() {
 				animal(patch),
 			setAnimalSearchEmbedding: async (id: string, embedding: Embedding | null) => {
 				embeddingWrites.push({ id, embedding });
+				if (embedding) missingAnimals = missingAnimals.filter((row) => row.id !== id);
 				return { id };
 			},
 			findSimilarPublicAnimals: (
@@ -154,6 +157,7 @@ function dependencies() {
 				return Promise.resolve(storedAnimals);
 			},
 			findAnimalsMissingSearchEmbedding: async () => missingAnimals,
+			findAnimalMissingSearchEmbedding: async (id: string) => missingAnimals.find((row) => row.id === id),
 		},
 		provider: {
 			embedSearchQuery: (text: string) => embed(text, "query"),
@@ -377,7 +381,7 @@ describe("editing an animal", () => {
 		assert.deepEqual(embeddingWrites, [{ id: ANIMAL_ID, embedding: providerEmbedding }]);
 	});
 
-	it("does not re-embed for an edit that leaves the search text unchanged", async () => {
+	it("preserves a valid embedding on a non-searchable edit", async () => {
 		await updateAnimalProfile(
 			ANIMAL_ID,
 			{ photoUrls: ["https://res.cloudinary.com/example/new.jpg"], status: "medically_cleared" },
@@ -386,6 +390,41 @@ describe("editing an animal", () => {
 
 		assert.deepEqual(embedCalls, []);
 		assert.deepEqual(embeddingWrites, []);
+	});
+
+	it("retries a missing embedding on a non-searchable status edit", async () => {
+		missingAnimals = [animal()];
+		const saved = await updateAnimalProfile(ANIMAL_ID, { status: "medically_cleared" }, dependencies());
+		assert.equal(saved.status, "medically_cleared");
+		assert.equal(embedCalls.length, 1);
+		assert.deepEqual(embeddingWrites, [{ id: ANIMAL_ID, embedding: providerEmbedding }]);
+		// A later unrelated save does not repeatedly regenerate the repaired vector.
+		await updateAnimalProfile(ANIMAL_ID, { photoUrls: [] }, dependencies());
+		assert.equal(embedCalls.length, 1);
+	});
+
+	it("keeps a non-searchable save successful when the missing-vector retry fails", async () => {
+		missingAnimals = [animal()];
+		providerFailure = new AiSearchUnavailableError("Provider unavailable");
+		const saved = await updateAnimalProfile(ANIMAL_ID, { status: "medically_cleared" }, dependencies());
+		assert.equal(saved.status, "medically_cleared");
+		assert.equal(embedCalls.length, 1);
+		assert.deepEqual(embeddingWrites, [{ id: ANIMAL_ID, embedding: null }]);
+		assert.equal(missingAnimals.length, 1);
+	});
+
+	it("does not fail the saved profile if the retry lookup is unavailable", async () => {
+		const deps = dependencies();
+		deps.repository.findAnimalMissingSearchEmbedding = async () => { throw new Error("Database lookup failed"); };
+		const saved = await updateAnimalProfile(ANIMAL_ID, { photoUrls: [] }, deps);
+		assert.deepEqual(saved.photoUrls, []);
+		assert.deepEqual(embedCalls, []);
+	});
+
+	it("does not manufacture an embedding for an incomplete legacy profile", async () => {
+		missingAnimals = [animal({ description: " ", behaviour: null })];
+		assert.equal(await ensureMissingAnimalSearchEmbedding(ANIMAL_ID, dependencies()), false);
+		assert.deepEqual(embedCalls, []);
 	});
 
 	it("clears a stale embedding when re-embedding fails", async () => {
@@ -402,6 +441,57 @@ describe("editing an animal", () => {
 		// has.
 		assert.equal(updated?.description, "A brand new description.");
 		assert.deepEqual(embeddingWrites, [{ id: ANIMAL_ID, embedding: null }]);
+	});
+});
+
+describe("medical clearance repairs missing search coverage", () => {
+	function clearanceSetup() {
+		let saved = { ...animal({ medicallyCleared: false }), searchEmbedding: null as number[] | null };
+		missingAnimals = [saved];
+		const deps = dependencies();
+		return {
+			deps,
+			clearance: {
+				findMedicalRecord: async () => ({
+					animal: saved, treatments: [], appointments: [], carePlan: [],
+					examinations: [{
+						id: "exam-1", animalId: ANIMAL_ID, examinationDate: "2026-01-04",
+						weightKg: null, temperatureC: null, generalCondition: "Healthy",
+						injuries: null, observations: null, diagnosis: null, notes: null,
+						performedByClerkUserId: "vet-1", createdAt: new Date(),
+					}],
+				}),
+				changeCarePlan: async () => { throw new Error("No care-plan mutation expected"); },
+				clearAnimal: async () => {
+					saved = { ...saved, medicallyCleared: true };
+					missingAnimals = [saved];
+					return { animal: saved, clearedBy: "vet-1", clearedAt: new Date() };
+				},
+				ensureMissingAnimalSearchEmbedding: async (id: string) => {
+					assert.equal(saved.medicallyCleared, true, "clearance must save before embedding retry");
+					return ensureMissingAnimalSearchEmbedding(id, deps);
+				},
+			},
+		};
+	}
+
+	it("runs the missing-vector helper after the real medical-clearance service saves", async () => {
+		const { clearance } = clearanceSetup();
+		const saved = await medicallyClear(ANIMAL_ID, "vet-1", undefined, clearance);
+		assert.equal(saved.animal.medicallyCleared, true);
+		assert.equal(embedCalls.length, 1);
+		assert.deepEqual(embeddingWrites, [{ id: ANIMAL_ID, embedding: providerEmbedding }]);
+		assert.equal(missingAnimals.length, 0);
+		assert.doesNotMatch(embedCalls[0].text, /tick treatment|user_vet_1/);
+	});
+
+	it("keeps medical clearance successful if Gemini fails and leaves the vector missing", async () => {
+		const { clearance } = clearanceSetup();
+		providerFailure = new AiSearchUnavailableError("Provider unavailable");
+		const saved = await medicallyClear(ANIMAL_ID, "vet-1", undefined, clearance);
+		assert.equal(saved.animal.medicallyCleared, true);
+		assert.deepEqual(embeddingWrites, [{ id: ANIMAL_ID, embedding: null }]);
+		assert.equal(missingAnimals.length, 1);
 	});
 });
 
