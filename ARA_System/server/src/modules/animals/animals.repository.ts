@@ -146,6 +146,14 @@ export async function findAnimalsMissingSearchEmbedding() {
 		.where(and(isNull(animals.searchEmbedding), isNull(animals.deletedAt)));
 }
 
+// Internal retry lookup: do not expose vectors in normal profile responses.
+export async function findAnimalMissingSearchEmbedding(id: string) {
+	const rows = await db.select(animalProfileColumns).from(animals).where(and(
+		eq(animals.id, id), isNull(animals.searchEmbedding), isNull(animals.deletedAt),
+	));
+	return rows.at(0);
+}
+
 // Soft delete: marks an animal as removed without touching the row, so
 // rescue_reports/adoption_applications/vet_appointments rows that reference
 // it by foreign key (and the animal's own history) are never broken or
