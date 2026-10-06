@@ -334,7 +334,9 @@ export function SiteHeader({
               <button
                 type="button"
                 className={
-                  currentPage === "animal-listings" ? "nav-link active" : "nav-link"
+                  currentPage === "adoption-apply" || currentPage === "my-applications"
+                    ? "nav-link active"
+                    : "nav-link"
                 }
                 onClick={() => navigate("animal-listings")}
               >
