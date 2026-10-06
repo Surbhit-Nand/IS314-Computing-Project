@@ -3,6 +3,7 @@ import { adoptionStatusLabel, sizeDisplayLabel, vaccinationStatusLabel, type Ani
 import { useFavoriteAnimals } from "../utils/favorites";
 import { capitalize } from "../utils/format";
 import { Breadcrumbs } from "./Breadcrumbs";
+import { PhotoLightbox } from "./PhotoLightbox";
 import { SiteHeader, type SiteHeaderView } from "./SiteHeader";
 
 type AnimalProfilePageProps = {
@@ -24,6 +25,7 @@ export function AnimalProfilePage({ animal, isLoaded, isSignedIn, currentPage, o
   // AnimalProfileFields.tsx, where photoUrls[0] is set as the first photo
   // staff upload) - then lets a visitor step through the rest.
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
+  const [isLightboxOpen, setIsLightboxOpen] = useState(false);
 
   const favorited = isFavorite(animal.id);
   const activePhoto = animal.photoUrls[activePhotoIndex] ?? animal.photoUrls[0];
@@ -67,10 +69,23 @@ export function AnimalProfilePage({ animal, isLoaded, isSignedIn, currentPage, o
           <section className="profile-hero">
             <div
               className="profile-hero-image"
-              aria-label={`${animal.name} photo`}
               style={activePhoto ? { backgroundImage: `url(${activePhoto})` } : undefined}
             >
-              {!activePhoto && <span className="animal-image-label">{capitalize(animal.type)}</span>}
+              {/* Click-to-preview: a transparent layer over the (cropped)
+                  photo that opens the full, uncropped photo in the lightbox.
+                  The heart and prev/next buttons below are siblings of this
+                  button, not children, so clicking them can never open the
+                  preview. */}
+              {activePhoto ? (
+                <button
+                  type="button"
+                  className="profile-hero-preview"
+                  aria-label={`Preview photo ${activePhotoIndex + 1} of ${animal.photoUrls.length} of ${animal.name}`}
+                  onClick={() => setIsLightboxOpen(true)}
+                />
+              ) : (
+                <span className="animal-image-label">{capitalize(animal.type)}</span>
+              )}
               <button
                 type="button"
                 className={favorited ? "favorite-button active" : "favorite-button"}
@@ -118,6 +133,17 @@ export function AnimalProfilePage({ animal, isLoaded, isSignedIn, currentPage, o
               </div>
             )}
           </section>
+
+          {isLightboxOpen && activePhoto && (
+            <PhotoLightbox
+              photos={animal.photoUrls}
+              activeIndex={animal.photoUrls[activePhotoIndex] ? activePhotoIndex : 0}
+              animalName={animal.name}
+              onPrevious={showPreviousPhoto}
+              onNext={showNextPhoto}
+              onClose={() => setIsLightboxOpen(false)}
+            />
+          )}
 
           <div className="profile-columns">
             {/* LEFT: structured details - breed, physical traits, health/
