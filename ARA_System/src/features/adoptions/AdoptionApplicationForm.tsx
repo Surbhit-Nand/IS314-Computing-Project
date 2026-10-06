@@ -2,6 +2,7 @@ import { SignInButton, useAuth, useUser } from "@clerk/react";
 import { useState, type FormEvent } from "react";
 import { submitAdoptionApplication } from "../../services/adoptionsApi";
 import type { Animal } from "../../types/animal";
+import { ADULT_AGE, calculateAge } from "../../utils/age";
 import { Breadcrumbs } from "../../components/Breadcrumbs";
 import { SiteFooter } from "../../components/SiteFooter";
 import { SiteHeader, type SiteHeaderView } from "../../components/SiteHeader";
@@ -126,6 +127,15 @@ export function AdoptionApplicationForm({
       const householdSize = Number.parseInt(form.householdSize, 10);
       if (!Number.isInteger(householdSize) || householdSize < 1) {
         throw new Error("Enter the number of people in your household.");
+      }
+      // Age is derived from the calendar date at submit time, so staff always
+      // see how old the applicant was when they applied. Must be an adult.
+      const age = calculateAge(form.dateOfBirth);
+      if (age === null) {
+        throw new Error("Choose your date of birth from the calendar.");
+      }
+      if (age < ADULT_AGE) {
+        throw new Error("Adoption applicants must be at least 18 years old.");
       }
       if (
         !form.housingType ||
@@ -322,10 +332,18 @@ export function AdoptionApplicationForm({
                   />
                 </label>
                 <label>
-                  <span className="form-label-text">Date of birth / age</span>
+                  <span className="form-label-text">
+                    Date of birth
+                    {(() => {
+                      const age = calculateAge(form.dateOfBirth);
+                      return age === null ? null : (
+                        <em className="optional-hint"> (age {age} at application)</em>
+                      );
+                    })()}
+                  </span>
                   <input
-                    type="text"
-                    placeholder="e.g. 12 Mar 1995 (adopters must be adults)"
+                    type="date"
+                    max={new Date().toISOString().slice(0, 10)}
                     value={form.dateOfBirth}
                     onChange={(event) => setField("dateOfBirth", event.target.value)}
                     required

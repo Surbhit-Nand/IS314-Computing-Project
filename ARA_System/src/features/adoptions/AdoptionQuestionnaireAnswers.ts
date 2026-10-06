@@ -1,4 +1,5 @@
 import type { AdoptionApplication } from "../../types/adoption";
+import { calculateAge } from "../../utils/age";
 
 export type AnswerRow = { label: string; value: string };
 export type AnswerSection = { title: string; rows: AnswerRow[] };
@@ -57,7 +58,14 @@ export function questionnaireSections(application: AdoptionApplication): AnswerS
         { label: "Contact number", value: application.contactNumber ?? "Not provided" },
         { label: "Email", value: application.applicantEmail ?? "Not provided" },
         { label: "Residential address", value: application.residentialAddress ?? "Not provided" },
-        { label: "Date of birth / age", value: application.dateOfBirth ?? "Not provided" },
+        {
+          label: "Date of birth",
+          value: (() => {
+            if (!application.dateOfBirth) return "Not provided";
+            const age = calculateAge(application.dateOfBirth);
+            return age === null ? application.dateOfBirth : `${application.dateOfBirth} (age ${age})`;
+          })(),
+        },
       ],
     },
     {

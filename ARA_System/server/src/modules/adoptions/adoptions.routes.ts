@@ -29,7 +29,10 @@ const applicationSchema = z
 		contactNumber: z.string().trim().min(1, "Tell us your contact number"),
 		applicantEmail: z.string().trim().email("Enter a valid email address"),
 		residentialAddress: z.string().trim().min(1, "Tell us your residential address"),
-		dateOfBirth: z.string().trim().min(1, "Tell us your date of birth or age"),
+		dateOfBirth: z
+			.string()
+			.trim()
+			.regex(/^\d{4}-\d{2}-\d{2}$/, "Choose your date of birth from the calendar"),
 		// Section 2: household & living situation.
 		housingType: z.enum(["house", "apartment", "other"], "Choose your housing type"),
 		tenure: z.enum(["own", "rent"], "Choose whether you own or rent"),
@@ -59,8 +62,23 @@ const applicationSchema = z
 		confirmAccurate: z.literal(true, "Please confirm your information is accurate"),
 	})
 	// Conditional fields: renting requires the landlord question; past pets
-	// require the outcome; current pets require their details.
+	// require the outcome; current pets require their details. Date of birth
+	// must be a real past date and the applicant must be an adult.
 	.superRefine((data, ctx) => {
+		const age = applicantAge(data.dateOfBirth);
+		if (age === null) {
+			ctx.addIssue({
+				code: "custom",
+				path: ["dateOfBirth"],
+				message: "Enter a valid date of birth in the past",
+			});
+		} else if (age < 18) {
+			ctx.addIssue({
+				code: "custom",
+				path: ["dateOfBirth"],
+				message: "Adoption applicants must be at least 18 years old",
+			});
+		}
 		if (data.tenure === "rent" && !data.landlordPetsAllowed) {
 			ctx.addIssue({
 				code: "custom",
@@ -88,6 +106,30 @@ const transitionSchema = z.object({
 	status: z.enum(ADOPTION_STATUSES),
 	reviewNotes: optionalText,
 });
+
+// Whole-year age from an ISO "YYYY-MM-DD" string, or null when invalid or
+// in the future. Mirrors src/utils/age.ts (kept local so the server bundle
+// never imports from the frontend tree).
+function applicantAge(dob: string): number | null {
+	const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dob.trim());
+	if (!match) return null;
+	const birth = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+	if (
+		Number.isNaN(birth.getTime()) ||
+		birth.getFullYear() !== Number(match[1]) ||
+		birth.getMonth() !== Number(match[2]) - 1 ||
+		birth.getDate() !== Number(match[3])
+	) {
+		return null;
+	}
+	const now = new Date();
+	let age = now.getFullYear() - birth.getFullYear();
+	const hadBirthday =
+		now.getMonth() > birth.getMonth() ||
+		(now.getMonth() === birth.getMonth() && now.getDate() >= birth.getDate());
+	if (!hadBirthday) age -= 1;
+	return age < 0 ? null : age;
+}
 
 // Express types a route param as `string | string[]` because a path pattern
 // could in principle capture a param more than once. Our routes only ever
