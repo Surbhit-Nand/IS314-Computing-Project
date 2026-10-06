@@ -109,32 +109,18 @@ export async function deleteAnimal(token: string, id: string): Promise<Animal> {
   return result as Animal;
 }
 
-// One AI search hit. Only the id is returned to the browser: the caller
-// already holds the full public profiles from GET /api/animals, so there is no
-// reason to ship a second copy of the same records - and no way for an internal
-// field to leak into the page through this response.
-export type AnimalSearchHit = {
-  id: string;
-};
+// One AI search hit: the endpoint now returns ranked IDs only (to avoid
+// shipping duplicate profile data and to prevent leaking internal fields).
+export type AnimalSearchHit = string;
 
-// Natural-language search: "small calm dog good with children" -> the publicly
-// adoptable animals that best match, most relevant first.
-//
-// Public, like GET /api/animals: browsing works with no account. The server
-// turns the sentence into a vector and ranks with pgvector - it never decides
-// anything about an animal, and the SQL public-visibility rules still apply, so
-// an adopted or not-yet-cleared animal can never appear here.
-//
-// Throws when the embedding provider is unreachable (503) or the API is down;
-// the caller is expected to fall back to the normal listing + filters, which
-// stay usable either way.
-export async function searchAnimalsWithAI(query: string): Promise<AnimalSearchHit[]> {
+// Natural-language search: returns ranked animal IDs (most relevant first).
+export async function searchAnimalsWithAI(query: string): Promise<string[]> {
   const response = await fetch(`${apiBaseUrl}/api/animals/ai-search`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ query }),
   });
-  const result = await readApiResponse<{ results?: AnimalSearchHit[]; error?: string }>(response);
+  const result = await readApiResponse<{ results?: string[]; error?: string }>(response);
   if (!response.ok) {
     throw new Error(
       result.error ?? "The search could not be completed. Please try again.",

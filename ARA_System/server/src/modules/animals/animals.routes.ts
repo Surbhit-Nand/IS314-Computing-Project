@@ -94,7 +94,8 @@ animalsRouter.post("/ai-search", async (request, response, next) => {
 	}
 
 	try {
-		response.json({ results: await searchAnimalsWithAI(parsed.data.query) });
+		const hits = await searchAnimalsWithAI(parsed.data.query);
+		response.json({ results: hits.map((h) => h.id) });
 	} catch (error) {
 		// The provider being unavailable is an expected, recoverable condition,
 		// not a bug: tell the caller so the frontend can keep the normal listing

@@ -134,7 +134,9 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
     try {
       const hits = await searchAnimalsWithAI(query);
       if (searchRun.current !== run) return; // a newer search has taken over
-      setAiRanking(hits.map((hit) => hit.id));
+      // If the server returns no matches, treat this as a completed search
+      // with an empty result set (do NOT fall back to all animals).
+      setAiRanking(hits.length === 0 ? [] : hits);
       setAiQuery(query);
     } catch (error: unknown) {
       if (searchRun.current !== run) return;
@@ -153,11 +155,13 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
     }
   }
 
-  // The animals the AI search picked, in the order it ranked them. Falls back to
-  // the full listing when no search is applied. Sidebar filters are applied on
-  // top of this, so a search can be narrowed further without searching again.
+  // The animals the AI search picked, in the order it ranked them.
+  // - aiRanking === null: no AI search active -> show full listing
+  // - aiRanking.length === 0: AI search completed but returned no matches -> show empty set
+  // - aiRanking.length > 0: show only those ranked matches, in order
   const ranked = useMemo(() => {
     if (aiRanking === null) return animals;
+    if (aiRanking.length === 0) return [];
     const rank = new Map(aiRanking.map((id, index) => [id, index]));
     return animals
       .filter((animal) => rank.has(animal.id))
@@ -448,7 +452,7 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
               {!animalsLoading && !animalsError && !aiSearching && visible.length === 0 && (
                 <p className="dashboard-data-state">
                   {aiQuery
-                    ? `No animals available match “${aiQuery}”. Try a different description, or clear the filters to see all animals.`
+                    ? `No animals available match “${aiQuery}”. Try a different description.`
                     : "No animals match your search. Try removing a filter or showing all animals."}
                 </p>
               )}
