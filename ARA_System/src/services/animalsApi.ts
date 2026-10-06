@@ -109,11 +109,8 @@ export async function deleteAnimal(token: string, id: string): Promise<Animal> {
   return result as Animal;
 }
 
-// One AI search hit: the endpoint now returns ranked IDs only (to avoid
-// shipping duplicate profile data and to prevent leaking internal fields).
-export type AnimalSearchHit = string;
-
 // Natural-language search: returns ranked animal IDs (most relevant first).
+// Profiles are already loaded; IDs avoid duplicate data and internal fields.
 export async function searchAnimalsWithAI(query: string): Promise<string[]> {
   const response = await fetch(`${apiBaseUrl}/api/animals/ai-search`, {
     method: "POST",
