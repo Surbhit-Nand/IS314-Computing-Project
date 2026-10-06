@@ -108,3 +108,20 @@ export async function deleteAnimal(token: string, id: string): Promise<Animal> {
   }
   return result as Animal;
 }
+
+// Natural-language search: returns ranked animal IDs (most relevant first).
+// Profiles are already loaded; IDs avoid duplicate data and internal fields.
+export async function searchAnimalsWithAI(query: string): Promise<string[]> {
+  const response = await fetch(`${apiBaseUrl}/api/animals/ai-search`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query }),
+  });
+  const result = await readApiResponse<{ results?: string[]; error?: string }>(response);
+  if (!response.ok) {
+    throw new Error(
+      result.error ?? "The search could not be completed. Please try again.",
+    );
+  }
+  return result.results ?? [];
+}

@@ -3,12 +3,14 @@ import multer from "multer";
 import { z } from "zod";
 import { requireClerkSession } from "../../middleware/auth.js";
 import { requireStaffOrAbove } from "../../middleware/rbac.js";
+import { AiSearchUnavailableError } from "../../shared/errors/applicationError.js";
 import {
 	deleteAnimal,
 	getAnimalById,
 	listAllAnimals,
 	listPublicAnimals,
 	registerAnimal,
+	searchAnimalsWithAI,
 	updateAnimalProfile,
 	uploadAnimalPhoto,
 } from "./animals.service.js";
@@ -46,6 +48,14 @@ const animalSchema = z.object({
 // or two fields at a time.
 const animalUpdateSchema = animalSchema.partial();
 
+// Natural-language animal search. `trim` collapses nothing on its own, but it
+// turns a whitespace-only query into "" so `min(2)` rejects it instead of it
+// being embedded as a blank prompt. 300 characters is far longer than any real
+// description and bounds the text sent to the embedding provider.
+const aiSearchSchema = z.object({
+	query: z.string().trim().min(2).max(300),
+});
+
 // In-memory storage: the uploaded file lives briefly in a request buffer,
 // gets streamed straight to Cloudinary, and is never written to disk.
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } });
@@ -65,6 +75,38 @@ animalsRouter.get("/", async (_request, response, next) => {
 	try {
 		response.json(await listPublicAnimals());
 	} catch (error) {
+		next(error);
+	}
+});
+
+// Public: natural-language (AI) search over the same public animals.
+//
+// No authentication - browsing the catalogue must work with no account, exactly
+// like GET "/". RBAC is untouched: this route only ever returns animals the
+// public listing would return anyway, ranked by how well they match.
+animalsRouter.post("/ai-search", async (request, response, next) => {
+	const parsed = aiSearchSchema.safeParse(request.body);
+	if (!parsed.success) {
+		response.status(400).json({
+			error: "Please describe the animal you are looking for, for example: small calm dog good with children.",
+		});
+		return;
+	}
+
+	try {
+		const hits = await searchAnimalsWithAI(parsed.data.query);
+		response.json({ results: hits.map((h) => h.id) });
+	} catch (error) {
+		// The provider being unavailable is an expected, recoverable condition,
+		// not a bug: tell the caller so the frontend can keep the normal listing
+		// and filters on screen instead of showing a failure.
+		if (error instanceof AiSearchUnavailableError) {
+			response.status(503).json({
+				error:
+					"AI search is currently unavailable. You can still browse animals or use the normal filters.",
+			});
+			return;
+		}
 		next(error);
 	}
 });

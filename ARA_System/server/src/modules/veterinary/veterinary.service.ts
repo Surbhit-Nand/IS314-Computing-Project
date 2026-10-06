@@ -1,3 +1,4 @@
+import { ensureMissingAnimalSearchEmbedding } from "../animals/animals.service.js";
 import {
 	clearAnimal,
 	createAppointment,
@@ -132,13 +133,22 @@ export async function completeAppointment(id: string, input: { visitDetails?: st
 	return completed;
 }
 
-export async function medicallyClear(animalId: string, clerkUserId: string, notes?: string) {
-	const record = await findMedicalRecord(animalId);
+const clearanceDependencies = { findMedicalRecord, changeCarePlan, clearAnimal, ensureMissingAnimalSearchEmbedding };
+
+export async function medicallyClear(
+	animalId: string,
+	clerkUserId: string,
+	notes?: string,
+	dependencies = clearanceDependencies,
+) {
+	const record = await dependencies.findMedicalRecord(animalId);
 	if (!record) throw new Error("Animal not found");
 	if (record.examinations.length === 0) throw new Error("Initial examination is required before medical clearance");
 	const outstanding = record.carePlan.filter((plan) => plan.requirementType !== "Final Medical Clearance" && plan.status !== "completed" && plan.status !== "not_required");
 	if (outstanding.length > 0) throw new Error(`Complete or mark not required: ${outstanding.map((plan) => plan.requirementType).join(", ")}`);
 	const finalClearance = record.carePlan.find((plan) => plan.requirementType === "Final Medical Clearance");
-	if (finalClearance) await changeCarePlan(finalClearance.id, { status: "completed", completedDate: new Date().toISOString() }, clerkUserId);
-	return clearAnimal(animalId, clerkUserId, notes);
+	if (finalClearance) await dependencies.changeCarePlan(finalClearance.id, { status: "completed", completedDate: new Date().toISOString() }, clerkUserId);
+	const result = await dependencies.clearAnimal(animalId, clerkUserId, notes);
+	if (result.animal) await dependencies.ensureMissingAnimalSearchEmbedding(animalId);
+	return result;
 }

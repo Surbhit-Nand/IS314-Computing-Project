@@ -5,11 +5,9 @@ Fiji's Animal Rescue and Adoption Management System, Group 7 (USP). Read this
 (plus `Adoption.md` for the adoption module) before generating or editing
 code.
 
-> **Source-of-truth note**: three docs in this repo contradict the actual
-> codebase and should not be trusted: `STYLE_FORMAT.md` (describes Tailwind /
-> `app/globals.css` — neither exists), `ARCHITECTURE.md` ("all server files are
-> placeholders" — most server modules are fully implemented), and `Adoption.md`
-> (says "Next.js" — it's not). Trust this file and the code itself.
+> **Source-of-truth note**: legacy planning documents such as `Adoption.md`
+> may describe a different stack. Trust current code and the maintained
+> architecture/backend documentation for implemented animal search behavior.
 
 ## What this system is
 
@@ -80,12 +78,25 @@ npm test             # node:test via tsx — server + frontend suites
 ```
 
 - **Tests**: `npm test` runs every `*.test.ts` under `server/src/**` and
-  `src/**` (94 tests / 6 files): adoptions, donations, reports, rescue, staff,
-  plus `src/utils/clerkToken.test.ts`. The script needs
+  `src/**`: adoptions, animals, donations, reports, rescue, staff, plus
+  `src/utils/clerkToken.test.ts`. The script needs
   `--experimental-test-module-mocks` because the suites stub modules with
   `node:test`'s `mock.module` — running `npx tsx --test <file>` directly fails
   with `TypeError: mock.module is not a function`. Add new suites as
   `*.test.ts` anywhere under those two roots; the glob picks them up.
+- **⚠️ `mock.module` does not work on Node v22.20.0** (verified with an isolated
+  probe, with and without `tsx`): the mocks are ignored and every mock-based
+  suite dies at import time with
+  `SyntaxError: The requested module '...' does not provide an export named
+  '...'`. On that Node version `npm test` therefore fails **adoptions, rescue and
+  staff** — pre-existing and unrelated to any current work. Donations, reports,
+  clerkToken and animals all pass.
+  **Do not write new suites with `mock.module`.** Take the collaborator
+  functions as an optional parameter instead (see the `SearchDependencies`
+  parameter on the animals service, which is what `animals.service.test.ts`
+  stubs). Also set `process.env.CLERK_SECRET_KEY` / `DATABASE_URL` to dummies at
+  the top of the file before importing anything, so the suite doesn't need a
+  real `.env` or a live database.
 - **Required order**: `db:migrate` → `server:dev`. A missing column is the #1
   cause of `column "xxx" of relation "animals" does not exist` crashes.
 - `npm run dev` does NOT start the API — run both `dev` and `server:dev`.
@@ -133,13 +144,26 @@ npm test             # node:test via tsx — server + frontend suites
 - [x] Profile fields (photos, type, breed, age, gender, colour, rescue date,
       behaviour, rescue history) — `schema.ts` `animals`
 - [x] Staff/vet view & update — `updateAnimalProfile`, `EditAnimalProfile.tsx`
-- [~] Public listing page — `findPublicAnimals` (`animals.repository.ts:14`)
-      filters `status != adopted` + not soft-deleted; **medical-clearance gate
-      is intentionally OFF** — see Data model guardrails
+- [x] Public listing and AI search share `publicAnimalVisibility()`: status is
+      not adopted, `deleted_at IS NULL`, and `medically_cleared = true`
 - [x] Search + filters (type, gender, breed, behaviour, size, colour, vaccination)
-- [~] Natural-language search — client-side free-text match over name/breed/
-      colour/behaviour/description/size (`AnimalListings.tsx`). Assistive
-      filter only — no AI provider, never auto-decides.
+- [x] Natural-language search — backend Gemini embeddings + Neon pgvector.
+      `POST /api/animals/ai-search` (public) → `searchAnimalsWithAI`
+      (`animals.service.ts`) → `findSimilarPublicAnimals`
+      (`animals.repository.ts`, cosine `<=>` over `animals.search_embedding`).
+      Provider isolated in `services/aiSearchClient.ts`, keyed by
+      `GEMINI_API_KEY` (backend only), 768-dim `gemini-embedding-001`. Text fed
+      to the provider comes from `animalSearchText.ts` — public profile fields
+      only, never rescue history/medical/staff data. Embeddings are written on
+      register and on edits that touch a searchable field. Missing embeddings
+      are retried on eligible profile updates and successful medical clearance,
+      and backfilled with
+      `npm run ai:backfill` (migration `0013_*` adds the `vector` extension +
+      column; it must be applied before searching). Assistive filter only — the
+      provider never decides anything, and `publicAnimalVisibility()` is the same
+      predicate the normal listing uses, so an adopted/uncleared/deleted animal
+      can never be returned. `AnimalListings.tsx` only reorders the profiles it
+      already loaded; if the provider is down it falls back to the full listing.
 
 **Adoption Application & Rescue Reporting**
 - [x] Public rescue report form (photos, location, condition, urgency) —
@@ -327,10 +351,26 @@ Every route/action is gated server-side by role, not just hidden in the UI
 
 ## AI search
 
-Natural-language queries map to the same filters (species, breed, age, size,
-temperament…). **Assistive only** — it narrows results, never makes or
-overrides an adoption decision. Current implementation is a client-side
-keyword match, not an external AI provider.
+Hybrid search combines deterministic explicit type/size/gender/vaccination
+constraints with a Gemini embedding of the full normalized query. Public
+visibility and structured predicates are applied in SQL before cosine ordering
+and LIMIT. The current parser supports dog/cat/rabbit but deliberately does not
+infer the database's other type. Compatibility and temperament remain semantic.
+
+See [backend search documentation](server/README.md) for the exact flow,
+visibility rule, supported vocabulary, lifecycle, configuration, and limitations.
+Current development uses Gemini gemini-embedding-001, 768 dimensions, an
+explicit environment threshold of 0.60, result limit 10, and a 10-second timeout.
+The code's threshold fallback remains 0; recalibrate with substantially larger
+datasets rather than treating 0.60 as universal.
+
+NULL embeddings are excluded from AI search and can be retried by an eligible
+profile save, successful veterinary clearance, or missing-only backfill.
+Provider failures must not block registration, updates, or clearance. Valid
+embeddings must be preserved on unrelated edits. Keep provider credentials
+backend-only, send only public profile text, and return only ranked IDs to the
+browser. Provider failure is an availability error; a successful empty result
+must remain a no-match state. Search is assistive and never decides adoption.
 
 ## Payments & third-party dependencies
 

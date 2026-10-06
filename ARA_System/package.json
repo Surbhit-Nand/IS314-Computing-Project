@@ -9,6 +9,7 @@
     "server:check": "tsc -p server/tsconfig.json --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx server/src/db/migrate.ts",
+    "ai:backfill": "tsx server/src/scripts/backfillAnimalEmbeddings.ts",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "test": "node --import tsx --experimental-test-module-mocks --test \"server/src/**/*.test.ts\" \"src/**/*.test.ts\"",

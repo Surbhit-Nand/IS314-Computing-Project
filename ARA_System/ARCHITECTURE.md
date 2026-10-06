@@ -1,8 +1,7 @@
 # ARA System Architecture
 
 > Architecture diagram of the **completed** system. Solid lines/boxes = built and
-> shipping. Dashed lines/boxes = planned to complete the system (veterinary
-> module, Stripe hosted checkout, notifications).
+> shipping. Dashed lines/boxes = planned to complete the system (Stripe hosted checkout and notifications).
 
 ## Legend
 
@@ -64,7 +63,8 @@ flowchart TB
     classDef planned fill:#fff,stroke:#a0aec0,stroke-width:1.5px,stroke-dasharray:5 5;
 
     class PUB,AUTH,USER,STAFF,MGR,MW,API,SVC,REPO,DB,CLERK,CLOUD,OSM,NEON built;
-    class VET,STRIPE planned;
+    class VET built;
+    class STRIPE planned;
 ```
 
 ## Layers
@@ -105,7 +105,7 @@ All modules persist to one shared database via Drizzle ORM. Key data:
 | Animal profiles | `animals` (soft-delete via `deleted_at`) |
 | Rescue reports | `rescue_reports` |
 | Adoption applications | `adoption_applications` + `adoption_status_history` |
-| Vet care | `vet_appointments` + planned `treatments` / `vaccinations` |
+| Vet care | `vet_appointments`, `veterinary_care_plans`, `veterinary_treatment_history` |
 | Audit trail | `audit_logs` |
 | Donations | `donations` |
 
@@ -115,6 +115,23 @@ All modules persist to one shared database via Drizzle ORM. Key data:
 |---|---|---|
 | Clerk | Auth, user management, role metadata, staff invitations | Built |
 | Cloudinary | Animal / rescue photo uploads | Built |
-| Neon | PostgreSQL hosting | Built |
+| Neon | PostgreSQL hosting + pgvector animal search | Built |
+| Gemini | Public-profile and full-query embeddings (768 dimensions) | Built |
 | OpenStreetMap + Leaflet | Rescue location picker & map | Built |
 | Stripe | Donation hosted checkout (`stripe_checkout_session_id` reserved) | Planned |
+
+## Hybrid animal search
+
+The public animal endpoint follows the existing route/service/repository layers.
+A deterministic parser supplies explicit structured constraints while Gemini
+embeds the full normalized query. Repository SQL applies the shared public
+visibility rule and structured predicates, excludes NULL vectors, applies the
+configured similarity threshold, orders by pgvector cosine distance, and limits
+results. Ranked IDs select and order existing frontend cards; sidebar filters
+narrow those results.
+
+Normal listing and AI search both require status other than adopted, no deletion
+timestamp, and medical clearance. Embeddings may exist for non-public animals.
+Missing-vector retries run after eligible profile updates or successful medical
+clearance, without blocking business operations when the provider fails.
+See [backend documentation](server/README.md) for exact rules and configuration.
