@@ -73,10 +73,18 @@ moduleMock("../../shared/audit/audit.service.js", {
 moduleMock("../notifications/notifications.service.js", {
 	createAdoptionStatusNotification: (input: unknown) =>
 		currentImpl("createAdoptionStatusNotification")(input),
+	createAdoptionSubmittedStaffNotifications: (input: unknown) =>
+		currentImpl("createAdoptionSubmittedStaffNotifications")(input),
 });
 
 moduleMock("../../services/email.js", {
 	sendAdoptionStatusEmail: (input: unknown) => currentImpl("sendAdoptionStatusEmail")(input),
+	sendAdoptionSubmittedStaffEmail: (input: unknown) =>
+		currentImpl("sendAdoptionSubmittedStaffEmail")(input),
+});
+
+moduleMock("../../services/staffDirectory.js", {
+	listStaffContacts: () => currentImpl("listStaffContacts")(),
 });
 
 moduleMock("../../services/clerkClient.js", {
@@ -107,6 +115,8 @@ const auditSpy: Array<Record<string, unknown>> = [];
 const animalUpdateSpy: Array<Record<string, unknown>> = [];
 const notificationSpy: Array<Record<string, unknown>> = [];
 const emailSpy: Array<Record<string, unknown>> = [];
+const staffNotificationSpy: Array<Record<string, unknown>> = [];
+const staffEmailSpy: Array<Record<string, unknown>> = [];
 
 function baseApplication(overrides: Record<string, unknown> = {}) {
 	return {
@@ -186,6 +196,8 @@ function resetImpls() {
 	animalUpdateSpy.length = 0;
 	notificationSpy.length = 0;
 	emailSpy.length = 0;
+	staffNotificationSpy.length = 0;
+	staffEmailSpy.length = 0;
 
 	repo("findAllAdoptionApplications", async () => []);
 	repo("findAdoptionApplicationsByApplicant", async () => []);
@@ -211,6 +223,18 @@ function resetImpls() {
 		notificationSpy.push(entry);
 		return entry;
 	});
+	repo("createAdoptionSubmittedStaffNotifications", async (entry: Record<string, unknown>) => {
+		staffNotificationSpy.push(entry);
+		return [];
+	});
+	repo("sendAdoptionSubmittedStaffEmail", async (entry: Record<string, unknown>) => {
+		staffEmailSpy.push(entry);
+		return { sent: true };
+	});
+	repo("listStaffContacts", async () => [
+		{ clerkUserId: "user-staff-1", email: "staff1@example.com", role: "staff" },
+		{ clerkUserId: "user-manager-1", email: null, role: "manager" },
+	]);
 	repo("sendAdoptionStatusEmail", async (entry: Record<string, unknown>) => {
 		emailSpy.push(entry);
 		return { sent: true };
@@ -369,6 +393,36 @@ describe("adoptions.service", () => {
 			assert.equal(notificationSpy[0].toStatus, "submitted");
 			assert.equal(emailSpy.length, 1);
 			assert.equal(emailSpy[0].to, "applicant@example.com");
+		});
+
+		it("notifies the review team in-app and by email on submit", async () => {
+			repo("getAnimalById", async () => baseAnimal());
+			repo("findActiveAdoptionApplication", async () => undefined);
+			repo("createAdoptionApplication", async (data: Record<string, unknown>) => ({ id: APPLICATION_ID, ...data }));
+
+			await submitAdoptionApplication(input, APPLICANT_ID);
+
+			assert.equal(staffNotificationSpy.length, 1);
+			assert.deepEqual(staffNotificationSpy[0].staffClerkUserIds, ["user-staff-1", "user-manager-1"]);
+			assert.equal(staffNotificationSpy[0].applicationId, APPLICATION_ID);
+			// Only the staffer with an email address gets mail.
+			assert.equal(staffEmailSpy.length, 1);
+			assert.equal(staffEmailSpy[0].to, "staff1@example.com");
+		});
+
+		it("still completes the submit when staff notification fails", async () => {
+			repo("getAnimalById", async () => baseAnimal());
+			repo("findActiveAdoptionApplication", async () => undefined);
+			repo("createAdoptionApplication", async (data: Record<string, unknown>) => ({ id: APPLICATION_ID, ...data }));
+			repo("listStaffContacts", async () => {
+				throw new Error("clerk down");
+			});
+
+			const app = await submitAdoptionApplication(input, APPLICANT_ID);
+
+			assert.equal(app.id, APPLICATION_ID);
+			assert.equal(notificationSpy.length, 1);
+			assert.equal(staffNotificationSpy.length, 0);
 		});
 	});
 

@@ -18,12 +18,48 @@ export type EmailSendResult = { sent: boolean; reason?: string };
 // record, so callers treat this as best-effort and never fail a business
 // write because mail is down.
 export async function sendAdoptionStatusEmail(email: AdoptionStatusEmail): Promise<EmailSendResult> {
+	return sendEmail({
+		to: email.to,
+		subject: emailSubject(email.toStatus, email.animalName),
+		text: emailBody(email),
+		logContext: `status=${email.toStatus}`,
+	});
+}
+
+// Staff-facing: a new adoption application is waiting for review.
+export async function sendAdoptionSubmittedStaffEmail(input: {
+	to: string;
+	animalName: string | null;
+	applicantName: string | null;
+}): Promise<EmailSendResult> {
+	const who = input.animalName ?? "an animal";
+	const by = input.applicantName?.trim() ? ` from ${input.applicantName.trim()}` : "";
+	return sendEmail({
+		to: input.to,
+		subject: `SPCA Fiji: new adoption application for ${who}`,
+		text: [
+			`Hello,`,
+			``,
+			`A new adoption application for ${who}${by} is waiting for review.`,
+			``,
+			`Open the adoption review queue to assess it.`,
+			``,
+			`SPCA Fiji`,
+		].join("\n"),
+		logContext: `staff-submitted`,
+	});
+}
+
+async function sendEmail(input: {
+	to: string;
+	subject: string;
+	text: string;
+	logContext: string;
+}): Promise<EmailSendResult> {
 	if (!env.resendApiKey) {
-		console.log(`[email:skipped] no provider configured (to=${email.to} status=${email.toStatus})`);
+		console.log(`[email:skipped] no provider configured (to=${input.to} ${input.logContext})`);
 		return { sent: false, reason: "email provider not configured" };
 	}
-	const subject = emailSubject(email.toStatus, email.animalName);
-	const text = emailBody(email);
 	try {
 		const response = await fetch("https://api.resend.com/emails", {
 			method: "POST",
@@ -33,9 +69,9 @@ export async function sendAdoptionStatusEmail(email: AdoptionStatusEmail): Promi
 			},
 			body: JSON.stringify({
 				from: env.emailFrom ?? "SPCA Fiji <noreply@spcafiji.org>",
-				to: [email.to],
-				subject,
-				text,
+				to: [input.to],
+				subject: input.subject,
+				text: input.text,
 			}),
 		});
 		if (!response.ok) {

@@ -41,6 +41,32 @@ export async function markEveryNotificationRead(clerkUserId: string) {
 	await markAllNotificationsRead(clerkUserId);
 }
 
+// Staff-facing: a new adoption application needs review. One row per staff
+// member so each inbox tracks its own read state.
+export async function createAdoptionSubmittedStaffNotifications(input: {
+	staffClerkUserIds: string[];
+	animalName: string | null;
+	applicantName: string | null;
+	applicationId: string;
+}) {
+	const who = input.animalName ?? "an animal";
+	const by = input.applicantName?.trim() ? ` from ${input.applicantName.trim()}` : "";
+	const created = [];
+	for (const recipientClerkUserId of input.staffClerkUserIds) {
+		created.push(
+			await createNotification({
+				recipientClerkUserId,
+				type: "adoption.submitted",
+				title: `New adoption application for ${who}`,
+				body: `A new application${by} is waiting for review.`,
+				entityType: "adoption_application",
+				entityId: input.applicationId,
+			}),
+		);
+	}
+	return created;
+}
+
 function notificationTitle(toStatus: string, animalName: string | null) {
 	const who = animalName ?? "your application";
 	switch (toStatus) {

@@ -7,6 +7,10 @@ import {
   updateAdoptionApplication,
 } from "../../services/adoptionsApi";
 import {
+  fetchMyNotifications,
+  markAllNotificationsRead,
+} from "../../services/notificationsApi";
+import {
   adoptionStatusClass,
   adoptionStatusLabel,
   adoptionStatusShortLabel,
@@ -104,6 +108,10 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
   const [detailById, setDetailById] = useState<Record<string, AdoptionApplication>>({});
   const [savingMessage, setSavingMessage] = useState("");
   const [savingError, setSavingError] = useState("");
+  // Unread "new submission" notifications for the signed-in staffer. The
+  // header bell lives on public pages only, so the queue surfaces its own
+  // count that the reviewer can acknowledge once they've seen the list.
+  const [unreadSubmissions, setUnreadSubmissions] = useState(0);
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn || !hasStaffAccess) return;
@@ -121,7 +129,32 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
         setIsLoading(false);
       }
     })();
+
+    void (async () => {
+      try {
+        const token = await getToken();
+        if (!token) return;
+        const inbox = await fetchMyNotifications(token);
+        setUnreadSubmissions(
+          inbox.items.filter((item) => item.type === "adoption.submitted" && !item.readAt).length,
+        );
+      } catch {
+        // The queue itself is the source of truth; a bell failure hides the
+        // chip rather than blocking reviews.
+      }
+    })();
   }, [getToken, hasStaffAccess, isLoaded, isSignedIn]);
+
+  async function acknowledgeSubmissions() {
+    try {
+      const token = await getToken();
+      if (!token) return;
+      await markAllNotificationsRead(token);
+      setUnreadSubmissions(0);
+    } catch {
+      // Count syncs on the next visit.
+    }
+  }
 
   // Newest applications on top; older ones in the same status group below.
   const visibleApplications = useMemo(() => {
@@ -268,6 +301,16 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
           <div>
             <p className="eyebrow">Adoption applications</p>
             <h2>{visibleApplications.length} application{visibleApplications.length === 1 ? "" : "s"}</h2>
+            {unreadSubmissions > 0 && (
+              <button
+                type="button"
+                className="chip"
+                title="New submissions since you last acknowledged them - click to mark seen"
+                onClick={() => void acknowledgeSubmissions()}
+              >
+                {unreadSubmissions} new
+              </button>
+            )}
           </div>
           <div className="rescue-queue-controls">
             <select

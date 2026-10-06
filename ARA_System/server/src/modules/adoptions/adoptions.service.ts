@@ -1,8 +1,12 @@
 import { logAuditEntry } from "../../shared/audit/audit.service.js";
 import { clerkClient } from "../../services/clerkClient.js";
-import { sendAdoptionStatusEmail } from "../../services/email.js";
+import { sendAdoptionStatusEmail, sendAdoptionSubmittedStaffEmail } from "../../services/email.js";
+import { listStaffContacts } from "../../services/staffDirectory.js";
 import { getAnimalById, updateAnimalProfile } from "../animals/animals.service.js";
-import { createAdoptionStatusNotification } from "../notifications/notifications.service.js";
+import {
+	createAdoptionStatusNotification,
+	createAdoptionSubmittedStaffNotifications,
+} from "../notifications/notifications.service.js";
 import {
 	createAdoptionApplication,
 	createAdoptionStatusHistoryEntry,
@@ -162,6 +166,14 @@ export async function submitAdoptionApplication(
 		applicationId: application.id,
 	});
 
+	// Tell the review team a new application is waiting (in-app row per
+	// staff member + email each). Best-effort like the applicant notify.
+	await notifyStaffOfSubmissionBestEffort({
+		animalName: animal.name ?? null,
+		applicantName: input.fullName ?? null,
+		applicationId: application.id,
+	});
+
 	return application;
 }
 
@@ -303,5 +315,45 @@ function throwIfInvalidTransition(from: AdoptionStatus, to: AdoptionStatus) {
 		throw new Error(
 			`Adoption application cannot move from "${from}" to "${to}" - only ${allowed.length > 0 ? allowed.join(" -> ") : "(terminal state)"} is allowed.`,
 		);
+	}
+}
+
+// New submissions are made by applicants, so the review team would otherwise
+// only discover them by opening the queue. Broadcast one in-app row per staff
+// member plus an email each - all best-effort, never failing the submission.
+async function notifyStaffOfSubmissionBestEffort(input: {
+	animalName: string | null;
+	applicantName: string | null;
+	applicationId: string;
+}) {
+	let staff: Awaited<ReturnType<typeof listStaffContacts>>;
+	try {
+		staff = await listStaffContacts();
+	} catch (error) {
+		console.error("[notifications] failed to list staff contacts", error);
+		return;
+	}
+	if (staff.length === 0) return;
+	try {
+		await createAdoptionSubmittedStaffNotifications({
+			staffClerkUserIds: staff.map((member) => member.clerkUserId),
+			animalName: input.animalName,
+			applicantName: input.applicantName,
+			applicationId: input.applicationId,
+		});
+	} catch (error) {
+		console.error("[notifications] failed to create staff notifications", error);
+	}
+	for (const member of staff) {
+		if (!member.email) continue;
+		try {
+			await sendAdoptionSubmittedStaffEmail({
+				to: member.email,
+				animalName: input.animalName,
+				applicantName: input.applicantName,
+			});
+		} catch (error) {
+			console.error("[notifications] failed to send staff email", error);
+		}
 	}
 }
