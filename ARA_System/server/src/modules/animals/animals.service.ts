@@ -8,6 +8,7 @@ import {
 	findAllAnimals,
 	findAnimalById,
 	findAnimalByPublicId,
+	findAnimalMissingSearchEmbedding,
 	findAnimalsMissingSearchEmbedding,
 	findPublicAnimals,
 	findSimilarPublicAnimals,
@@ -83,6 +84,7 @@ type SearchDependencies = {
 		| "updateAnimal"
 		| "findSimilarPublicAnimals"
 		| "findAnimalsMissingSearchEmbedding"
+		| "findAnimalMissingSearchEmbedding"
 		| "setAnimalSearchEmbedding"
 	> & {
 		findAnimalByPublicId: (publicId: string) => Promise<{ id: string } | undefined>;
@@ -102,6 +104,7 @@ const searchDependencies: SearchDependencies = {
 		updateAnimal,
 		findSimilarPublicAnimals,
 		findAnimalsMissingSearchEmbedding,
+		findAnimalMissingSearchEmbedding,
 		setAnimalSearchEmbedding,
 	},
 	provider: {
@@ -234,6 +237,28 @@ export async function registerAnimal(
 	return animal;
 }
 
+// Retry missing derived metadata after a successful profile save or vet clearance.
+// The repository returns a profile only if its vector is NULL and it is not
+// deleted. A valid existing vector therefore never incurs a provider request.
+export async function ensureMissingAnimalSearchEmbedding(
+	id: string,
+	dependencies: SearchDependencies = searchDependencies,
+): Promise<boolean> {
+	try {
+		const animal = await dependencies.repository.findAnimalMissingSearchEmbedding(id);
+		// Do not generate a vector from an incomplete legacy profile containing
+		// only a name/category. Normal registrations already require description.
+		if (!animal || !animal.name.trim() || !(animal.description?.trim() || animal.behaviour?.trim())) {
+			return false;
+		}
+		return await refreshSearchEmbedding(animal, dependencies);
+	} catch (error) {
+		// Even a retry lookup failure must not fail a save that already succeeded.
+		console.warn(`[AI search] Could not retry missing embedding for ${id}: ${error instanceof Error ? error.message : "unknown error"}`);
+		return false;
+	}
+}
+
 export async function updateAnimalProfile(
 	id: string,
 	input: Partial<Parameters<typeof updateAnimal>[1]>,
@@ -241,11 +266,12 @@ export async function updateAnimalProfile(
 ) {
 	const animal = await dependencies.repository.updateAnimal(id, input);
 
-	// Only re-embed when a field the search text is built from actually changed.
-	// An edit that touches, say, photoUrls or the lifecycle status leaves the text
-	// (and therefore the stored vector) identical, so it costs no provider call.
+	// Searchable edits invalidate the vector. Other edits preserve a valid vector
+	// but retry a missing one, so legacy/provider-failure records can recover.
 	if (animal && touchesSearchableField(input)) {
 		await refreshSearchEmbedding(animal, dependencies);
+	} else if (animal) {
+		await ensureMissingAnimalSearchEmbedding(id, dependencies);
 	}
 
 	return animal;
