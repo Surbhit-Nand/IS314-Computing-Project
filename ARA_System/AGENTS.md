@@ -5,11 +5,9 @@ Fiji's Animal Rescue and Adoption Management System, Group 7 (USP). Read this
 (plus `Adoption.md` for the adoption module) before generating or editing
 code.
 
-> **Source-of-truth note**: three docs in this repo contradict the actual
-> codebase and should not be trusted: `STYLE_FORMAT.md` (describes Tailwind /
-> `app/globals.css` — neither exists), `ARCHITECTURE.md` ("all server files are
-> placeholders" — most server modules are fully implemented), and `Adoption.md`
-> (says "Next.js" — it's not). Trust this file and the code itself.
+> **Source-of-truth note**: legacy planning documents such as `Adoption.md`
+> may describe a different stack. Trust current code and the maintained
+> architecture/backend documentation for implemented animal search behavior.
 
 ## What this system is
 
@@ -138,9 +136,8 @@ npm test             # node:test via tsx — server + frontend suites
 - [x] Profile fields (photos, type, breed, age, gender, colour, rescue date,
       behaviour, rescue history) — `schema.ts` `animals`
 - [x] Staff/vet view & update — `updateAnimalProfile`, `EditAnimalProfile.tsx`
-- [~] Public listing page — `findPublicAnimals` (`animals.repository.ts:14`)
-      filters `status != adopted` + not soft-deleted; **medical-clearance gate
-      is intentionally OFF** — see Data model guardrails
+- [x] Public listing and AI search share `publicAnimalVisibility()`: status is
+      not adopted, `deleted_at IS NULL`, and `medically_cleared = true`
 - [x] Search + filters (type, gender, breed, behaviour, size, colour, vaccination)
 - [x] Natural-language search — backend Gemini embeddings + Neon pgvector.
       `POST /api/animals/ai-search` (public) → `searchAnimalsWithAI`
@@ -150,7 +147,9 @@ npm test             # node:test via tsx — server + frontend suites
       `GEMINI_API_KEY` (backend only), 768-dim `gemini-embedding-001`. Text fed
       to the provider comes from `animalSearchText.ts` — public profile fields
       only, never rescue history/medical/staff data. Embeddings are written on
-      register and on edits that touch a searchable field, and backfilled with
+      register and on edits that touch a searchable field. Missing embeddings
+      are retried on eligible profile updates and successful medical clearance,
+      and backfilled with
       `npm run ai:backfill` (migration `0011_*` adds the `vector` extension +
       column; it must be applied before searching). Assistive filter only — the
       provider never decides anything, and `publicAnimalVisibility()` is the same
@@ -344,33 +343,26 @@ Every route/action is gated server-side by role, not just hidden in the UI
 
 ## AI search
 
-Natural-language queries map to the same filters (species, breed, age, size,
-temperament…). **Assistive only** — it narrows results, never makes or
-overrides an adoption decision.
+Hybrid search combines deterministic explicit type/size/gender/vaccination
+constraints with a Gemini embedding of the full normalized query. Public
+visibility and structured predicates are applied in SQL before cosine ordering
+and LIMIT. The current parser supports dog/cat/rabbit but deliberately does not
+infer the database's other type. Compatibility and temperament remain semantic.
 
-Implementation: the visitor's sentence is embedded by Gemini
-(`gemini-embedding-001`, 768 dimensions, `RETRIEVAL_QUERY`) and compared in
-Neon with pgvector cosine distance against each animal's stored vector
-(`RETRIEVAL_DOCUMENT`). Rules that must hold for any future change:
+See [backend search documentation](server/README.md) for the exact flow,
+visibility rule, supported vocabulary, lifecycle, configuration, and limitations.
+Current development uses Gemini gemini-embedding-001, 768 dimensions, an
+explicit environment threshold of 0.60, result limit 10, and a 10-second timeout.
+The code's threshold fallback remains 0; recalibrate with substantially larger
+datasets rather than treating 0.60 as universal.
 
-- **The provider only ever scores text.** It receives no animal data beyond the
-  fields `animalSearchText.ts` lists, it returns no animal, and it never
-  influences availability — that is `publicAnimalVisibility()` in SQL, shared
-  with the normal listing.
-- **A `null` embedding means "not searchable yet", never "no match".** Animals
-  registered before this feature (or whose embedding failed) only appear after
-  `npm run ai:backfill`. Search is best-effort: it never rejects a registration
-  or an edit.
-- **Provider down ≠ no results.** The route returns 503, not an empty list, so
-  the frontend can fall back to the full listing + filters. Silently returning
-  "no animals" would be the one genuinely harmful failure mode.
-- `GEMINI_API_KEY` is **backend only** — never `VITE_`-prefixed, never sent to
-  the browser. The browser gets ids only; it renders the profiles it already
-  loaded from `GET /api/animals`.
-- `AI_SEARCH_MIN_SIMILARITY` defaults to `0` (ranking + limit only). Tune it
-  against real records before changing it — embedding models give unrelated
-  sentences a non-trivial baseline similarity, so a guessed cut-off hides valid
-  matches.
+NULL embeddings are excluded from AI search and can be retried by an eligible
+profile save, successful veterinary clearance, or missing-only backfill.
+Provider failures must not block registration, updates, or clearance. Valid
+embeddings must be preserved on unrelated edits. Keep provider credentials
+backend-only, send only public profile text, and return only ranked IDs to the
+browser. Provider failure is an availability error; a successful empty result
+must remain a no-match state. Search is assistive and never decides adoption.
 
 ## Payments & third-party dependencies
 
