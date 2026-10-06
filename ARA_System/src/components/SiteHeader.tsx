@@ -338,7 +338,13 @@ export function SiteHeader({
                     ? "nav-link active"
                     : "nav-link"
                 }
-                onClick={() => navigate("animal-listings")}
+                onClick={() => {
+                  navigate("animal-listings");
+                  // Adopt points at the listings page, so clicking it while
+                  // already there is a same-view no-op - scroll to top so it
+                  // still feels responsive.
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
               >
                 Adopt
               </button>
