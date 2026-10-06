@@ -7,6 +7,7 @@ import { AiSearchUnavailableError } from "../../shared/errors/applicationError.j
 // Type-only, so nothing is loaded at runtime: the repository's own signatures
 // are the source of truth for these row shapes, not hand-written copies.
 import type { createAnimal, updateAnimal } from "./animals.repository.js";
+import type { AnimalSearchFilters } from "./animalSearchIntent.js";
 
 // Tests for the animal module's AI search behaviour.
 //
@@ -49,7 +50,7 @@ const ANIMAL_ID = "11111111-1111-1111-1111-111111111111";
 
 type Embedding = number[];
 type EmbedCall = { text: string; purpose: "document" | "query" };
-type SearchCall = { embedding: Embedding; limit: number; minSimilarity?: number };
+type SearchCall = { embedding: Embedding; limit: number; minSimilarity?: number; filters?: AnimalSearchFilters };
 
 // Everything the stubs recorded, so a test can assert what was sent - and, just
 // as importantly, that nothing was sent at all.
@@ -147,7 +148,7 @@ function dependencies() {
 			},
 			findSimilarPublicAnimals: (
 				embedding: Embedding,
-				options: { limit: number; minSimilarity?: number },
+				options: Omit<SearchCall, "embedding">,
 			) => {
 				searchCalls.push({ embedding, ...options });
 				return Promise.resolve(storedAnimals);
@@ -242,6 +243,35 @@ describe("natural-language search", () => {
 		await searchAnimalsWithAI("  small   calm\tdog  ", dependencies());
 
 		assert.equal(embedCalls[0].text, "small calm dog");
+		assert.deepEqual(searchCalls[0].filters, {
+			type: "dog", size: "small", gender: undefined, vaccinationStatus: undefined,
+		});
+	});
+
+	it("passes all hard constraints while embedding the full normalized sentence", async () => {
+		const deps = { ...dependencies(), minSimilarity: 0.42, limit: 7 };
+		await searchAnimalsWithAI("  female small dog not vaccinated good with children  ", deps);
+		assert.deepEqual(embedCalls, [{
+			text: "female small dog not vaccinated good with children", purpose: "query",
+		}]);
+		assert.deepEqual(searchCalls, [{
+			embedding: providerEmbedding, limit: 7, minSimilarity: 0.42,
+			filters: { type: "dog", size: "small", gender: "Female", vaccinationStatus: "not_vaccinated" },
+		}]);
+	});
+
+	it("keeps descriptive-only queries unconstrained", async () => {
+		await searchAnimalsWithAI("calm family animal", dependencies());
+		assert.deepEqual(searchCalls[0].filters, {
+			type: undefined, size: undefined, gender: undefined, vaccinationStatus: undefined,
+		});
+	});
+
+	it("returns no matches without falling back to an unfiltered listing", async () => {
+		assert.deepEqual(await searchAnimalsWithAI("small calm dog", dependencies()), []);
+		assert.equal(searchCalls.length, 1);
+		assert.equal(searchCalls[0].filters?.type, "dog");
+		assert.equal(searchCalls[0].filters?.size, "small");
 	});
 
 	it("returns the database's rows verbatim - availability is the database's call", async () => {
