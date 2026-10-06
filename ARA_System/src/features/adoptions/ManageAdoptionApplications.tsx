@@ -9,6 +9,7 @@ import {
 import {
   adoptionStatusClass,
   adoptionStatusLabel,
+  adoptionStatusShortLabel,
   type AdoptionAnimalSummary,
   type AdoptionApplication,
   type AdoptionStatus,
@@ -433,8 +434,11 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
 
                           <div className="dispatch-field">
                             <span className="dispatch-label">Current status</span>
-                            <span className={`adoption-status-badge ${adoptionStatusClass(application.status)}`}>
-                              {adoptionStatusLabel(application.status)}
+                            <span
+                              className={`adoption-status-badge ${adoptionStatusClass(application.status)}`}
+                              title={adoptionStatusLabel(application.status)}
+                            >
+                              {adoptionStatusShortLabel(application.status)}
                             </span>
                           </div>
 

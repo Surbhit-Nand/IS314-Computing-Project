@@ -11,6 +11,7 @@ import {
 import {
   adoptionStatusClass,
   adoptionStatusLabel,
+  adoptionStatusShortLabel,
   adoptionStepIndex,
   ADOPTION_STATUS_STEPS,
   type AdoptionApplication,
@@ -117,8 +118,11 @@ function AdoptionApplicationDetailModal({
         </div>
 
         <p className="adoption-status-line">
-          <span className={`adoption-status-badge ${adoptionStatusClass(application.status)}`}>
-            {adoptionStatusLabel(application.status)}
+          <span
+            className={`adoption-status-badge ${adoptionStatusClass(application.status)}`}
+            title={adoptionStatusLabel(application.status)}
+          >
+            {adoptionStatusShortLabel(application.status)}
           </span>
         </p>
 
@@ -325,8 +329,11 @@ export function MyApplications({ isLoaded, isSignedIn, onNavigate }: MyApplicati
                       {application.animal && <small>{application.animal.publicId}</small>}
                     </span>
                     <span className="adoption-track-when">{formatDate(application.createdAt)}</span>
-                    <span className={`adoption-status-badge ${adoptionStatusClass(application.status)}`}>
-                      {adoptionStatusLabel(application.status)}
+                    <span
+                      className={`adoption-status-badge ${adoptionStatusClass(application.status)}`}
+                      title={adoptionStatusLabel(application.status)}
+                    >
+                      {adoptionStatusShortLabel(application.status)}
                     </span>
                   </button>
                 ))}

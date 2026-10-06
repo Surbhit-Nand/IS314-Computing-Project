@@ -139,6 +139,24 @@ export function adoptionStatusLabel(status: AdoptionStatus): string {
   }
 }
 
+// Short pill label for status badges (track rows, review queue, modals).
+// The fixed-width pill truncates the long labels above, so badges use these
+// while steppers/history keep the descriptive text.
+export function adoptionStatusShortLabel(status: AdoptionStatus): string {
+  switch (status) {
+    case "submitted":
+      return "Submitted";
+    case "under_review":
+      return "Under Review";
+    case "approved":
+      return "Approved";
+    case "completed":
+      return "Adopted";
+    default:
+      return "Not approved";
+  }
+}
+
 export function adoptionStatusClass(status: AdoptionStatus): string {
   return status.replaceAll("_", "-");
 }
