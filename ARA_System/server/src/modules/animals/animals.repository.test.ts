@@ -5,7 +5,7 @@ process.env.CLERK_SECRET_KEY = "test-clerk-secret-key";
 process.env.DATABASE_URL = "postgresql://test:test@localhost:5432/ara_test";
 
 const { db } = await import("../../db/client.js");
-const { findSimilarPublicAnimals, findPublicAnimals } = await import("./animals.repository.js");
+const { findSimilarPublicAnimals, findPublicAnimals, findAnimalMissingSearchEmbedding, findAnimalsMissingSearchEmbedding, setAnimalSearchEmbedding } = await import("./animals.repository.js");
 const { parseAnimalSearchIntent } = await import("./animalSearchIntent.js");
 
 // Execute the real Drizzle builder, intercepting only the transport. This checks
@@ -27,6 +27,28 @@ function parameterFor(sql: string, params: unknown[], expression: RegExp): unkno
 }
 
 describe("hybrid search SQL", () => {
+	it("looks up only a missing non-deleted vector for the requested animal", async () => {
+		assert.equal(await findAnimalMissingSearchEmbedding("animal-id"), undefined);
+		const { sql, params } = queries[0];
+		assert.equal(parameterFor(sql, params, /"id" = \$(\d+)/), "animal-id");
+		assert.match(sql, /"search_embedding" is null/);
+		assert.match(sql, /"deleted_at" is null/);
+		assert.doesNotMatch(sql.split(" from ")[0], /search_embedding/);
+	});
+
+	it("backfills missing non-deleted vectors without excluding adopted or uncleared animals", async () => {
+		await findAnimalsMissingSearchEmbedding();
+		const where = queries[0].sql.split(" where ")[1];
+		assert.match(where, /"search_embedding" is null/);
+		assert.match(where, /"deleted_at" is null/);
+		assert.doesNotMatch(where, /"status"|"medically_cleared"/);
+	});
+
+	it("writes only the embedding and leaves updatedAt and profile fields alone", async () => {
+		await setAnimalSearchEmbedding("animal-id", [1, 0, 0]);
+		assert.match(queries[0].sql, /^update "animals" set "search_embedding" = \$\d+ where/);
+		assert.doesNotMatch(queries[0].sql, /updated_at|description|medically_cleared/);
+	});
 	it("filters candidates before cosine threshold, ordering and limit", async () => {
 		const filters = parseAnimalSearchIntent("female small dog not vaccinated");
 		await findSimilarPublicAnimals([0.1, 0.2, 0.3], { filters, limit: 7, minSimilarity: 0.4 });
