@@ -59,7 +59,7 @@ async function sendEmail(input: {
 	logContext: string;
 }): Promise<EmailSendResult> {
 	if (!env.resendApiKey) {
-		console.log(`[email:skipped] no provider configured (to=${input.to} ${input.logContext})`);
+		console.warn(`[email:skipped] no provider configured (to=${input.to} ${input.logContext})`);
 		return { sent: false, reason: "email provider not configured" };
 	}
 	try {

@@ -109,7 +109,9 @@ npm test             # node:test via tsx — server + frontend suites
   reads only `.env.local`.
 - Frontend vars are `VITE_*` in `.env.local` (`VITE_CLERK_PUBLISHABLE_KEY`,
   `VITE_DEV_BYPASS_AUTH`). Server vars in `server/.env` (`CLERK_SECRET_KEY`,
-  `API_PORT`, `DATABASE_URL`, Cloudinary, `stripe`…).
+  `API_PORT`, `DATABASE_URL`, Cloudinary, `stripe`…) — but a single root
+  `.env.local` holding both is supported and currently used locally, since
+  root wins on conflicts and `drizzle.config.ts` reads only `.env.local`.
 - **`DEV_BYPASS_AUTH=true`** (server env) skips ONLY the role check — a Clerk
   session is still required. Mirror flag `VITE_DEV_BYPASS_AUTH` in `src/utils/devBypass.ts`
   for the UI. Never enable outside local dev.
