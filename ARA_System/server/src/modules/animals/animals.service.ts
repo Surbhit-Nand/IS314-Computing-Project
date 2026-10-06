@@ -2,6 +2,7 @@ import { env } from "../../config/env.js";
 import { cloudinary, isCloudinaryConfigured } from "../../services/cloudinaryClient.js";
 import { embedAnimalProfileText, embedSearchQuery } from "../../services/aiSearchClient.js";
 import { buildAnimalSearchText, touchesSearchableField } from "./animalSearchText.js";
+import { parseAnimalSearchIntent } from "./animalSearchIntent.js";
 import {
 	createAnimal,
 	findAllAnimals,
@@ -53,7 +54,7 @@ async function generateUniquePublicId(
 }
 
 // ---------------------------------------------------------------------------
-// AI search (semantic search over public animal profiles)
+// AI search (structured constraints plus semantic ranking of public profiles)
 //
 // Assistive discovery only. It ranks animals that already exist and are already
 // publicly adoptable; it never approves, rejects or completes an adoption, never
@@ -171,13 +172,16 @@ export async function searchAnimalsWithAI(
 		return [];
 	}
 
+	const { semanticQuery, ...filters } = parseAnimalSearchIntent(query);
+
 	// Propagates AiSearchUnavailableError from the provider service, which the
 	// route turns into a 503 the frontend shows as "AI search unavailable".
-	const queryEmbedding = await dependencies.provider.embedSearchQuery(query);
+	const queryEmbedding = await dependencies.provider.embedSearchQuery(semanticQuery);
 
 	return dependencies.repository.findSimilarPublicAnimals(queryEmbedding, {
 		limit: dependencies.limit,
 		minSimilarity: dependencies.minSimilarity,
+		filters,
 	});
 }
 
