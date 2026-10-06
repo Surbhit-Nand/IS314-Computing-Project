@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import { env } from "../config/env.js";
 import { clerkClient } from "../services/clerkClient.js";
+import { retryTransient } from "../shared/retry/retry.js";
 import {
 	managerOrAdminRoles,
 	dispatcherRoles,
@@ -39,7 +40,13 @@ function requireRole(allowedRoles: readonly Role[], deniedMessage: string) {
 				return;
 			}
 
-			const user = await clerkClient.users.getUser(request.clerkUserId);
+			// The Clerk lookup runs per request; a transient Clerk API blip used
+		// to 500 every staff route immediately. Retry it the same way as DB
+		// queries - still fail-closed (403/500) on persistent outages, and no
+		// role caching so revocation stays immediate.
+		const user = await retryTransient(() =>
+			clerkClient.users.getUser(request.clerkUserId as string),
+		);
 			// normalizeRole maps a pre-rename `rescuer` account onto `dispatcher`
 			// so legacy accounts keep passing the gates they used to pass.
 			const role = normalizeRole(user.publicMetadata.role);

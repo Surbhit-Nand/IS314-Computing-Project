@@ -6,6 +6,7 @@ import { animalsRouter } from "./modules/animals/animals.routes.js";
 import { rescueRouter } from "./modules/rescue/rescue.routes.js";
 import { donationsRouter } from "./modules/donations/donations.routes.js";
 import { adoptionsRouter } from "./modules/adoptions/adoptions.routes.js";
+import { notificationsRouter } from "./modules/notifications/notifications.routes.js";
 import { reportsRouter } from "./modules/reports/reports.routes.js";
 import { veterinaryRouter } from "./modules/veterinary/veterinary.routes.js";
 import { webhooksRouter } from "./webhooks/webhooks.routes.js";
@@ -31,6 +32,7 @@ app.use("/api/admin", staffRouter);
 app.use("/api/rescue", rescueRouter);
 app.use("/api/donations", donationsRouter);
 app.use("/api/adoptions", adoptionsRouter);
+app.use("/api/notifications", notificationsRouter);
 app.use("/api/reports", reportsRouter);
 app.use("/api/veterinary", veterinaryRouter);
 

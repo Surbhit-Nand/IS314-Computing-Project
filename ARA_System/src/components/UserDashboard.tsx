@@ -75,6 +75,13 @@ export function UserDashboard({ onNavigate }: UserDashboardProps) {
         >
           Browse animals
         </button>
+        <button
+          type="button"
+          className="ghost-button"
+          onClick={() => onNavigate("my-profile")}
+        >
+          Edit my profile
+        </button>
       </section>
 
       <section className="user-dashboard-grid" aria-label="Account summary">

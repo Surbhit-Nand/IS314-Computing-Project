@@ -221,10 +221,50 @@ export const adoptionApplications = pgTable(
 		id: uuid("id").defaultRandom().primaryKey(),
 		animalId: uuid("animal_id").notNull().references(() => animals.id),
 		applicantClerkUserId: text("applicant_clerk_user_id").notNull(),
-		homeDetails: text("home_details").notNull(),
-		familyDetails: text("family_details").notNull(),
+		// Legacy free-text answers (kept for rows submitted before the
+		// structured 6-section questionnaire; nullable since 0012 so new
+		// applications write the structured fields below instead).
+		homeDetails: text("home_details"),
+		familyDetails: text("family_details"),
 		existingPets: text("existing_pets"),
 		animalExperience: text("animal_experience"),
+		// Section 1: applicant information.
+		fullName: text("full_name"),
+		contactNumber: text("contact_number"),
+		applicantEmail: text("applicant_email"),
+		residentialAddress: text("residential_address"),
+		dateOfBirth: text("date_of_birth"),
+		// Section 2: household & living situation (radio answers stored as
+		// short codes: housing_type house|apartment|other, tenure own|rent,
+		// landlord_pets_allowed yes|no|not_sure, fenced_yard yes|no|na,
+		// pet_allergies yes|no).
+		housingType: text("housing_type"),
+		tenure: text("tenure"),
+		landlordPetsAllowed: text("landlord_pets_allowed"),
+		fencedYard: text("fenced_yard"),
+		householdSize: integer("household_size"),
+		childrenAges: text("children_ages"),
+		petAllergies: text("pet_allergies"),
+		// Section 3: pet experience (yes|no codes + conditional details).
+		ownedPetsBefore: text("owned_pets_before"),
+		previousPetOutcome: text("previous_pet_outcome"),
+		hasCurrentPets: text("has_current_pets"),
+		currentPetsDetails: text("current_pets_details"),
+		// Section 4: lifestyle & care plan.
+		aloneHours: text("alone_hours"),
+		primaryCaregiver: text("primary_caregiver"),
+		dailyRoutine: text("daily_routine"),
+		vetCostPlan: text("vet_cost_plan"),
+		travelCarePlan: text("travel_care_plan"),
+		// Section 5: motivation (adoption_for self|gift, household_agreement
+		// yes|no). Gift adoptions are flagged for extra review in the queue.
+		adoptionMotivation: text("adoption_motivation"),
+		adoptionFor: text("adoption_for"),
+		householdAgreement: text("household_agreement"),
+		// Section 6: required acknowledgements (all must be true to submit).
+		consentHomeVisit: boolean("consent_home_visit").notNull().default(false),
+		agreeReturnToSpca: boolean("agree_return_to_spca").notNull().default(false),
+		confirmAccurate: boolean("confirm_accurate").notNull().default(false),
 		status: text("status").notNull().default("submitted"),
 		reviewNotes: text("review_notes"),
 		createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -347,5 +387,22 @@ export const donations = pgTable("donations", {
 	paymentMethod: text("payment_method").notNull().default("card"),
 	message: text("message"),
 	stripeCheckoutSessionId: text("stripe_checkout_session_id"),
+	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// In-app notifications (bell/badge in the UI). Recipients are Clerk user ids -
+// there is deliberately no FK because Clerk identities don't live in Postgres.
+// Email delivery is a separate best-effort step in services/email.ts; this row
+// is the durable record the UI reads, so a failed email never loses the
+// notification itself.
+export const notifications = pgTable("notifications", {
+	id: uuid("id").defaultRandom().primaryKey(),
+	recipientClerkUserId: text("recipient_clerk_user_id").notNull(),
+	type: text("type").notNull().default("adoption.status_changed"),
+	title: text("title").notNull(),
+	body: text("body"),
+	entityType: text("entity_type"),
+	entityId: text("entity_id"),
+	readAt: timestamp("read_at", { withTimezone: true }),
 	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

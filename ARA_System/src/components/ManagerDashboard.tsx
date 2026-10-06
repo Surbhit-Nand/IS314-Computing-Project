@@ -322,6 +322,13 @@ export function ManagerDashboard({ onNavigate }: ManagerDashboardProps) {
           <button
             type="button"
             className="ghost-button"
+            onClick={() => onNavigate("my-profile")}
+          >
+            My profile
+          </button>
+          <button
+            type="button"
+            className="ghost-button"
             onClick={() => onNavigate("reports")}
           >
             View reports
