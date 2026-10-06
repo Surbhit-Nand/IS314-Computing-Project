@@ -1,6 +1,7 @@
 import { and, asc, eq, getTableColumns, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import { db } from "../../db/client.js";
 import { animals } from "../../db/schema.js";
+import type { AnimalSearchFilters } from "./animalSearchIntent.js";
 
 // Every column of `animals` EXCEPT the semantic-search vector.
 //
@@ -83,7 +84,8 @@ function cosineDistance(embedding: number[]) {
 }
 
 // Ranks publicly adoptable animals by how close their stored embedding is to
-// the searcher's sentence, best match first.
+// the searcher's sentence, best match first. Explicit structured constraints
+// restrict the SQL candidates before the threshold, ordering and result limit.
 //
 // `minSimilarity` (0-1) is an optional cut-off and defaults to 0, i.e. no
 // exclusion - ranking plus `limit` do the work. Embedding models give unrelated
@@ -92,10 +94,11 @@ function cosineDistance(embedding: number[]) {
 // improve relevance.
 export async function findSimilarPublicAnimals(
 	queryEmbedding: number[],
-	options: { limit: number; minSimilarity?: number },
+	options: { limit: number; minSimilarity?: number; filters?: AnimalSearchFilters },
 ) {
 	const distance = cosineDistance(queryEmbedding);
 	const maxDistance = 1 - (options.minSimilarity ?? 0);
+	const filters = options.filters ?? {};
 
 	return db
 		.select(publicSearchResult)
@@ -103,6 +106,15 @@ export async function findSimilarPublicAnimals(
 		.where(
 			and(
 				publicAnimalVisibility(),
+				filters.type ? eq(animals.type, filters.type) : undefined,
+				filters.size ? eq(animals.size, filters.size) : undefined,
+				// Free-text legacy values may differ in capitalization or whitespace.
+				filters.gender
+					? sql`lower(trim(${animals.gender})) = ${filters.gender.toLowerCase()}`
+					: undefined,
+				filters.vaccinationStatus
+					? eq(animals.vaccinationStatus, filters.vaccinationStatus)
+					: undefined,
 				// An animal with no embedding yet - registered before the search
 				// feature existed, or its embedding failed to generate - has
 				// nothing to compare against, so it is skipped rather than
