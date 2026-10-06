@@ -5,7 +5,6 @@ export type AdoptionStatusEmail = {
 	animalName: string | null;
 	toStatus: string;
 	reviewNote?: string | null;
-	applicationId: string;
 };
 
 export type EmailSendResult = { sent: boolean; reason?: string };
@@ -26,11 +25,13 @@ export async function sendAdoptionStatusEmail(email: AdoptionStatusEmail): Promi
 	});
 }
 
-// Staff-facing: a new adoption application is waiting for review.
+// Staff-facing: a new adoption application is waiting for review. The
+// application id is included so the reviewer can find the row in the queue.
 export async function sendAdoptionSubmittedStaffEmail(input: {
 	to: string;
 	animalName: string | null;
 	applicantName: string | null;
+	applicationId: string;
 }): Promise<EmailSendResult> {
 	const who = input.animalName ?? "an animal";
 	const by = input.applicantName?.trim() ? ` from ${input.applicantName.trim()}` : "";
@@ -41,6 +42,7 @@ export async function sendAdoptionSubmittedStaffEmail(input: {
 			`Hello,`,
 			``,
 			`A new adoption application for ${who}${by} is waiting for review.`,
+			`Application ID: ${input.applicationId}`,
 			``,
 			`Open the adoption review queue to assess it.`,
 			``,

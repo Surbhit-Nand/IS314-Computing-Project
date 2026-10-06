@@ -17,7 +17,6 @@ export async function listMyNotifications(clerkUserId: string) {
 export async function createAdoptionStatusNotification(input: {
 	recipientClerkUserId: string;
 	animalName: string | null;
-	fromStatus: string;
 	toStatus: string;
 	reviewNote?: string | null;
 	applicationId: string;

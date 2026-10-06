@@ -160,7 +160,6 @@ export async function submitAdoptionApplication(
 	await notifyApplicantBestEffort({
 		recipientClerkUserId: applicantClerkUserId,
 		animalName: animal.name ?? null,
-		fromStatus: "",
 		toStatus: "submitted",
 		reviewNote: null,
 		applicationId: application.id,
@@ -260,7 +259,6 @@ export async function transitionAdoptionApplication(
 	await notifyApplicantBestEffort({
 		recipientClerkUserId: application.applicantClerkUserId,
 		animalName,
-		fromStatus: current,
 		toStatus: input.status,
 		reviewNote: input.reviewNotes ?? null,
 		applicationId: updated.id,
@@ -281,7 +279,6 @@ async function requireMedicallyCleared(animalId: string): Promise<boolean> {
 async function notifyApplicantBestEffort(input: {
 	recipientClerkUserId: string;
 	animalName: string | null;
-	fromStatus: string;
 	toStatus: string;
 	reviewNote?: string | null;
 	applicationId: string;
@@ -302,7 +299,6 @@ async function notifyApplicantBestEffort(input: {
 			animalName: input.animalName,
 			toStatus: input.toStatus,
 			reviewNote: input.reviewNote,
-			applicationId: input.applicationId,
 		});
 	} catch (error) {
 		console.error("[notifications] failed to send adoption email", error);
@@ -351,6 +347,7 @@ async function notifyStaffOfSubmissionBestEffort(input: {
 				to: member.email,
 				animalName: input.animalName,
 				applicantName: input.applicantName,
+				applicationId: input.applicationId,
 			});
 		} catch (error) {
 			console.error("[notifications] failed to send staff email", error);
