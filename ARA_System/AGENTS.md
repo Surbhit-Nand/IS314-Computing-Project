@@ -62,6 +62,7 @@ npm run server:dev    # Express API only (tsx, port 8787) — needs env (below)
 npm run server:check  # typecheck the server package only
 npm run db:generate   # create a Drizzle migration from schema.ts
 npm run db:migrate    # apply migrations — run AFTER every pull, BEFORE server:dev
+npm run db:seed:animals # idempotent demo animal profiles (photos → Cloudinary)
 npm run build         # tsc -b && vite build (typechecks frontend+server)
 npm run lint          # eslint .
 ```
