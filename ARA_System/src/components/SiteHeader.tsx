@@ -112,6 +112,21 @@ export function SiteHeader({
     }
   }
 
+  const userRole = user?.publicMetadata.role;
+  const isAdmin = userRole === "manager" || userRole === "admin";
+  const isDispatcher = isDispatcherRole(userRole);
+  const isVeterinarian = userRole === "veterinarian";
+  // isDevBypassEnabled is OR'd in here only so the "Dashboard" nav buttons
+  // appear locally without a real role - see src/utils/devBypass.ts.
+  const isStaff = isDevBypassEnabled || isDispatcher || userRole === "staff" || isVeterinarian;
+  // Module-level work (register animals, review adoptions) is staff work -
+  // Dispatchers keep the rescue queue and public site only.
+  const isStaffModuleRole =
+    isDevBypassEnabled || isAdmin || userRole === "staff" || isVeterinarian;
+  // Adoption review access mirrors the queue's requireStaffOrAbove gate, so a
+  // notification can never route someone somewhere the API would reject.
+  const canReviewAdoptions = isStaffModuleRole;
+
   async function handleOpenNotification(id: string, entityType: string | null) {
     setBellOpen(false);
     try {
@@ -132,20 +147,12 @@ export function SiteHeader({
       // Read state syncs on the next poll.
     }
     if (entityType === "adoption_application") {
-      navigate("my-applications");
+      // Staff reviewers land on the all-users review queue; everyone else
+      // (applicants, dispatchers) lands on their own tracking page. The queue
+      // is staff-gated server-side, so sending a dispatcher there would 403.
+      navigate(canReviewAdoptions ? "manage-adoption-applications" : "my-applications");
     }
   }
-  const userRole = user?.publicMetadata.role;
-  const isAdmin = userRole === "manager" || userRole === "admin";
-  const isDispatcher = isDispatcherRole(userRole);
-  const isVeterinarian = userRole === "veterinarian";
-  // isDevBypassEnabled is OR'd in here only so the "Dashboard" nav buttons
-  // appear locally without a real role - see src/utils/devBypass.ts.
-  const isStaff = isDevBypassEnabled || isDispatcher || userRole === "staff" || isVeterinarian;
-  // Module-level work (register animals, review adoptions) is staff work -
-  // Dispatchers keep the rescue queue and public site only.
-  const isStaffModuleRole =
-    isDevBypassEnabled || isAdmin || userRole === "staff" || isVeterinarian;
   // Internal screens rendered by account-type dashboards and staff forms swap
   // the public prompts for team navigation; staff can still preview the
   // public site through the "View public site" link.
