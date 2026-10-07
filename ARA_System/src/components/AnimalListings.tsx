@@ -3,6 +3,9 @@ import type { Animal, AnimalSize } from "../types/animal";
 import { capitalize } from "../utils/format";
 import { useFavoriteAnimals } from "../utils/favorites";
 import { searchAnimalsWithAI } from "../services/animalsApi";
+import { ANIMAL_TRAITS, buildAnimalTags, extractTraits, type TraitGroup } from "../utils/animalTags";
+import { AnimalTagChips } from "./AnimalTagChips";
+import { apiBaseUrl } from "../services/apiClient.js";
 import { SiteFooter } from "./SiteFooter";
 import { SiteHeader, type SiteHeaderView } from "./SiteHeader";
 
@@ -13,8 +16,6 @@ type AnimalListingsProps = {
   onNavigate: (view: SiteHeaderView) => void;
   onViewAnimal: (animal: Animal) => void;
 };
-
-const apiBaseUrl = import.meta.env.VITE_API_URL ?? "http://localhost:8787";
 
 type Filters = {
   type: string;
@@ -36,16 +37,15 @@ const EMPTY_FILTERS: Filters = {
   vaccination: "all",
 };
 
-function behaviourKey(behaviour: string | null): string {
-  if (!behaviour) return "";
-  const lower = behaviour.toLowerCase();
-  if (/(good with children|family|kids)/.test(lower)) return "good-with-children";
-  if (/(calm|gentle|docile|quiet)/.test(lower)) return "calm";
-  if (/(energetic|active|playful|high.?energy)/.test(lower)) return "energetic";
-  if (/(house.?trained|housebroken)/.test(lower)) return "house-trained";
-  if (/(good with (other )?(dogs|pets|animals)|cat.?friendly|dog.?friendly)/.test(lower)) return "good-with-pets";
-  return "";
+// Behaviour filter matching, driven by the shared trait lexicon: an animal
+// matches the selected option when its trait set includes it. Single source
+// of truth with the card tags (see extractTraits) - a tag can never promise
+// a filter it does not apply.
+function animalTraits(animal: { behaviour: string | null; description: string | null }): string[] {
+  return extractTraits(animal.behaviour, animal.description);
 }
+
+const TRAIT_GROUPS: TraitGroup[] = ["Temperament", "Sociability", "Energy & lifestyle", "Training & care"];
 
 export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, onViewAnimal }: AnimalListingsProps) {
   const [animals, setAnimals] = useState<Animal[]>([]);
@@ -187,7 +187,7 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
           (animal.breed ?? "").trim().toLowerCase() !== filters.breed.toLowerCase()
         )
           return false;
-        if (filters.behaviour !== "all" && behaviourKey(animal.behaviour) !== filters.behaviour)
+        if (filters.behaviour !== "all" && !animalTraits(animal).includes(filters.behaviour))
           return false;
         if (filters.size !== "all" && animal.size !== filters.size) return false;
         if (
@@ -400,23 +400,30 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
 
             <div className="filter-group">
               <h3>Behaviour</h3>
-              {[
-                ["all", "Any"],
-                ["good-with-children", "Good with children"],
-                ["calm", "Calm / gentle"],
-                ["energetic", "Energetic / playful"],
-                ["house-trained", "House-trained"],
-                ["good-with-pets", "Good with other pets"],
-              ].map(([value, label]) => (
-                <label key={value} className="filter-option">
-                  <input
-                    type="radio"
-                    name="behaviour"
-                    checked={filters.behaviour === value}
-                    onChange={() => setFilter("behaviour", value)}
-                  />
-                  <span>{label}</span>
-                </label>
+              <label className="filter-option">
+                <input
+                  type="radio"
+                  name="behaviour"
+                  checked={filters.behaviour === "all"}
+                  onChange={() => setFilter("behaviour", "all")}
+                />
+                <span>Any</span>
+              </label>
+              {TRAIT_GROUPS.map((group) => (
+                <div key={group} className="filter-subgroup">
+                  <h4 className="filter-subgroup-title">{group}</h4>
+                  {ANIMAL_TRAITS.filter((trait) => trait.group === group).map((trait) => (
+                    <label key={trait.key} className="filter-option">
+                      <input
+                        type="radio"
+                        name="behaviour"
+                        checked={filters.behaviour === trait.key}
+                        onChange={() => setFilter("behaviour", trait.key)}
+                      />
+                      <span>{trait.label}</span>
+                    </label>
+                  ))}
+                </div>
               ))}
             </div>
           </aside>
@@ -501,7 +508,12 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
                   <div className="pet-card-body">
                     <h3 className="pet-card-name">{animal.name}</h3>
                     <p className="pet-card-breed">{animal.breed ?? "Breed not recorded"}</p>
-                    {animal.behaviour && <p className="pet-card-blurb">{animal.behaviour}</p>}
+                    <AnimalTagChips
+                      tags={buildAnimalTags(animal)}
+                      onSelectTag={(tag) =>
+                        setFilters((previous) => ({ ...previous, [tag.filterKey]: tag.filterValue }))
+                      }
+                    />
                     <p className="pet-card-line">
                       <span aria-hidden="true">🐾</span>
                       {animal.gender ?? "Gender unknown"} • {animal.estimatedAge ?? "Age unknown"}

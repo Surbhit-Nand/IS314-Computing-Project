@@ -693,6 +693,49 @@
   border-color: rgba(21, 135, 195, 0.2);
 }
 
+/* Summary tags on animal cards. Display-only chips (Home, profile page) are
+   plain labels; clickable chips (listings) advertise it on hover/focus. */
+.animal-tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 2px;
+}
+
+.tag-chip-static {
+  cursor: default;
+}
+
+.tag-chip:hover,
+.tag-chip:focus-visible {
+  background: rgba(21, 135, 195, 0.16);
+  border-color: var(--teal);
+  box-shadow: 0 4px 12px rgba(21, 135, 195, 0.25);
+  transform: translateY(-1px);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.tag-chip:active {
+  transform: translateY(0) scale(0.97);
+  box-shadow: none;
+}
+
+.filter-subgroup {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 8px;
+}
+
+.filter-subgroup-title {
+  margin: 4px 0 2px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--navy);
+  opacity: 0.65;
+}
+
 .animal-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -8814,6 +8857,175 @@
   color: var(--navy);
   font-size: 1rem;
   font-weight: 800;
+}
+
+/* Wizard progress dots for the adoption application: numbered circles with
+   labels underneath. Completed pages are clickable buttons; the current page
+   is filled; upcoming pages are muted and disabled. */
+.wizard-progress {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  list-style: none;
+  margin: 18px 0 6px;
+  padding: 0;
+}
+
+.wizard-progress li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 64px;
+}
+
+.wizard-progress button {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--navy);
+  font-weight: 800;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.wizard-progress li.active button {
+  background: linear-gradient(135deg, var(--teal) 0%, var(--teal-dark) 100%);
+  border-color: transparent;
+  color: #fff;
+}
+
+.wizard-progress li.done button {
+  border-color: var(--teal);
+  color: var(--teal-dark);
+}
+
+.wizard-progress button:disabled {
+  cursor: default;
+}
+
+.wizard-progress span {
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: var(--navy);
+  opacity: 0.7;
+}
+
+.wizard-progress li.active span {
+  opacity: 1;
+}
+
+/* Phone input: flag country picker + national number in one row. Follows the
+   form tokens (10px radius, teal border + focus ring); flags are 4:3 images
+   with rounded corners so every nation reads at a glance. */
+.phone-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.phone-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.phone-row input[type="tel"] {
+  flex: 1;
+  min-width: 0;
+}
+
+.country-picker {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.country-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 100%;
+  min-height: 42px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--teal);
+  background: var(--bg);
+  color: var(--navy);
+  font-weight: 800;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.country-trigger:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(21,135,195,.12);
+}
+
+.country-flag {
+  width: 26px;
+  height: 20px;
+  object-fit: cover;
+  border-radius: 3px;
+  border: 1px solid var(--line);
+}
+
+.country-caret {
+  opacity: 0.6;
+  font-size: 0.7rem;
+}
+
+.country-list {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 240px;
+  max-height: 280px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: #fff;
+  box-shadow: 0 16px 40px rgba(15,25,34,0.16);
+}
+
+.country-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--navy);
+  font-size: 0.85rem;
+  font-weight: 400;
+  cursor: pointer;
+  text-align: left;
+}
+
+.country-option.highlight {
+  background: rgba(21, 135, 195, 0.12);
+}
+
+.country-option .country-name {
+  flex: 1;
+}
+
+.country-option .country-code {
+  opacity: 0.65;
+  font-weight: 800;
+}
+
+.phone-hint {
+  font-size: 0.72rem;
+  opacity: 0.7;
+  color: var(--navy);
 }
 
 .animal-form-grid fieldset.radio-group {

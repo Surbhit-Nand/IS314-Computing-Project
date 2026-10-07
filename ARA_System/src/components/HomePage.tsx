@@ -2,7 +2,10 @@ import { useEffect, useState } from "react";
 import type { Animal } from "../types/animal";
 import { capitalize } from "../utils/format";
 import { useFavoriteAnimals } from "../utils/favorites";
+import { buildAnimalTags } from "../utils/animalTags";
+import { AnimalTagChips } from "./AnimalTagChips";
 import { DonateModal } from "../features/donations/DonateModal";
+import { apiBaseUrl } from "../services/apiClient.js";
 import { SiteFooter } from "./SiteFooter";
 import { SiteHeader, type SiteHeaderView } from "./SiteHeader";
 
@@ -13,8 +16,6 @@ type HomePageProps = {
   onNavigate: (view: SiteHeaderView) => void;
   onViewAnimal: (animal: Animal) => void;
 };
-
-const apiBaseUrl = import.meta.env.VITE_API_URL ?? "http://localhost:8787";
 
 // Homepage hero slideshow images (rotating full-bleed backgrounds).
 const HERO_SLIDES = [
@@ -228,7 +229,7 @@ export function HomePage({ isLoaded, isSignedIn, currentPage, onNavigate, onView
                 <div className="pet-card-body">
                   <h3 className="pet-card-name">{animal.name}</h3>
                   <p className="pet-card-breed">{animal.breed ?? "Breed not recorded"}</p>
-                  {animal.behaviour && <p className="pet-card-blurb">{animal.behaviour}</p>}
+                  <AnimalTagChips tags={buildAnimalTags(animal)} />
                   <p className="pet-card-line">
                     <span aria-hidden="true">🐾</span>
                     {animal.gender ?? "Gender unknown"} • {animal.estimatedAge ?? "Age unknown"}
