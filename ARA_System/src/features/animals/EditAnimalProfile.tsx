@@ -58,7 +58,7 @@ export function EditAnimalProfile({ animalId, onNavigate }: EditAnimalProfilePro
     isDevBypassEnabled || role === "staff" || role === "veterinarian" || role === "manager" || role === "admin";
 
   const [form, setForm] = useState<AnimalFormInput | null>(null);
-  const breedOptions = useBreedOptions(form?.type);
+  const breedOptions = useBreedOptions(form?.type, form?.speciesName);
   // Turned on by a blocked save so every field's problem shows at once.
   const [showAllErrors, setShowAllErrors] = useState(false);
   const [isLoading, setIsLoading] = useState(true);

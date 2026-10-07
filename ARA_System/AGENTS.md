@@ -73,7 +73,7 @@ npm run server:check  # typecheck the server package only
 npm run db:generate   # create a Drizzle migration from schema.ts
 npm run db:migrate    # apply migrations — run AFTER every pull, BEFORE server:dev
 npm run db:seed:animals # idempotent demo animal profiles (photos → Cloudinary)
-npm run db:seed:breeds  # idempotent dog/cat breed list for the breeds table (after migration 0015)
+npm run db:seed:breeds  # idempotent breed lists (dog, cat, typed Other species) for the breeds table (after migrations 0015 + 0017)
 npm run build         # tsc -b && vite build (typechecks frontend+server)
 npm run lint          # eslint .
 npm test             # node:test via tsx — server + frontend suites
@@ -140,7 +140,8 @@ npm test             # node:test via tsx — server + frontend suites
 - **`db:generate` is currently broken** (since the ai-search merge): snapshots
   `0011`/`0013` and `0012`/`0014` point at the same parent, so drizzle-kit
   reports a "collision" and refuses to generate. `0015_breeds_and_rabbit_species`
-  and `0016_animal_species_name` were therefore hand-written (no snapshot),
+  `0016_animal_species_name` and `0017_breeds_for_other_species` were
+  therefore hand-written (no snapshot),
   like `0007`. Until someone repairs
   the snapshot chain, write new migrations by hand, add the journal entry
   yourself with a `when` newer than the latest applied row, and update
@@ -151,9 +152,19 @@ npm test             # node:test via tsx — server + frontend suites
   ("Rabbit", "Guinea Pig") and `breed` is free text ("Holland Lop",
   "Unknown"); dogs/cats always have `species_name` NULL. Display species via
   `speciesLabel()` in `src/utils/format.ts`, never `capitalize(animal.type)`.
-  Dog/cat breeds must exist in the `breeds` table (seeded by
-  `db:seed:breeds`); legacy values not in the table still display but must be
-  re-picked on the next edit.
+  Typing "dog"/"cat" (any case, plurals) as an Other species switches back to
+  Dog/Cat in the form, and the API stores such a request as a real dog/cat -
+  dogs and cats are never stored as Other.
+  Breed lists live in the `breeds` table (seeded by `db:seed:breeds`): dog/cat
+  rows have `species_name` NULL; typed-species rows (migration 0017) are
+  `species = 'other'` + `species_name` ("Rabbit"), unique per (species,
+  species_name, name) case-insensitively. A species with a list gets a Breed
+  dropdown ending with a form-only "Other" option that opens a typed box; a
+  species without one (e.g. Snake) always types its breed. A breed not in the
+  table is stored only if it passes `validateTypedBreedName` (no digits, junk,
+  "Other" or species words like "cat"); typed breeds are never added to the
+  table. Server check: `resolveSpeciesAndBreed` in
+  `server/src/modules/animals/speciesBreed.ts`.
 - **Veterinary priority** is set by staff on the Register/Edit forms
   (`VeterinaryPriorityField.tsx`, default Moderate on Register). Kept
   self-contained so it can move to the vet module later - that file's header
@@ -428,4 +439,4 @@ must remain a no-match state. Search is assistive and never decides adoption.
   **Reconcile at merge**: the reports/analytics module (`server/src/modules/reports/*`,
   `src/components/ReportsPage.tsx`) overlaps `Adoption.md`'s "report generation"
   but was built on `surbhit` deliberately **at the user's request** — QA it in
-  that context, not as an Alvin duplicate.
+  that context, not as an Alvin duplicate.

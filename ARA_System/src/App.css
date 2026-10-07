@@ -2162,25 +2162,6 @@
   color: var(--red);
 }
 
-/* "Choose Dog or Cat instead" under the typed Species box - a small text
-   link back to the Species dropdown. */
-.animal-species-switch {
-  align-self: flex-start;
-  padding: 0;
-  border: none;
-  background: none;
-  color: var(--teal-dark);
-  font: inherit;
-  font-size: 0.8rem;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.animal-species-switch:hover,
-.animal-species-switch:focus-visible {
-  text-decoration: underline;
-}
-
 .animal-photo-list {
   display: flex;
   flex-wrap: wrap;

@@ -87,14 +87,28 @@ export function formatNameText(value: string): string {
 
 const KEYBOARD_SEQUENCES = ["abcdefghijklmnopqrstuvwxyz", "qwertyuiop", "asdfghjkl", "zxcvbnm"];
 
-// Shared rule for short typed names: letters, spaces and hyphens only, 2-40
-// characters, no digits, and no junk ("aaaa", "abc", "qwerty", no vowels).
-function validateNameText(value: string, fieldLabel: string, examples: string): string | null {
+// One word of a typed name: letters, optionally joined by apostrophes inside
+// the word ("Charles's", "D'Artagnan").
+const NAME_WORD = "[A-Za-z]+(?:['’][A-Za-z]+)*";
+const NAME_WITH_APOSTROPHES = new RegExp(`^${NAME_WORD}(?:[ -]${NAME_WORD})*$`);
+
+// Shared rule for short typed names: letters, spaces and hyphens only (plus
+// apostrophes when `allowApostrophes`), 2-40 characters, no digits, and no
+// junk ("aaaa", "abc", "qwerty", no vowels).
+function validateNameText(
+  value: string,
+  fieldLabel: string,
+  examples: string,
+  { allowApostrophes = false }: { allowApostrophes?: boolean } = {},
+): string | null {
   const name = value.trim().replace(/\s+/g, " ");
   if (!name) return `${fieldLabel} is required (${examples}).`;
   if (/\d/.test(name)) return `${fieldLabel} can't contain numbers.`;
-  if (!/^[A-Za-z]+(?:[ -][A-Za-z]+)*$/.test(name)) {
-    return `${fieldLabel} can only contain letters, spaces and hyphens.`;
+  const allowedShape = allowApostrophes ? NAME_WITH_APOSTROPHES : /^[A-Za-z]+(?:[ -][A-Za-z]+)*$/;
+  if (!allowedShape.test(name)) {
+    return allowApostrophes
+      ? `${fieldLabel} can only contain letters, spaces, hyphens and apostrophes.`
+      : `${fieldLabel} can only contain letters, spaces and hyphens.`;
   }
   if (name.length < NAME_TEXT_MIN_LENGTH || name.length > NAME_TEXT_MAX_LENGTH) {
     return `${fieldLabel} must be ${NAME_TEXT_MIN_LENGTH}-${NAME_TEXT_MAX_LENGTH} characters.`;
@@ -103,11 +117,24 @@ function validateNameText(value: string, fieldLabel: string, examples: string): 
   const letters = name.toLowerCase().replace(/[^a-z]/g, "");
   const looksLikeJunk =
     new Set(letters).size < 2 ||
-    /([a-z])\1{2,}/.test(letters) ||
+    // Same letter 3+ times within one word ("aaaa", "Rabbbit") - checked
+    // per word so "Charles's Spaniel" isn't read as "...sss...".
+    /([a-z])\1{2,}/.test(name.toLowerCase().replace(/['’]/g, "")) ||
     !/[aeiouy]/.test(letters) ||
     (letters.length >= 3 && KEYBOARD_SEQUENCES.some((sequence) => sequence.includes(letters)));
   if (looksLikeJunk) return `${fieldLabel} doesn't look like a real name - ${examples}.`;
 
+  return null;
+}
+
+// Typed species text that actually means a dog or a cat ("dog", " Cats ") -
+// trimmed, case-insensitive, plurals accepted. Dogs and cats must never be
+// stored as Other: the form switches back to the Species dropdown and the API
+// stores them as type dog/cat. Null for anything else.
+export function detectDogOrCatSpecies(value: string): "dog" | "cat" | null {
+  const name = value.trim().replace(/\s+/g, " ").toLowerCase();
+  if (name === "dog" || name === "dogs") return "dog";
+  if (name === "cat" || name === "cats") return "cat";
   return null;
 }
 
@@ -117,8 +144,26 @@ export function validateSpeciesName(value: string): string | null {
   return validateNameText(value, "Species", "e.g. Rabbit, Snake, Guinea Pig");
 }
 
-// The breed of an Other animal - free text, since there's no breed list for
-// arbitrary species. "Unknown" and "Mixed breed" pass like any other name.
-export function validateOtherBreedName(value: string): string | null {
-  return validateNameText(value, "Breed", "e.g. Holland Lop, Unknown, Mixed breed");
+// Words that name an animal, not a breed - e.g. a legacy breed of "cat".
+const NOT_A_BREED = ["dog", "dogs", "puppy", "puppies", "cat", "cats", "kitten", "kittens"];
+
+// A breed staff typed instead of picking one from the list: the dog/cat
+// "Other" breed option, a legacy breed that isn't in the breeds table (e.g.
+// "Russian Blue Mix"), or any breed of an Other species ("Holland Lop").
+// "Unknown" and "Mixed breed" pass like any other name. Never the form-only
+// word "Other", and never a species word.
+export function validateTypedBreedName(value: string): string | null {
+  const problem = validateNameText(value, "Breed", "e.g. Russian Blue Mix, Unknown, Mixed breed", {
+    allowApostrophes: true,
+  });
+  if (problem) return problem;
+
+  const name = value.trim().replace(/\s+/g, " ").toLowerCase();
+  if (name === "other") {
+    return 'Breed can\'t be "Other" - type the actual breed, or use Unknown or Mixed breed.';
+  }
+  if (NOT_A_BREED.includes(name)) {
+    return `"${value.trim()}" is a species, not a breed - type the breed, or use Unknown or Mixed breed.`;
+  }
+  return null;
 }

@@ -106,6 +106,13 @@
       "when": 1791344971693,
       "tag": "0016_animal_species_name",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1791347850881,
+      "tag": "0017_breeds_for_other_species",
+      "breakpoints": true
     }
   ]
 }

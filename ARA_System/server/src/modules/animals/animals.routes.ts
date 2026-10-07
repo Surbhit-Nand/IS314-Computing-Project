@@ -14,13 +14,16 @@ import {
 	updateAnimalProfile,
 	uploadAnimalPhoto,
 } from "./animals.service.js";
+import { validateNarrativeText } from "./animalFieldRules.js";
 import {
-	formatNameText,
-	validateNarrativeText,
-	validateOtherBreedName,
-	validateSpeciesName,
-} from "./animalFieldRules.js";
-import { findBreedName, findBreedNames } from "./breeds.repository.js";
+	findBreedName,
+	findBreedNames,
+	findListedSpeciesName,
+	findOtherSpeciesBreeds,
+} from "./breeds.repository.js";
+import { resolveSpeciesAndBreed, type BreedLookups } from "./speciesBreed.js";
+
+const BREED_LOOKUPS: BreedLookups = { findBreedName, findListedSpeciesName };
 
 // Description / Behaviour / Rescue history: length, word-count, real-letters
 // and no-repetition rules from animalFieldRules.ts - the same rules the form
@@ -50,8 +53,9 @@ const animalSchema = z.object({
 	// Required when type is "other" (the typed species, e.g. "Rabbit");
 	// ignored and cleared for dogs and cats. Checked in resolveSpeciesAndBreed().
 	speciesName: z.string().optional(),
-	// Checked further in resolveSpeciesAndBreed(): dog/cat breeds must be in
-	// the breeds table, an "other" breed must be a valid name.
+	// Checked further in resolveSpeciesAndBreed() (speciesBreed.ts): a listed
+	// dog/cat breed is stored in the table's spelling, anything else must pass
+	// the typed-breed rules.
 	breed: z.string().trim().min(1, "Breed is required."),
 	// Left optional here, matching its pre-existing behaviour - the lecturer
 	// confirmed Age validation already works correctly (blocked client-side
@@ -116,34 +120,6 @@ function firstIssueMessage(error: z.ZodError): string {
 	return `${issue.path.join(".")}: ${issue.message}`;
 }
 
-type SpeciesResolution =
-	| { speciesName: string | null; breed: string; error?: undefined }
-	| { speciesName?: undefined; breed?: undefined; error: string };
-
-// Checks species + breed as a pair and returns the values to store:
-// - Dog/cat: the breed must be in the breeds table (stored in the table's own
-//   spelling), so "abc" or "123" can't be saved even by bypassing the form;
-//   speciesName is always cleared (their species is `type`).
-// - Other: speciesName is the typed species ("Rabbit") and breed is free text
-//   ("Holland Lop", "Unknown"), both validated and capitalised.
-async function resolveSpeciesAndBreed(
-	type: "dog" | "cat" | "other",
-	speciesName: string,
-	breed: string,
-): Promise<SpeciesResolution> {
-	if (type === "other") {
-		const speciesProblem = validateSpeciesName(speciesName);
-		if (speciesProblem) return { error: speciesProblem };
-		const breedProblem = validateOtherBreedName(breed);
-		if (breedProblem) return { error: breedProblem };
-		return { speciesName: formatNameText(speciesName), breed: formatNameText(breed) };
-	}
-	const canonical = await findBreedName(type, breed);
-	return canonical
-		? { speciesName: null, breed: canonical }
-		: { error: `"${breed}" isn't a recognised ${type} breed - please choose one from the list.` };
-}
-
 export const animalsRouter = Router();
 
 // Public: only medically cleared, not-yet-adopted animals.
@@ -183,6 +159,19 @@ animalsRouter.post("/ai-search", async (request, response, next) => {
 			});
 			return;
 		}
+		next(error);
+	}
+});
+
+// Breed list for a typed "other" species (e.g. /breeds/other/guinea%20pig),
+// matched case-insensitively: { speciesName: "Guinea Pig", breeds: [...] },
+// or { speciesName: null, breeds: [] } when the species has no list (Snake).
+// Public, read-only reference data. Declared before GET "/:id".
+animalsRouter.get("/breeds/other/:speciesName", async (request, response, next) => {
+	try {
+		const list = await findOtherSpeciesBreeds(getIdParam(request.params.speciesName));
+		response.json(list ?? { speciesName: null, breeds: [] });
+	} catch (error) {
 		next(error);
 	}
 });
@@ -276,6 +265,7 @@ animalsRouter.post(
 				parsed.data.type,
 				parsed.data.speciesName ?? "",
 				parsed.data.breed,
+				BREED_LOOKUPS,
 			);
 			if (species.error !== undefined) {
 				response.status(400).json({ error: species.error });
@@ -284,6 +274,8 @@ animalsRouter.post(
 			response.status(201).json(
 				await registerAnimal({
 					...parsed.data,
+					// May differ from the request: Other + "dog"/"cat" is stored as a dog/cat.
+					type: species.type,
 					speciesName: species.speciesName,
 					breed: species.breed,
 					veterinaryPriority: parsed.data.veterinaryPriority ?? DEFAULT_VETERINARY_PRIORITY,
@@ -314,8 +306,8 @@ animalsRouter.patch(
 
 			// Species, typed species name and breed are only valid together, so if
 			// any of them changes, check all three (filling the rest from the saved
-			// profile). This is also what makes a legacy breed that isn't in the
-			// table (e.g. "Husky") get replaced the next time staff save it.
+			// profile) - e.g. a legacy breed like Aqua's "cat" must be fixed, and
+			// Other + "dog" is saved as a dog.
 			if (update.type !== undefined || update.breed !== undefined || update.speciesName !== undefined) {
 				const existing = await getAnimalById(id);
 				if (!existing) {
@@ -331,12 +323,13 @@ animalsRouter.patch(
 					type,
 					update.speciesName ?? existing.speciesName ?? "",
 					update.breed ?? existing.breed ?? "",
+					BREED_LOOKUPS,
 				);
 				if (species.error !== undefined) {
 					response.status(400).json({ error: species.error });
 					return;
 				}
-				update.type = type;
+				update.type = species.type;
 				update.breed = species.breed;
 				// null for dogs/cats, so switching an Other animal to Dog clears it.
 				update.speciesName = species.speciesName;

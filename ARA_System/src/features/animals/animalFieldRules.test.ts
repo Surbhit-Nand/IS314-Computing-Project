@@ -47,14 +47,24 @@ describe("validateNarrativeText", () => {
   }
 });
 
-describe("validateSpeciesName / validateOtherBreedName", () => {
+describe("validateSpeciesName / validateTypedBreedName", () => {
   for (const [name, rules] of copies) {
     it(`${name}: accepts real names`, () => {
       for (const value of ["Rabbit", "Snake", "guinea pig", "Sugar-Glider", "Ox"]) {
         assert.equal(rules.validateSpeciesName(value), null, value);
       }
-      for (const value of ["Holland Lop", "Unknown", "Mixed breed", "Syrian Mix", "Dwarf"]) {
-        assert.equal(rules.validateOtherBreedName(value), null, value);
+      for (const value of [
+        "Holland Lop",
+        "Unknown",
+        "Mixed breed",
+        "Syrian Mix",
+        "Russian Blue Mix",
+        "German Shepard",
+        "Fijian mixed breed",
+        "King Charles's Spaniel",
+        "Pere David’s",
+      ]) {
+        assert.equal(rules.validateTypedBreedName(value), null, value);
       }
     });
 
@@ -75,25 +85,55 @@ describe("validateSpeciesName / validateOtherBreedName", () => {
       for (const [value, expected] of cases) {
         assert.match(rules.validateSpeciesName(value) ?? "", expected, value);
       }
-      assert.match(rules.validateOtherBreedName("") ?? "", /Breed is required/);
-      assert.match(rules.validateOtherBreedName("123") ?? "", /Breed can't contain numbers/);
-      assert.match(rules.validateOtherBreedName("aaaa") ?? "", /Breed doesn't look like a real name/);
+      // Apostrophes are only allowed in breeds, not species names.
+      assert.match(rules.validateSpeciesName("Pere David's") ?? "", /letters, spaces and hyphens/);
+
+      const breedCases: [string, RegExp][] = [
+        ["", /Breed is required/],
+        ["123", /Breed can't contain numbers/],
+        ["Lab 2", /Breed can't contain numbers/],
+        ["aaaa", /Breed doesn't look like a real name/],
+        ["Labbbrador", /Breed doesn't look like a real name/],
+        ["abc", /Breed doesn't look like a real name/],
+        ["qwerty", /Breed doesn't look like a real name/],
+        ["Pit_Bull", /letters, spaces, hyphens and apostrophes/],
+        ["'Terrier", /letters, spaces, hyphens and apostrophes/],
+        ["Other", /can't be "Other"/],
+        ["  oTHer  ", /can't be "Other"/],
+        ["cat", /is a species, not a breed/],
+        ["Puppy", /is a species, not a breed/],
+      ];
+      for (const [value, expected] of breedCases) {
+        assert.match(rules.validateTypedBreedName(value) ?? "", expected, value);
+      }
     });
 
     it(`${name}: capitalises for display and save`, () => {
       assert.equal(rules.formatNameText("  guinea   pig "), "Guinea Pig");
       assert.equal(rules.formatNameText("SUGAR-glider"), "Sugar-Glider");
       assert.equal(rules.formatNameText("mixed breed"), "Mixed Breed");
+      assert.equal(rules.formatNameText("russian blue mix"), "Russian Blue Mix");
+    });
+  }
+
+  for (const [name, rules] of copies) {
+    it(`${name}: detects typed Dog / Cat (any case, plurals), nothing else`, () => {
+      for (const value of ["dog", " Dogs ", "DOG"]) assert.equal(rules.detectDogOrCatSpecies(value), "dog", value);
+      for (const value of ["cat", "Cats", "  cAt "]) assert.equal(rules.detectDogOrCatSpecies(value), "cat", value);
+      for (const value of ["", "Rabbit", "hot dog", "catfish", "doggo", "Dog Cat"]) {
+        assert.equal(rules.detectDogOrCatSpecies(value), null, value);
+      }
     });
   }
 
   it("both copies give identical answers", () => {
-    const inputs = [...realNarratives, ...badNarratives.map(([text]) => text), "Rabbit", "abc", "guinea pig", "Unknown"];
+    const inputs = [...realNarratives, ...badNarratives.map(([text]) => text), "Rabbit", "abc", "guinea pig", "Unknown", "Other", "cat", "King Charles's Spaniel"];
     for (const input of inputs) {
       assert.equal(client.validateNarrativeText(input, "X"), server.validateNarrativeText(input, "X"));
       assert.equal(client.validateSpeciesName(input), server.validateSpeciesName(input));
-      assert.equal(client.validateOtherBreedName(input), server.validateOtherBreedName(input));
+      assert.equal(client.validateTypedBreedName(input), server.validateTypedBreedName(input));
       assert.equal(client.formatNameText(input), server.formatNameText(input));
+      assert.equal(client.detectDogOrCatSpecies(input), server.detectDogOrCatSpecies(input));
     }
   });
 });

@@ -2,7 +2,15 @@ import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "r
 import { uploadAnimalPhoto } from "../../services/animalsApi";
 import { sizeOptionLabel, type AnimalFormInput, type AnimalSize, type FormSpecies } from "../../types/animal";
 import { COLOUR_OPTIONS, OTHER_ANIMAL_SUGGESTIONS } from "./animalOptions";
-import { NARRATIVE_MAX_LENGTH, NARRATIVE_MIN_LENGTH, formatNameText } from "./animalFieldRules";
+import {
+  NARRATIVE_MAX_LENGTH,
+  NARRATIVE_MIN_LENGTH,
+  detectDogOrCatSpecies,
+  formatNameText,
+  validateSpeciesName,
+  validateTypedBreedName,
+} from "./animalFieldRules";
+import { BREED_OTHER_OPTION, findListedBreed, orderBreedOptions } from "./breedChoice";
 import type { BreedOptions } from "./useBreedOptions";
 import { VeterinaryPriorityField } from "./VeterinaryPriorityField";
 import { getAnimalFormErrors, type AnimalFormField } from "./validateAnimalForm";
@@ -40,6 +48,14 @@ function FieldLabel({ children, needsValue }: { children: ReactNode; needsValue:
   );
 }
 
+// True when an input's change came from picking a datalist suggestion (a
+// replacement, or a plain Event in Firefox) rather than typing characters -
+// so a picked suggestion can commit straight away, keystrokes never do.
+function isSuggestionPick(event: ChangeEvent<HTMLInputElement>): boolean {
+  const inputType = (event.nativeEvent as Partial<InputEvent>).inputType;
+  return inputType === undefined || inputType === "insertReplacementText";
+}
+
 function FieldError({ id, message }: { id: string; message: string | undefined }) {
   if (!message) return null;
   return (
@@ -68,18 +84,46 @@ export function AnimalProfileFields({ value, onChange, getToken, breedOptions, s
     }
   }, [value.type]);
 
-  const errors = getAnimalFormErrors(value, breedOptions.options);
-  // A breed saved before the breeds table existed (e.g. "Husky", or Aqua's
-  // "cat") still displays on the profile, but has to be replaced on save.
-  const hasLegacyBreed =
-    value.type !== "other" &&
-    value.breed !== "" &&
-    breedOptions.options !== undefined &&
-    !breedOptions.options.includes(value.breed);
+  // Breed field mode, for a species with a breed list:
+  // - "auto": the dropdown, unless the breed isn't listed (e.g. a saved
+  //   "Russian Blue Mix") - then the typed box, pre-filled.
+  // - "typed": the typed box, after staff choose "Other" or type in the box.
+  //   Sticky, so the box never flips back to the dropdown mid-keystroke; it
+  //   only does when commitTypedBreed() finds a listed breed.
+  const [breedMode, setBreedMode] = useState<"auto" | "typed">("auto");
+  const breedInputRef = useRef<HTMLInputElement>(null);
+  const focusBreedInput = useRef(false);
+  // The breed the form opened with (Edit), so an invalid saved breed (e.g.
+  // Aqua's "cat") shows its error straight away instead of after a blur.
+  const [initialBreed] = useState(value.breed);
+  // The typed species last committed (blur / Enter / suggestion), so a
+  // genuinely different species clears the breed, but leaving the box
+  // unchanged doesn't.
+  const lastCommittedSpecies = useRef(value.speciesName);
+
+  // The current species' breed list: dogs, cats, or a typed species like
+  // Rabbit. Empty for a species with no list (e.g. Snake), undefined while
+  // loading.
+  const listedBreeds = breedOptions.options;
+  const hasBreedList = listedBreeds !== undefined && listedBreeds.length > 0;
+  const orderedBreeds = hasBreedList ? orderBreedOptions(listedBreeds) : [];
+  const showBreedTextBox =
+    (value.type === "other" && !hasBreedList) ||
+    (hasBreedList &&
+      (breedMode === "typed" || (value.breed.trim() !== "" && !findListedBreed(value.breed, listedBreeds))));
+
+  useEffect(() => {
+    if (focusBreedInput.current && showBreedTextBox) {
+      breedInputRef.current?.focus();
+      focusBreedInput.current = false;
+    }
+  }, [showBreedTextBox]);
+
+  const errors = getAnimalFormErrors(value, listedBreeds);
 
   function errorFor(field: AnimalFormField): string | undefined {
-    const showLegacyBreedError = field === "breed" && hasLegacyBreed;
-    return showAllErrors || touched[field] || showLegacyBreedError ? errors[field] : undefined;
+    const invalidSavedBreed = field === "breed" && initialBreed.trim() !== "" && value.breed === initialBreed;
+    return showAllErrors || touched[field] || invalidSavedBreed ? errors[field] : undefined;
   }
 
   function markTouched(field: AnimalFormField) {
@@ -143,15 +187,62 @@ export function AnimalProfileFields({ value, onChange, getToken, breedOptions, s
     // Picking Other swaps the dropdown for a text box - move focus into it so
     // staff can type straight away (not on page load, only on the switch).
     focusSpeciesInput.current = nextType === "other";
+    lastCommittedSpecies.current = "";
+    setBreedMode("auto");
     onChange({ ...value, type: nextType, speciesName: "", breed: "" });
   }
 
-  // Tidies capitalisation when staff leave a typed name field, but only once
-  // the value is valid - never rewrites something they still need to fix.
-  function formatOnBlur(field: "speciesName" | "breed") {
-    markTouched(field);
-    if (!errors[field] && value[field].trim()) setField(field, formatNameText(value[field]));
+  // Runs when staff leave the typed Species box, press Enter, or pick a
+  // suggestion - never on each keystroke. "Dog"/"cat" (any case, plurals)
+  // switches back to the Species dropdown with that species selected and its
+  // breed list shown; any other valid name is tidied to Title Case, and a
+  // different species than before clears the breed.
+  function commitSpecies(text: string) {
+    markTouched("speciesName");
+    const dogOrCat = detectDogOrCatSpecies(text);
+    if (dogOrCat) {
+      handleSpeciesChange(dogOrCat);
+      return;
+    }
+    if (!text.trim() || validateSpeciesName(text)) {
+      setField("speciesName", text);
+      return;
+    }
+    const species = formatNameText(text);
+    const changed = species.toLowerCase() !== formatNameText(lastCommittedSpecies.current).toLowerCase();
+    lastCommittedSpecies.current = species;
+    if (changed) setBreedMode("auto");
+    onChange({ ...value, speciesName: species, breed: changed ? "" : value.breed });
   }
+
+  // Breed dropdown (any species with a list): "Other" swaps it for the typed
+  // box (focused); anything else is a listed breed.
+  function handleBreedSelect(selected: string) {
+    if (selected === BREED_OTHER_OPTION) {
+      setBreedMode("typed");
+      focusBreedInput.current = true;
+      setField("breed", "");
+      return;
+    }
+    setBreedMode("auto");
+    setField("breed", selected);
+  }
+
+  // Runs when staff leave the typed breed box, press Enter, or pick a
+  // suggestion - never on each keystroke. Text matching a listed breed
+  // (trimmed, case-insensitive) switches back to the dropdown with that breed
+  // selected; otherwise a valid typed breed is tidied to Title Case.
+  function commitTypedBreed(text: string) {
+    markTouched("breed");
+    const listed = findListedBreed(text, listedBreeds);
+    if (listed) {
+      setBreedMode("auto");
+      setField("breed", listed);
+    } else if (text.trim() && !validateTypedBreedName(text)) {
+      setField("breed", formatNameText(text));
+    }
+  }
+
 
   // Description / Behaviour / Rescue history: textarea, live character count
   // and the field's error underneath.
@@ -199,8 +290,8 @@ export function AnimalProfileFields({ value, onChange, getToken, breedOptions, s
       </label>
 
       {/* Species: Dog / Cat / Other dropdown. Choosing Other turns this same
-          field into a text box for the species itself (Rabbit, Snake...),
-          with a button to go back to the dropdown. */}
+          field into a text box for the species itself (Rabbit, Snake...).
+          No "back" link: typing Dog or Cat switches back to the dropdown. */}
       {value.type === "other" ? (
         <label>
           <FieldLabel needsValue={Boolean(errors.speciesName)}>Species</FieldLabel>
@@ -208,22 +299,32 @@ export function AnimalProfileFields({ value, onChange, getToken, breedOptions, s
             ref={speciesInputRef}
             type="text"
             list="animal-species-suggestions"
-            placeholder="Type the animal, e.g. Rabbit, Snake, Guinea Pig"
+            placeholder="Type the animal, e.g. Rabbit (or type Dog / Cat)"
             value={value.speciesName}
-            onChange={(event) => setField("speciesName", event.target.value)}
             maxLength={60}
             required
             {...fieldProps("speciesName")}
-            onBlur={() => formatOnBlur("speciesName")}
+            onChange={(event) => {
+              if (isSuggestionPick(event)) {
+                commitSpecies(event.target.value);
+                return;
+              }
+              setField("speciesName", event.target.value);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                // Enter commits the species instead of submitting the form.
+                event.preventDefault();
+                commitSpecies(value.speciesName);
+              }
+            }}
+            onBlur={() => commitSpecies(value.speciesName)}
           />
           <datalist id="animal-species-suggestions">
             {OTHER_ANIMAL_SUGGESTIONS.map((suggestion) => (
               <option key={suggestion} value={suggestion} />
             ))}
           </datalist>
-          <button type="button" className="animal-species-switch" onClick={() => handleSpeciesChange("dog")}>
-            ← Choose Dog or Cat instead
-          </button>
           <FieldError id="animal-speciesName-error" message={errorFor("speciesName")} />
         </label>
       ) : (
@@ -242,25 +343,47 @@ export function AnimalProfileFields({ value, onChange, getToken, breedOptions, s
         </label>
       )}
 
-      {/* Breed is always shown: a list from the breeds table for dogs and
-          cats, free text for Other (no breed list exists for every animal). */}
-      {value.type === "other" ? (
+      {/* Breed is always shown. When the species has a list in the breeds
+          table (dogs, cats, Rabbit, Hamster...) it's a dropdown ending with
+          "Other", which turns it into a typed box; a species with no list
+          (e.g. Snake) always types its breed. The typed box is one element
+          for both cases, so a list arriving mid-typing never steals focus. */}
+      {showBreedTextBox ? (
         <label>
           <FieldLabel needsValue={Boolean(errors.breed)}>Breed</FieldLabel>
           <input
+            ref={breedInputRef}
             type="text"
-            list="animal-other-breed-suggestions"
-            placeholder="e.g. Holland Lop, or Unknown / Mixed breed"
+            list="animal-breed-suggestions"
+            placeholder={
+              hasBreedList ? "Type the breed (or type a listed breed)" : "Type the breed, or Unknown / Mixed breed"
+            }
             value={value.breed}
-            onChange={(event) => setField("breed", event.target.value)}
             maxLength={60}
             required
             {...fieldProps("breed")}
-            onBlur={() => formatOnBlur("breed")}
+            onChange={(event) => {
+              const text = event.target.value;
+              setBreedMode("typed");
+              if (isSuggestionPick(event) && findListedBreed(text, listedBreeds)) {
+                commitTypedBreed(text);
+                return;
+              }
+              setField("breed", text);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                // Enter commits the breed instead of submitting the form.
+                event.preventDefault();
+                commitTypedBreed(value.breed);
+              }
+            }}
+            onBlur={() => commitTypedBreed(value.breed)}
           />
-          <datalist id="animal-other-breed-suggestions">
-            <option value="Unknown" />
-            <option value="Mixed breed" />
+          <datalist id="animal-breed-suggestions">
+            {(hasBreedList ? orderedBreeds : ["Unknown", "Mixed breed"]).map((breed) => (
+              <option key={breed} value={breed} />
+            ))}
           </datalist>
           <FieldError id="animal-breed-error" message={errorFor("breed")} />
         </label>
@@ -269,21 +392,18 @@ export function AnimalProfileFields({ value, onChange, getToken, breedOptions, s
           <FieldLabel needsValue={Boolean(errors.breed)}>Breed</FieldLabel>
           <select
             value={value.breed}
-            onChange={(event) => setField("breed", event.target.value)}
+            onChange={(event) => handleBreedSelect(event.target.value)}
             disabled={breedOptions.isLoading}
             {...fieldProps("breed")}
           >
             <option value="">{breedOptions.isLoading ? "Loading breeds..." : "Select breed"}</option>
-            {hasLegacyBreed && (
-              <option value={value.breed} disabled>
-                {value.breed} (not in the breed list - please choose another)
-              </option>
-            )}
-            {(breedOptions.options ?? []).map((breed) => (
+            {orderedBreeds.map((breed) => (
               <option key={breed} value={breed}>
                 {breed}
               </option>
             ))}
+            {/* Form-only: switches to the typed box; never stored. */}
+            {hasBreedList && <option value={BREED_OTHER_OPTION}>Other</option>}
           </select>
           {breedOptions.error && <span className="animal-field-error">{breedOptions.error}</span>}
           <FieldError id="animal-breed-error" message={errorFor("breed")} />

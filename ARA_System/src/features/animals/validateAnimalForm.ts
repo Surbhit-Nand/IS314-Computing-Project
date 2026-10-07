@@ -1,9 +1,6 @@
 import type { AnimalFormInput } from "../../types/animal";
-import {
-  validateNarrativeText,
-  validateOtherBreedName,
-  validateSpeciesName,
-} from "./animalFieldRules";
+import { validateNarrativeText, validateSpeciesName, validateTypedBreedName } from "./animalFieldRules";
+import { findListedBreed } from "./breedChoice";
 
 export type AnimalFormField = keyof AnimalFormInput;
 export type AnimalFormErrors = Partial<Record<AnimalFormField, string>>;
@@ -11,10 +8,13 @@ export type AnimalFormErrors = Partial<Record<AnimalFormField, string>>;
 // Every problem on the registration/edit form, keyed by field, so each error
 // can be shown under its own input (and decides each field's red asterisk).
 // The text rules (Description, Behaviour, Rescue history, the typed species
-// and an Other breed) come from animalFieldRules.ts and are enforced again by
-// the API. `knownBreeds` is the dog/cat list loaded from the breeds table -
-// when given, a breed that isn't in it (e.g. a legacy "Husky" on an old
-// profile) must be re-picked before saving.
+// and a typed breed) come from animalFieldRules.ts and are enforced again by
+// the API. `knownBreeds` is the current species' list from the breeds table
+// (dog, cat, or a typed species like Rabbit; empty when it has none, e.g.
+// Snake): a listed breed is always fine; any other breed - typed via the
+// dropdown's "Other" option, a legacy value like "Russian Blue Mix", or a
+// breed of a species with no list - must pass the typed-breed rules (so a
+// legacy "cat" has to be fixed, "Husky" doesn't).
 export function getAnimalFormErrors(input: AnimalFormInput, knownBreeds?: string[]): AnimalFormErrors {
   const errors: AnimalFormErrors = {};
 
@@ -27,12 +27,17 @@ export function getAnimalFormErrors(input: AnimalFormInput, knownBreeds?: string
   if (input.type === "other") {
     const speciesProblem = validateSpeciesName(input.speciesName);
     if (speciesProblem) errors.speciesName = speciesProblem;
-    const breedProblem = validateOtherBreedName(input.breed);
+  }
+
+  // Breed, for every species: a listed breed is always fine; anything else
+  // must pass the typed-breed rules. An empty breed gets the dropdown wording
+  // when the species has a list, the typed-box wording when it doesn't.
+  const hasBreedList = knownBreeds !== undefined && knownBreeds.length > 0;
+  if (!input.breed.trim() && hasBreedList) {
+    errors.breed = "Please select the animal's breed, or choose Other and type it.";
+  } else if (!findListedBreed(input.breed, knownBreeds)) {
+    const breedProblem = validateTypedBreedName(input.breed);
     if (breedProblem) errors.breed = breedProblem;
-  } else if (!input.breed.trim()) {
-    errors.breed = "Please select the animal's breed.";
-  } else if (knownBreeds && !knownBreeds.includes(input.breed)) {
-    errors.breed = "Please select a breed from the list.";
   }
 
   // Veterinary priority (see VeterinaryPriorityField.tsx).

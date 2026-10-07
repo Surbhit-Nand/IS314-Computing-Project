@@ -29,6 +29,22 @@ export async function fetchBreeds(species: "dog" | "cat"): Promise<string[]> {
   return result;
 }
 
+// Breed list for a typed "other" species (GET /api/animals/breeds/other/:name),
+// matched case-insensitively. speciesName is the breeds table's spelling
+// ("Guinea Pig"), or null with an empty list when the species has none.
+export async function fetchOtherSpeciesBreeds(
+  speciesName: string,
+): Promise<{ speciesName: string | null; breeds: string[] }> {
+  const response = await fetch(`${apiBaseUrl}/api/animals/breeds/other/${encodeURIComponent(speciesName)}`);
+  const result = await readApiResponse<{ speciesName: string | null; breeds: string[] } | { error?: string }>(
+    response,
+  );
+  if (!response.ok || !("breeds" in result)) {
+    throw new Error((result as { error?: string }).error ?? "The breed list could not be loaded.");
+  }
+  return result;
+}
+
 // Fetches every animal profile (staff-only) for the Manage Animal Profiles page.
 export async function fetchStaffAnimals(token: string): Promise<Animal[]> {
   const response = await fetch(`${apiBaseUrl}/api/animals/staff`, {

@@ -1,7 +1,8 @@
-// Seeds the `breeds` table (migration 0015) from breedSeedData.ts.
+// Seeds the `breeds` table (migrations 0015 + 0017) from breedSeedData.ts:
+// dog and cat breeds, and breeds for typed "other" species (Rabbit...).
 // Run with `npm run db:seed:breeds`. Safe to re-run: existing
-// (species, name) rows are skipped via ON CONFLICT DO NOTHING, and nothing is
-// ever deleted or renamed.
+// (species, species name, name) rows are skipped via ON CONFLICT DO NOTHING,
+// and nothing is ever deleted or renamed.
 import { breeds } from "./schema.js";
 import { db } from "./client.js";
 import { BREED_SEED_ROWS } from "./breedSeedData.js";
@@ -9,7 +10,9 @@ import { BREED_SEED_ROWS } from "./breedSeedData.js";
 const inserted = await db
 	.insert(breeds)
 	.values(BREED_SEED_ROWS)
-	.onConflictDoNothing({ target: [breeds.species, breeds.name] })
+	// No target: the unique index (migration 0017) is on expressions -
+	// (species, lower(species_name), lower(name)) - so any duplicate is skipped.
+	.onConflictDoNothing()
 	.returning({ id: breeds.id });
 
 console.log(

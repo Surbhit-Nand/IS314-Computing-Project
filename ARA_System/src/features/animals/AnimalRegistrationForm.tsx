@@ -45,9 +45,12 @@ export function AnimalRegistrationForm({ onNavigate }: AnimalRegistrationFormPro
     isDevBypassEnabled || role === "staff" || role === "veterinarian" || role === "manager" || role === "admin";
 
   const [form, setForm] = useState<AnimalFormInput>(emptyForm);
-  const breedOptions = useBreedOptions(form.type);
+  const breedOptions = useBreedOptions(form.type, form.speciesName);
   // Turned on by a blocked submit so every field's problem shows at once.
   const [showAllErrors, setShowAllErrors] = useState(false);
+  // Bumped after a successful registration so the fields remount fresh for
+  // the next animal (typed-breed mode, "touched" state and focus all reset).
+  const [fieldsKey, setFieldsKey] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [createdPublicId, setCreatedPublicId] = useState("");
@@ -80,6 +83,7 @@ export function AnimalRegistrationForm({ onNavigate }: AnimalRegistrationFormPro
       setCreatedPublicId(animal.publicId);
       setSuccessToastMessage(`✓ ${animal.name} registered successfully!`);
       setForm(emptyForm);
+      setFieldsKey((key) => key + 1);
       setShowAllErrors(false);
     } catch (error) {
       const message = error instanceof Error ? error.message : "The animal profile could not be created.";
@@ -163,6 +167,7 @@ export function AnimalRegistrationForm({ onNavigate }: AnimalRegistrationFormPro
 
         <form className="animal-form" onSubmit={handleSubmit}>
           <AnimalProfileFields
+            key={fieldsKey}
             value={form}
             onChange={setForm}
             getToken={getToken}
