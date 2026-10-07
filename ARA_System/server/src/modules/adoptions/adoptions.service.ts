@@ -1,5 +1,6 @@
 import { logAuditEntry } from "../../shared/audit/audit.service.js";
 import { clerkClient } from "../../services/clerkClient.js";
+import { cloudinary, isCloudinaryConfigured } from "../../services/cloudinaryClient.js";
 import { sendAdoptionStatusEmail, sendAdoptionSubmittedStaffEmail } from "../../services/email.js";
 import { listStaffContacts } from "../../services/staffDirectory.js";
 import { getAnimalById, updateAnimalProfile } from "../animals/animals.service.js";
@@ -25,30 +26,23 @@ export type SubmitAdoptionApplicationInput = Pick<
 	| "fullName"
 	| "contactNumber"
 	| "applicantEmail"
-	| "residentialAddress"
-	| "dateOfBirth"
-	| "housingType"
-	| "tenure"
-	| "landlordPetsAllowed"
-	| "fencedYard"
-	| "householdSize"
-	| "childrenAges"
+	| "ageBracket"
+	| "guardianName"
+	| "guardianContact"
+	| "guardianRelationship"
+	| "guardianConsent"
+	| "idDocumentType"
+	| "idDocumentUrl"
 	| "petAllergies"
+	| "respiratoryIssues"
 	| "ownedPetsBefore"
 	| "previousPetOutcome"
 	| "hasCurrentPets"
 	| "currentPetsDetails"
-	| "aloneHours"
-	| "primaryCaregiver"
-	| "dailyRoutine"
 	| "vetCostPlan"
-	| "travelCarePlan"
-	| "adoptionMotivation"
+	| "nextOfKinName"
+	| "nextOfKinContact"
 	| "adoptionFor"
-	| "householdAgreement"
-	| "consentHomeVisit"
-	| "agreeReturnToSpca"
-	| "confirmAccurate"
 >;
 
 // The single adopted lifecycle for an application: submitted -> under_review
@@ -106,6 +100,15 @@ export async function submitAdoptionApplication(
 		throw new Error("You have already applied to adopt this animal.");
 	}
 
+	// Health gate, mirroring the medical-clearance gate below: applicants with
+	// asthma or a respiratory condition cannot adopt cats. Enforced here (not
+	// in the route) because only the service knows the animal's species.
+	if (animal.type === "cat" && input.respiratoryIssues === "yes") {
+		throw new Error(
+			"Applicants with asthma or a respiratory condition cannot adopt cats, for health and safety. Our team can suggest a dog, rabbit or other pet instead.",
+		);
+	}
+
 	const application = await createAdoptionApplication({
 		animalId: input.animalId,
 		applicantClerkUserId,
@@ -116,30 +119,39 @@ export async function submitAdoptionApplication(
 		fullName: input.fullName,
 		contactNumber: input.contactNumber,
 		applicantEmail: input.applicantEmail,
-		residentialAddress: input.residentialAddress,
-		dateOfBirth: input.dateOfBirth,
-		housingType: input.housingType,
-		tenure: input.tenure,
-		landlordPetsAllowed: input.landlordPetsAllowed ?? null,
-		fencedYard: input.fencedYard,
-		householdSize: input.householdSize,
-		childrenAges: input.childrenAges ?? null,
+		residentialAddress: null,
+		dateOfBirth: null,
+		ageBracket: input.ageBracket,
+		guardianName: input.guardianName ?? null,
+		guardianContact: input.guardianContact ?? null,
+		guardianRelationship: input.guardianRelationship ?? null,
+		guardianConsent: input.guardianConsent ?? false,
+		idDocumentType: input.idDocumentType,
+		idDocumentUrl: input.idDocumentUrl,
+		housingType: null,
+		tenure: null,
+		landlordPetsAllowed: null,
+		fencedYard: null,
+		householdSize: null,
+		childrenAges: null,
 		petAllergies: input.petAllergies,
+		respiratoryIssues: input.respiratoryIssues,
 		ownedPetsBefore: input.ownedPetsBefore,
 		previousPetOutcome: input.previousPetOutcome ?? null,
 		hasCurrentPets: input.hasCurrentPets,
 		currentPetsDetails: input.currentPetsDetails ?? null,
-		aloneHours: input.aloneHours,
-		primaryCaregiver: input.primaryCaregiver,
-		dailyRoutine: input.dailyRoutine,
+		aloneHours: null,
+		primaryCaregiver: null,
+		dailyRoutine: null,
 		vetCostPlan: input.vetCostPlan,
-		travelCarePlan: input.travelCarePlan,
-		adoptionMotivation: input.adoptionMotivation,
+		travelCarePlan: null,
+		nextOfKinName: input.nextOfKinName,
+		nextOfKinContact: input.nextOfKinContact,
+		adoptionMotivation: null,
 		adoptionFor: input.adoptionFor,
-		householdAgreement: input.householdAgreement,
-		consentHomeVisit: input.consentHomeVisit,
-		agreeReturnToSpca: input.agreeReturnToSpca,
-		confirmAccurate: input.confirmAccurate,
+		consentHomeVisit: false,
+		agreeReturnToSpca: false,
+		confirmAccurate: false,
 		status: "submitted",
 		reviewNotes: null,
 	});
@@ -174,6 +186,39 @@ export async function submitAdoptionApplication(
 	});
 
 	return application;
+}
+
+// Streams an applicant's identification photo buffer straight to Cloudinary
+// (never touching disk) and returns its hosted URL. The URL is stored on the
+// application row and shown to staff at review; the document's validity is
+// judged by staff, never by this function.
+//
+// The uploader is an optional collaborator so tests can stub Cloudinary
+// without module mocking (see the SearchDependencies pattern in animals).
+export async function uploadAdoptionIdDocument(
+	fileBuffer: Buffer,
+	uploader: (fileBuffer: Buffer) => Promise<string> = uploadIdDocumentToCloudinary,
+): Promise<string> {
+	if (!isCloudinaryConfigured()) {
+		throw new Error(
+			"Cloudinary is not configured. Set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET before uploading documents.",
+		);
+	}
+
+	return uploader(fileBuffer);
+}
+
+function uploadIdDocumentToCloudinary(fileBuffer: Buffer): Promise<string> {
+	return new Promise<string>((resolve, reject) => {
+		const stream = cloudinary.uploader.upload_stream({ folder: "ara/id-documents" }, (error, result) => {
+			if (error || !result) {
+				reject(error ?? new Error("Cloudinary upload failed"));
+				return;
+			}
+			resolve(result.secure_url);
+		});
+		stream.end(fileBuffer);
+	});
 }
 
 // Staff action: move an application through its lifecycle and, when reaching

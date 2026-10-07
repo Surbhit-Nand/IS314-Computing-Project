@@ -242,16 +242,33 @@ export const adoptionApplications = pgTable(
 		familyDetails: text("family_details"),
 		existingPets: text("existing_pets"),
 		animalExperience: text("animal_experience"),
-		// Section 1: applicant information.
+		// Section 1: applicant information. Age is a self-declared bracket
+		// (adult|minor) rather than a birth date; minors must supply guardian
+		// details on the same page (guardian_* below, all required for minors
+		// and null for adults).
 		fullName: text("full_name"),
 		contactNumber: text("contact_number"),
 		applicantEmail: text("applicant_email"),
 		residentialAddress: text("residential_address"),
 		dateOfBirth: text("date_of_birth"),
+		ageBracket: text("age_bracket"),
+		guardianName: text("guardian_name"),
+		guardianContact: text("guardian_contact"),
+		guardianRelationship: text("guardian_relationship"),
+		guardianConsent: boolean("guardian_consent").notNull().default(false),
+		// Identification document for the applicant (photo + type). Required
+		// on new applications so staff can verify identity at review; the
+		// content is never auto-validated - staff decide, the applicant
+		// always continues. Stored as the Cloudinary URL, returned only on
+		// authenticated endpoints (staff queue/detail, applicant's own).
+		idDocumentType: text("id_document_type"),
+		idDocumentUrl: text("id_document_url"),
 		// Section 2: household & living situation (radio answers stored as
-		// short codes: housing_type house|apartment|other, tenure own|rent,
-		// landlord_pets_allowed yes|no|not_sure, fenced_yard yes|no|na,
-		// pet_allergies yes|no).
+		// short codes: housing_type house|apartment|other,
+		// fenced_yard yes|no|na, pet_allergies yes|no,
+		// respiratory_issues yes|no). Tenure/landlord/household-size/children
+		// columns below are kept for rows submitted before the simplified
+		// questionnaire; new applications leave them null.
 		housingType: text("housing_type"),
 		tenure: text("tenure"),
 		landlordPetsAllowed: text("landlord_pets_allowed"),
@@ -259,23 +276,33 @@ export const adoptionApplications = pgTable(
 		householdSize: integer("household_size"),
 		childrenAges: text("children_ages"),
 		petAllergies: text("pet_allergies"),
+		respiratoryIssues: text("respiratory_issues"),
 		// Section 3: pet experience (yes|no codes + conditional details).
 		ownedPetsBefore: text("owned_pets_before"),
 		previousPetOutcome: text("previous_pet_outcome"),
 		hasCurrentPets: text("has_current_pets"),
 		currentPetsDetails: text("current_pets_details"),
-		// Section 4: lifestyle & care plan.
+		// Section 4: care plan. Only the vet-cost plan and the next-of-kin
+		// backup contact are collected now; the older routine/travel columns
+		// below stay defined (existing rows still hold them) but new
+		// applications leave them null.
 		aloneHours: text("alone_hours"),
 		primaryCaregiver: text("primary_caregiver"),
 		dailyRoutine: text("daily_routine"),
 		vetCostPlan: text("vet_cost_plan"),
 		travelCarePlan: text("travel_care_plan"),
-		// Section 5: motivation (adoption_for self|gift, household_agreement
-		// yes|no). Gift adoptions are flagged for extra review in the queue.
+		nextOfKinName: text("next_of_kin_name"),
+		nextOfKinContact: text("next_of_kin_contact"),
+		// Section 5: who the adoption is for (adoption_for self|gift,
+		// household_agreement yes|no). Gift adoptions are flagged for extra
+		// review in the queue. The motivation textarea was removed from the
+		// questionnaire; its column stays for existing rows.
 		adoptionMotivation: text("adoption_motivation"),
 		adoptionFor: text("adoption_for"),
 		householdAgreement: text("household_agreement"),
-		// Section 6: required acknowledgements (all must be true to submit).
+		// Acknowledgements are no longer collected (SPCA Fiji has no capacity
+		// for home visits); the columns stay for existing rows and default
+		// false on new applications.
 		consentHomeVisit: boolean("consent_home_visit").notNull().default(false),
 		agreeReturnToSpca: boolean("agree_return_to_spca").notNull().default(false),
 		confirmAccurate: boolean("confirm_accurate").notNull().default(false),

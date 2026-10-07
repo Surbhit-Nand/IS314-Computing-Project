@@ -19,20 +19,13 @@ import {
   type AdoptionStatusHistoryEntry,
 } from "../../types/adoption";
 import { questionnaireSections } from "./AdoptionQuestionnaireAnswers";
+import { formatDate } from "../../utils/format";
 
 type MyApplicationsProps = {
   isLoaded: boolean;
   isSignedIn: boolean | undefined;
   onNavigate: (view: SiteHeaderView) => void;
 };
-
-function formatDate(value: string): string {
-  return new Date(value).toLocaleString(undefined, {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
 
 // Which forward step the applicant last reached before a rejection, so the
 // stepper shows how far they got rather than pretending the final step was
@@ -153,7 +146,14 @@ function AdoptionApplicationDetailModal({
               <dd>
                 {section.rows.map((row) => (
                   <p key={row.label} className="adoption-answer-row">
-                    <strong>{row.label}:</strong> {row.value}
+                    <strong>{row.label}:</strong>{" "}
+                    {row.href ? (
+                      <a href={row.href} target="_blank" rel="noreferrer">
+                        {row.value}
+                      </a>
+                    ) : (
+                      row.value
+                    )}
                   </p>
                 ))}
               </dd>

@@ -1,7 +1,9 @@
 import { Router } from "express";
+import multer from "multer";
 import { z } from "zod";
 import { requireClerkSession } from "../../middleware/auth.js";
 import { requireStaffOrAbove } from "../../middleware/rbac.js";
+import { getIdParam } from "../../shared/http/routeParams.js";
 import {
 	ADOPTION_STATUSES,
 	getAdoptionApplicationDetail,
@@ -9,6 +11,7 @@ import {
 	listMyAdoptionApplications,
 	submitAdoptionApplication,
 	transitionAdoptionApplication,
+	uploadAdoptionIdDocument,
 } from "./adoptions.service.js";
 
 // Shared optional-text normalizer (empty string -> absent) so optional fields
@@ -21,84 +24,79 @@ const optionalText = z
 
 const yesNo = z.enum(["yes", "no"]);
 
-const applicationSchema = z
+// Exported for validation tests: the wizard payload must satisfy this shape.
+export const applicationSchema = z
 	.object({
 		animalId: z.string().uuid("Link a valid animal"),
-		// Section 1: applicant information.
+		// Section 1: applicant information. Age is a self-declared bracket,
+		// not a birth date; minors unlock the guardian fields below.
 		fullName: z.string().trim().min(1, "Tell us your full name"),
 		contactNumber: z.string().trim().min(1, "Tell us your contact number"),
 		applicantEmail: z.string().trim().email("Enter a valid email address"),
-		residentialAddress: z.string().trim().min(1, "Tell us your residential address"),
-		dateOfBirth: z
-			.string()
-			.trim()
-			.regex(/^\d{4}-\d{2}-\d{2}$/, "Choose your date of birth from the calendar"),
-		// Section 2: household & living situation.
-		housingType: z.enum(["house", "apartment", "other"], "Choose your housing type"),
-		tenure: z.enum(["own", "rent"], "Choose whether you own or rent"),
-		landlordPetsAllowed: z.enum(["yes", "no", "not_sure"]).optional(),
-		fencedYard: z.enum(["yes", "no", "na"], "Tell us about your outdoor space"),
-		householdSize: z.coerce.number().int().min(1, "Enter the number of people in your household"),
-		childrenAges: optionalText,
+		ageBracket: z.enum(["adult", "minor"], "Tell us whether you are 18 or older"),
+		guardianName: optionalText,
+		guardianContact: optionalText,
+		guardianRelationship: z.enum(["parent", "guardian", "other"]).optional(),
+		guardianConsent: z.literal(true).optional(),
+		// Identification document (photo uploaded first, URL submitted here).
+		// Presence only - staff judge the document itself at review.
+		idDocumentType: z.enum(
+			["voter_card", "passport", "drivers_licence", "other"],
+			"Choose your identification document type",
+		),
+		idDocumentUrl: z.string().trim().url("Upload your identification document photo"),
+		// Section 2: household (allergies + respiratory only).
 		petAllergies: yesNo,
+		respiratoryIssues: yesNo,
 		// Section 3: pet experience.
 		ownedPetsBefore: yesNo,
 		previousPetOutcome: optionalText,
 		hasCurrentPets: yesNo,
 		currentPetsDetails: optionalText,
-		// Section 4: lifestyle & care plan.
-		aloneHours: z.string().trim().min(1, "Tell us how long the animal would be alone each day"),
-		primaryCaregiver: z.string().trim().min(1, "Tell us who will be the primary caregiver"),
-		dailyRoutine: z.string().trim().min(1, "Describe the daily exercise and care routine"),
+		// Section 4: care plan (vet costs + next-of-kin backup contact).
 		vetCostPlan: z.string().trim().min(1, "Tell us how you will cover veterinary costs"),
-		travelCarePlan: z.string().trim().min(1, "Tell us your care plan when you travel"),
-		// Section 5: motivation.
-		adoptionMotivation: z.string().trim().min(1, "Tell us why you want to adopt this animal"),
+		nextOfKinName: z.string().trim().min(1, "Tell us who looks after the animal when you are unavailable"),
+		nextOfKinContact: z.string().trim().min(1, "Tell us your next of kin's contact number"),
+		// Section 5: who the adoption is for.
 		adoptionFor: z.enum(["self", "gift"], "Choose who this adoption is for"),
-		householdAgreement: yesNo,
-		// Section 6: required acknowledgements.
-		consentHomeVisit: z.literal(true, "Please consent to a potential home visit"),
-		agreeReturnToSpca: z.literal(true, "Please agree to return the animal to SPCA Fiji if needed"),
-		confirmAccurate: z.literal(true, "Please confirm your information is accurate"),
 	})
-	// Conditional fields: renting requires the landlord question; past pets
-	// require the outcome; current pets require their details. Date of birth
-	// must be a real past date and the applicant must be an adult.
+	// Conditional fields: minors must supply all four guardian answers (and
+	// adults must not send any); past pets require the outcome; current pets
+	// require their details. The cat/asthma health gate lives in the service,
+	// which is the layer that knows the animal's species.
 	.superRefine((data, ctx) => {
-		const age = applicantAge(data.dateOfBirth);
-		if (age === null) {
-			ctx.addIssue({
-				code: "custom",
-				path: ["dateOfBirth"],
-				message: "Enter a valid date of birth in the past",
-			});
-		} else if (age < 18) {
-			ctx.addIssue({
-				code: "custom",
-				path: ["dateOfBirth"],
-				message: "Adoption applicants must be at least 18 years old",
-			});
-		}
-		if (data.tenure === "rent" && !data.landlordPetsAllowed) {
-			ctx.addIssue({
-				code: "custom",
-				path: ["landlordPetsAllowed"],
-				message: "Renters must tell us whether pets are allowed",
-			});
+		const required = (path: (keyof typeof data)[], message: string) => {
+			ctx.addIssue({ code: "custom", path: path as string[], message });
+		};
+		if (data.ageBracket === "minor") {
+			if (!data.guardianName) {
+				required(["guardianName"], "Tell us your parent or guardian's full name");
+			}
+			if (!data.guardianContact) {
+				required(["guardianContact"], "Tell us your parent or guardian's contact number");
+			}
+			if (!data.guardianRelationship) {
+				required(["guardianRelationship"], "Choose their relationship to you");
+			}
+			if (data.guardianConsent !== true) {
+				required(
+					["guardianConsent"],
+					"Your parent or guardian must consent to this adoption",
+				);
+			}
+		} else if (
+			data.guardianName ??
+			data.guardianContact ??
+			data.guardianRelationship ??
+			data.guardianConsent
+		) {
+			required(["guardianName"], "Guardian details are only needed for applicants under 18");
 		}
 		if (data.ownedPetsBefore === "yes" && !data.previousPetOutcome) {
-			ctx.addIssue({
-				code: "custom",
-				path: ["previousPetOutcome"],
-				message: "Tell us what happened to your previous pet(s)",
-			});
+			required(["previousPetOutcome"], "Tell us what happened to your previous pet(s)");
 		}
 		if (data.hasCurrentPets === "yes" && !data.currentPetsDetails) {
-			ctx.addIssue({
-				code: "custom",
-				path: ["currentPetsDetails"],
-				message: "Tell us about your current pets",
-			});
+			required(["currentPetsDetails"], "Tell us about your current pets");
 		}
 	});
 
@@ -107,41 +105,13 @@ const transitionSchema = z.object({
 	reviewNotes: optionalText,
 });
 
-// Whole-year age from an ISO "YYYY-MM-DD" string, or null when invalid or
-// in the future. Mirrors src/utils/age.ts (kept local so the server bundle
-// never imports from the frontend tree).
-function applicantAge(dob: string): number | null {
-	const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dob.trim());
-	if (!match) return null;
-	const birth = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
-	if (
-		Number.isNaN(birth.getTime()) ||
-		birth.getFullYear() !== Number(match[1]) ||
-		birth.getMonth() !== Number(match[2]) - 1 ||
-		birth.getDate() !== Number(match[3])
-	) {
-		return null;
-	}
-	const now = new Date();
-	let age = now.getFullYear() - birth.getFullYear();
-	const hadBirthday =
-		now.getMonth() > birth.getMonth() ||
-		(now.getMonth() === birth.getMonth() && now.getDate() >= birth.getDate());
-	if (!hadBirthday) age -= 1;
-	return age < 0 ? null : age;
-}
-
-// Express types a route param as `string | string[]` because a path pattern
-// could in principle capture a param more than once. Our routes only ever
-// use a single ":id" segment, so this just narrows it back down to a plain
-// string (taking the first value in the unexpected array case).
-function getIdParam(value: string | string[]): string {
-	return Array.isArray(value) ? value[0] : value;
-}
+// Whole-year age helper removed with the date-of-birth field: age is now a
+// self-declared adult/minor bracket, and minors supply guardian details
+// instead of being blocked.
 
 // Maps a handful of known business-rule rejections to a specific status code
-// (409 double-approval, 400 invalid lifecycle move / cleared-gate). Anything
-// unrecognized falls through to the app-level 500 handler.
+// (409 double-approval, 400 invalid lifecycle move / cleared-gate / health
+// gate). Anything unrecognized falls through to the app-level 500 handler.
 function businessErrorStatus(error: unknown): number | null {
 	if (!(error instanceof Error)) {
 		return null;
@@ -155,6 +125,7 @@ function businessErrorStatus(error: unknown): number | null {
 	if (
 		error.message.startsWith("Add a review note") ||
 		error.message.includes("medically cleared") ||
+		error.message.includes("respiratory condition") ||
 		error.message.includes("no longer available for adoption") ||
 		error.message.includes("already applied")
 	) {
@@ -165,12 +136,57 @@ function businessErrorStatus(error: unknown): number | null {
 
 export const adoptionsRouter = Router();
 
+// In-memory upload handling for the applicant's identification photo: the file
+// lives briefly in a request buffer, is streamed straight to Cloudinary, and
+// is never written to disk. Images only (staff read the document visually;
+// PDFs would need a separate viewer).
+const idUpload = multer({
+	storage: multer.memoryStorage(),
+	limits: { fileSize: 8 * 1024 * 1024 },
+	fileFilter: (_request, file, done) => {
+		if (file.mimetype.startsWith("image/")) {
+			done(null, true);
+		} else {
+			done(new Error("Upload a photo of your identification document (JPG or PNG)."));
+		}
+	},
+});
+
+// Signed-in applicant: upload the identification photo before submitting.
+// Returns the hosted URL, which the wizard sends back with the application.
+// The document's validity is judged by staff at review - this endpoint only
+// checks that a real image arrived.
+adoptionsRouter.post(
+	"/id-document",
+	requireClerkSession,
+	idUpload.single("document"),
+	async (request, response, next) => {
+		if (!request.file) {
+			response.status(400).json({ error: "An identification document photo is required." });
+			return;
+		}
+
+		try {
+			const url = await uploadAdoptionIdDocument(request.file.buffer);
+			response.status(201).json({ url });
+		} catch (error) {
+			next(error);
+		}
+	},
+);
+
 // Signed-in user: apply to adopt an animal. The applicant identity comes from
 // the Clerk session, never from the body.
 adoptionsRouter.post("/", requireClerkSession, async (request, response, next) => {
 	const parsed = applicationSchema.safeParse(request.body);
 	if (!parsed.success) {
-		response.status(400).json({ error: "Invalid adoption application details" });
+		// Surface the first field-level message (all copy is our own zod
+		// strings, so nothing internal leaks) instead of a generic 400 -
+		// a stale client or a missed field becomes self-diagnosing.
+		const firstIssue = parsed.error.issues[0];
+		response.status(400).json({
+			error: firstIssue?.message ?? "Invalid adoption application details",
+		});
 		return;
 	}
 

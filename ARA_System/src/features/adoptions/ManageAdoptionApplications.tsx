@@ -20,6 +20,7 @@ import {
 } from "../../types/adoption";
 import {
   isGiftAdoption,
+  isMinorApplication,
   questionnaireSections,
 } from "./AdoptionQuestionnaireAnswers";
 import {
@@ -31,6 +32,7 @@ import {
 } from "./adoptionQueue";
 import { SkeletonLoader } from "../../components/SkeletonLoader";
 import { isDevBypassEnabled } from "../../utils/devBypass";
+import { formatDate } from "../../utils/format";
 import { Breadcrumbs } from "../../components/Breadcrumbs";
 
 type ManageAdoptionApplicationsProps = {
@@ -79,14 +81,6 @@ function transitionHint(status: AdoptionStatus, awaitingClearance: boolean) {
   }
   if (status === "completed") return " (removes the animal from public listings)";
   return "";
-}
-
-function formatDate(value: string): string {
-  return new Date(value).toLocaleString(undefined, {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
 }
 
 // Staff-only page: the adoption application review queue. Each application
@@ -451,6 +445,14 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
                           Gift - extra review
                         </span>
                       )}
+                      {isMinorApplication(application) && (
+                        <span
+                          className="adoption-clearance-badge"
+                          title="The applicant is under 18 - guardian details and consent are on file in the application."
+                        >
+                          Minor - guardian consent on file
+                        </span>
+                      )}
                       <span className={`adoption-status-badge ${adoptionStatusClass(application.status)}`}>
                         {SHORT_STATUS_LABEL[application.status]}
                       </span>
@@ -495,7 +497,14 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
                                 <dd>
                                   {section.rows.map((row) => (
                                     <p key={row.label} className="adoption-answer-row">
-                                      <strong>{row.label}:</strong> {row.value}
+                                      <strong>{row.label}:</strong>{" "}
+                                      {row.href ? (
+                                        <a href={row.href} target="_blank" rel="noreferrer">
+                                          {row.value}
+                                        </a>
+                                      ) : (
+                                        row.value
+                                      )}
                                     </p>
                                   ))}
                                 </dd>

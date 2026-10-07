@@ -103,6 +103,7 @@ const {
 	listMyAdoptionApplications,
 	submitAdoptionApplication,
 	transitionAdoptionApplication,
+	uploadAdoptionIdDocument,
 } = await import("./adoptions.service.js");
 
 const APPLICATION_ID = "11111111-1111-1111-1111-111111111111";
@@ -131,24 +132,28 @@ function baseApplication(overrides: Record<string, unknown> = {}) {
 		contactNumber: "9900000",
 		applicantEmail: "mere@example.com",
 		residentialAddress: "Suva",
-		dateOfBirth: "1995",
+		ageBracket: "adult",
+		guardianName: null,
+		guardianContact: null,
+		guardianRelationship: null,
+		guardianConsent: false,
+		idDocumentType: "voter_card",
+		idDocumentUrl: "https://res.cloudinary.com/demo/id.jpg",
 		housingType: "house",
-		tenure: "own",
-		landlordPetsAllowed: null,
 		fencedYard: "yes",
-		householdSize: 4,
-		childrenAges: null,
 		petAllergies: "no",
+		respiratoryIssues: "no",
 		ownedPetsBefore: "no",
 		previousPetOutcome: null,
 		hasCurrentPets: "no",
 		currentPetsDetails: null,
-		aloneHours: "4 hours",
-		primaryCaregiver: "Mere Koro",
-		dailyRoutine: "Morning walk",
+		aloneHours: null,
+		primaryCaregiver: null,
+		dailyRoutine: null,
 		vetCostPlan: "Savings",
-		travelCarePlan: "Neighbour",
-		adoptionMotivation: "Companion",
+		travelCarePlan: null,
+		nextOfKinName: "Jone Koro",
+		nextOfKinContact: "+679 9900001",
 		adoptionFor: "self",
 		householdAgreement: "yes",
 		consentHomeVisit: true,
@@ -306,32 +311,21 @@ describe("adoptions.service", () => {
 			animalId: ANIMAL_ID,
 			fullName: "Mere Koro",
 			contactNumber: "9900000",
-			applicantEmail: "mere@example.com",
-			residentialAddress: "Suva",
-			dateOfBirth: "1995",
-			housingType: "house",
-			tenure: "own",
-			landlordPetsAllowed: undefined,
-			fencedYard: "yes",
-			householdSize: 4,
-			childrenAges: undefined,
-			petAllergies: "no",
-			ownedPetsBefore: "no",
-			previousPetOutcome: undefined,
-			hasCurrentPets: "no",
-			currentPetsDetails: undefined,
-			aloneHours: "4 hours",
-			primaryCaregiver: "Mere Koro",
-			dailyRoutine: "Morning walk",
-			vetCostPlan: "Savings",
-			travelCarePlan: "Neighbour",
-			adoptionMotivation: "Companion",
-			adoptionFor: "self",
-			householdAgreement: "yes",
-			consentHomeVisit: true,
-			agreeReturnToSpca: true,
-			confirmAccurate: true,
-		};
+		applicantEmail: "mere@example.com",
+		ageBracket: "adult",
+		idDocumentType: "voter_card",
+		idDocumentUrl: "https://res.cloudinary.com/demo/id.jpg",
+		petAllergies: "no",
+		respiratoryIssues: "no",
+		ownedPetsBefore: "no",
+		previousPetOutcome: undefined,
+		hasCurrentPets: "no",
+		currentPetsDetails: undefined,
+		vetCostPlan: "Savings",
+		nextOfKinName: "Jone Koro",
+		nextOfKinContact: "+679 9900001",
+		adoptionFor: "self",
+	};
 
 		it("creates a submitted application and its first history entry", async () => {
 			repo("getAnimalById", async () => baseAnimal());
@@ -346,7 +340,8 @@ describe("adoptions.service", () => {
 			assert.equal(app.status, "submitted");
 			assert.equal(app.fullName, "Mere Koro");
 			assert.equal(app.adoptionFor, "self");
-			assert.equal(app.consentHomeVisit, true);
+			assert.equal(app.vetCostPlan, "Savings");
+			assert.equal(app.nextOfKinName, "Jone Koro");
 			assert.equal(historySpy.length, 1);
 			assert.deepEqual(historySpy[0], {
 				applicationId: APPLICATION_ID,
@@ -379,6 +374,94 @@ describe("adoptions.service", () => {
 			repo("findActiveAdoptionApplication", async () => baseApplication());
 
 			await assert.rejects(submitAdoptionApplication(input, APPLICANT_ID), /already applied/);
+		});
+
+		it("blocks a cat adoption for an applicant with a respiratory condition", async () => {
+			repo("getAnimalById", async () => baseAnimal({ type: "cat" }));
+
+			await assert.rejects(
+				submitAdoptionApplication({ ...input, respiratoryIssues: "yes" }, APPLICANT_ID),
+				/respiratory condition/,
+			);
+		});
+
+		it("allows a dog adoption for an applicant with a respiratory condition", async () => {
+			repo("getAnimalById", async () => baseAnimal({ type: "dog" }));
+			repo("findActiveAdoptionApplication", async () => undefined);
+			repo("createAdoptionApplication", async (data: Record<string, unknown>) => ({ id: APPLICATION_ID, ...data }));
+
+			const app = await submitAdoptionApplication(
+				{ ...input, respiratoryIssues: "yes" },
+				APPLICANT_ID,
+			);
+
+			assert.equal(app.id, APPLICATION_ID);
+		});
+
+		it("stores guardian details for a minor applicant", async () => {
+			repo("getAnimalById", async () => baseAnimal());
+			repo("findActiveAdoptionApplication", async () => undefined);
+			let stored: Record<string, unknown> = {};
+			repo("createAdoptionApplication", async (data: Record<string, unknown>) => {
+				stored = data;
+				return { id: APPLICATION_ID, ...data };
+			});
+
+			await submitAdoptionApplication(
+				{
+					...input,
+					ageBracket: "minor",
+					guardianName: "Jone Koro",
+					guardianContact: "9900001",
+					guardianRelationship: "parent",
+					guardianConsent: true,
+				},
+				APPLICANT_ID,
+			);
+
+			assert.equal(stored.guardianName, "Jone Koro");
+			assert.equal(stored.guardianConsent, true);
+		});
+
+		it("stores the identification document on submit", async () => {
+			repo("getAnimalById", async () => baseAnimal());
+			repo("findActiveAdoptionApplication", async () => undefined);
+			let stored: Record<string, unknown> = {};
+			repo("createAdoptionApplication", async (data: Record<string, unknown>) => {
+				stored = data;
+				return { id: APPLICATION_ID, ...data };
+			});
+
+			await submitAdoptionApplication(input, APPLICANT_ID);
+
+			assert.equal(stored.idDocumentType, "voter_card");
+			assert.equal(stored.idDocumentUrl, "https://res.cloudinary.com/demo/id.jpg");
+		});
+
+		it("stores the next-of-kin backup contact on submit", async () => {
+			repo("getAnimalById", async () => baseAnimal());
+			repo("findActiveAdoptionApplication", async () => undefined);
+			let stored: Record<string, unknown> = {};
+			repo("createAdoptionApplication", async (data: Record<string, unknown>) => {
+				stored = data;
+				return { id: APPLICATION_ID, ...data };
+			});
+
+			await submitAdoptionApplication(input, APPLICANT_ID);
+
+			assert.equal(stored.nextOfKinName, "Jone Koro");
+			assert.equal(stored.nextOfKinContact, "+679 9900001");
+		});
+
+		it("uploads an ID photo through the injected uploader", async () => {
+			const seen: Buffer[] = [];
+			const url = await uploadAdoptionIdDocument(Buffer.from("fake-image"), async (file) => {
+				seen.push(file);
+				return "https://res.cloudinary.com/demo/uploaded.jpg";
+			});
+
+			assert.equal(url, "https://res.cloudinary.com/demo/uploaded.jpg");
+			assert.equal(seen.length, 1);
 		});
 
 		it("notifies the applicant in-app and by email on submit", async () => {

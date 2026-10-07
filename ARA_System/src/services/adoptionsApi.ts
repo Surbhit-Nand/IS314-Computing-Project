@@ -3,24 +3,7 @@ import type {
   AdoptionApplicationInput,
   AdoptionStatus,
 } from "../types/adoption";
-
-// Same base URL / dev-server-not-running guard pattern used in rescueApi.ts
-// and animalsApi.ts - one shared copy for every adoption page.
-const apiBaseUrl = import.meta.env.VITE_API_URL ?? "http://localhost:8787";
-
-async function readApiResponse<T>(response: Response): Promise<T> {
-  const contentType = response.headers.get("content-type") ?? "";
-  if (!contentType.includes("application/json")) {
-    throw new Error("The SPCA API is not running. Start it with `npm run server:dev`.");
-  }
-  return (await response.json()) as T;
-}
-
-function authHeaders(token?: string, extra?: Record<string, string>) {
-  return token
-    ? { Authorization: `Bearer ${token}`, ...extra }
-    : { ...extra };
-}
+import { apiBaseUrl, authHeaders, readApiResponse } from "./apiClient.js";
 
 // Signed-in user: applies to adopt an animal.
 export async function submitAdoptionApplication(
@@ -37,6 +20,23 @@ export async function submitAdoptionApplication(
     throw new Error((result as { error?: string }).error ?? "The application could not be submitted.");
   }
   return result as AdoptionApplication;
+}
+
+// Signed-in applicant: uploads the identification photo before submitting.
+// Returns the hosted URL, which the wizard sends back with the application.
+export async function uploadAdoptionIdDocument(file: File, token: string): Promise<string> {
+  const body = new FormData();
+  body.append("document", file);
+  const response = await fetch(`${apiBaseUrl}/api/adoptions/id-document`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body,
+  });
+  const result = await readApiResponse<{ url?: string; error?: string }>(response);
+  if (!response.ok || !result.url) {
+    throw new Error(result.error ?? "The identification photo could not be uploaded.");
+  }
+  return result.url;
 }
 
 // Signed-in applicant: their own applications for the tracking page.

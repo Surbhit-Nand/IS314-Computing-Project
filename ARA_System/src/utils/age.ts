@@ -1,7 +1,8 @@
 // Whole-year age from an ISO "YYYY-MM-DD" date string, measured at `asOf`
-// (default today). Returns null for missing/invalid/future dates. Shared by
-// the adoption form (live "age at application") and the questionnaire answer
-// renderer (staff queue + applicant modal).
+// (default today). Returns null for missing/invalid/future dates. Kept as a
+// tested shared util (its suite locks the boundary behavior); the adoption
+// questionnaire no longer collects a birth date, so it currently has no
+// production callers.
 export function calculateAge(dob: string | null | undefined, asOf: Date = new Date()): number | null {
   if (!dob) return null;
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dob.trim());
