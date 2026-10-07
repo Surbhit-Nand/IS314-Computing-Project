@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { IconArrowLeft, IconLock } from "../../../components/MedicalIcons";
 import type { MedicalRecord } from "../../../types/veterinary";
 import type { Animal } from "../../../types/animal";
@@ -22,9 +22,11 @@ type Props = {
   onBack: () => void;
   onRefresh: () => Promise<void>;
   onViewProfile?: (animal: Animal) => void;
+  scene: CareScene;
+  onChangeScene: (scene: CareScene, replace?: boolean) => void;
 };
 
-export function VeterinaryCarePage({ record, getToken, onBack, onRefresh, onViewProfile }: Props) {
+export function VeterinaryCarePage({ record, getToken, onBack, onRefresh, onViewProfile, scene, onChangeScene }: Props) {
   const animal = record.animal;
   const assessmentDone = record.examinations.length > 0;
   const treatments = record.carePlan.filter((plan) => !NON_CARE.includes(plan.requirementType));
@@ -32,29 +34,43 @@ export function VeterinaryCarePage({ record, getToken, onBack, onRefresh, onView
   const ready = assessmentDone && completed === treatments.length;
   const stageNumber = !assessmentDone ? 1 : ready ? 3 : 2;
 
-  const [scene, setScene] = useState<CareScene>("history");
   const [selected, setSelected] = useState<string[]>([]);
   const [customTreatment, setCustomTreatment] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [hint, setHint] = useState("");
   const [viewingProfile, setViewingProfile] = useState(false);
+  const navigationVersion = useRef(0);
+  useEffect(() => {
+    return () => { navigationVersion.current += 1; };
+  }, [animal.id, scene]);
+
+  // A restored scene still obeys the live medical workflow gates.
+  const lockedScene = !assessmentDone && (scene === "treatments" || scene === "clearance");
+  useEffect(() => {
+    if (lockedScene) onChangeScene("history", true);
+  }, [lockedScene, onChangeScene]);
+  const activeScene = lockedScene ? "history" : scene;
 
   async function save(action: () => Promise<unknown>, nextScene?: CareScene) {
+    const version = navigationVersion.current;
     try {
       await action();
+      if (version !== navigationVersion.current) return;
       await onRefresh();
-      if (nextScene) setScene(nextScene);
+      if (version !== navigationVersion.current) return;
+      if (nextScene) onChangeScene(nextScene);
       setError("");
       setEditingId(null);
     } catch (value) {
+      if (version !== navigationVersion.current) return;
       setError(value instanceof Error ? value.message : "Veterinary update failed.");
     }
   }
 
   function goToScene(next: CareScene) {
     if (next === "history" || next === "assessment" || assessmentDone) {
-      setScene(next);
+      onChangeScene(next);
       setHint("");
     } else {
       setHint(next === "clearance" ? "Medical Clearance is locked until the Initial Assessment has been saved." : "Required Treatments are locked until the Initial Assessment has been saved.");
@@ -63,12 +79,15 @@ export function VeterinaryCarePage({ record, getToken, onBack, onRefresh, onView
 
   async function handleViewProfile() {
     if (!onViewProfile) return;
+    const version = navigationVersion.current;
     try {
       setViewingProfile(true);
       const token = await getToken();
       if (!token) return;
-      onViewProfile(await fetchAnimalById(token, animal.id));
+      const profile = await fetchAnimalById(token, animal.id);
+      if (version === navigationVersion.current) onViewProfile(profile);
     } catch (value) {
+      if (version !== navigationVersion.current) return;
       setError(value instanceof Error ? value.message : "The animal profile could not be opened.");
     } finally {
       setViewingProfile(false);
@@ -110,14 +129,14 @@ export function VeterinaryCarePage({ record, getToken, onBack, onRefresh, onView
           rail={<VeterinaryStepper stages={stages} onSelect={(number) => goToScene(number === 1 ? "assessment" : number === 2 ? "treatments" : "clearance")} />}
           notice={hint ? <WorkflowNotice tone="red" icon={<IconLock size={15} />} title="Stage locked" detail={hint} /> : undefined}
         >
-          {scene === "history" && (
+          {activeScene === "history" && (
             <MedicalHistoryScene
               record={record}
               onOpenStage={(stage) => goToScene(stage)}
               onBack={onBack}
             />
           )}
-          {scene === "assessment" && (
+          {activeScene === "assessment" && (
             <InitialAssessmentStage
               record={record}
               animal={animal}
@@ -145,7 +164,7 @@ export function VeterinaryCarePage({ record, getToken, onBack, onRefresh, onView
               }
             />
           )}
-          {scene === "treatments" && (
+          {activeScene === "treatments" && (
             <RequiredTreatmentsStage
               record={record}
               editingId={editingId}
@@ -160,7 +179,7 @@ export function VeterinaryCarePage({ record, getToken, onBack, onRefresh, onView
               }
             />
           )}
-          {scene === "clearance" && (
+          {activeScene === "clearance" && (
             <MedicalClearanceStage
               record={record}
               completed={completed}

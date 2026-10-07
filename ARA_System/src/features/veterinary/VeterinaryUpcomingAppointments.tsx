@@ -1,5 +1,5 @@
 import { SignInButton, useAuth } from "@clerk/react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { IconCalendar, IconCalendarPlus, IconNotes, IconUser } from "../../components/MedicalIcons";
 import { fetchVeterinaryAppointments } from "../../services/veterinaryApi";
 import type { VeterinaryAppointment } from "../../types/veterinary";
@@ -11,35 +11,47 @@ import { FollowUpAppointmentPage } from "./FollowUpAppointmentPage";
 
 type Props = {
   currentView: VeterinaryView;
+  selectedAppointmentId?: string;
+  onSelectAppointment: (appointment: VeterinaryAppointment) => void;
+  onInvalidContext: () => void;
   onNavigate: (view: VeterinaryView) => void;
 };
 
-export function VeterinaryUpcomingAppointments({ currentView, onNavigate }: Props) {
+export function VeterinaryUpcomingAppointments({ currentView, onNavigate, selectedAppointmentId, onSelectAppointment, onInvalidContext }: Props) {
   const { isLoaded, isSignedIn, getToken } = useAuth();
   const [appointments, setAppointments] = useState<VeterinaryAppointment[]>([]);
-  const [selected, setSelected] = useState<VeterinaryAppointment | null>(null);
+  const requestVersion = useRef(0);
+  const selected = appointments.find((entry) => entry.appointment.id === selectedAppointmentId);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
-    const token = await getToken();
-    if (!token) return;
+    const version = ++requestVersion.current;
     setLoading(true);
     try {
-      setAppointments(await fetchVeterinaryAppointments(token));
+      const token = await getToken();
+      if (!token || version !== requestVersion.current) return;
+      const entries = await fetchVeterinaryAppointments(token);
+      if (version !== requestVersion.current) return;
+      if (selectedAppointmentId && !entries.some((entry) => entry.appointment.id === selectedAppointmentId)) {
+        onInvalidContext();
+        return;
+      }
+      setAppointments(entries);
       setError("");
     } catch (value) {
+      if (version !== requestVersion.current) return;
       setError(value instanceof Error ? value.message : "Could not load upcoming appointments.");
     } finally {
-      setLoading(false);
+      if (version === requestVersion.current) setLoading(false);
     }
-  }, [getToken]);
+  }, [getToken, selectedAppointmentId, onInvalidContext]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
       void load();
     }, 0);
-    return () => window.clearTimeout(timer);
+    return () => { window.clearTimeout(timer); requestVersion.current += 1; };
   }, [load]);
 
   if (!isLoaded || !isSignedIn) {
@@ -58,7 +70,18 @@ export function VeterinaryUpcomingAppointments({ currentView, onNavigate }: Prop
   }
 
   if (selected) {
-    return <FollowUpAppointmentPage appointment={selected} getToken={getToken} onNavigate={onNavigate} onRefresh={load} />;
+    return <FollowUpAppointmentPage key={selected.appointment.id} appointment={selected} parentView="vet-appointments" getToken={getToken} onNavigate={onNavigate} onRefresh={load} />;
+  }
+
+  if (selectedAppointmentId) {
+    return (
+      <main className="vm-page">
+        <div className="vm-container">
+          <p className={error ? "form-error" : "vm-hint"}>{error || "Loading appointment..."}</p>
+          <button type="button" className="ghost-button" onClick={() => onNavigate("vet-appointments")}>Back to appointments</button>
+        </div>
+      </main>
+    );
   }
 
   return (
@@ -116,7 +139,7 @@ export function VeterinaryUpcomingAppointments({ currentView, onNavigate }: Prop
                       <small><IconUser size={11} /> {fmtTime(appointment.appointmentDate)}</small>
                     </div>
                     <div className="vm-td vm-td-actions">
-                      <button type="button" className="vm-queue-action is-primary" onClick={() => setSelected({ appointment, animal })}>View</button>
+                      <button type="button" className="vm-queue-action is-primary" onClick={() => onSelectAppointment({ appointment, animal })}>View</button>
                     </div>
                   </div>
                 ))}
