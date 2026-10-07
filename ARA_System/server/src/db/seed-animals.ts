@@ -2,7 +2,13 @@
 // have realistic data to test against. Run with `npm run db:seed:animals`.
 //
 // Idempotent: an animal is skipped if a non-deleted profile with the same
-// name and type already exists, so re-running never creates duplicates.
+// name already exists, so re-running never creates duplicates (matched on name
+// alone, because migrations 0015/0016 changed the seeded rabbits' species).
+//
+// Dog/cat breeds must be names from the breeds table (breedSeedData.ts) - this
+// script writes straight to the DB, bypassing the API's breed check. Rabbits
+// and hamsters are species "other", with the typed species in `speciesName`
+// ("Rabbit") and a free-text breed ("Lionhead").
 //
 // Photos are sourced from Wikimedia Commons (freely licensed). Each one was
 // checked by eye against the profile's species/breed/colour, and every
@@ -62,7 +68,7 @@ const SEED_ANIMALS: SeedAnimal[] = [
 	{
 		name: "Koda",
 		type: "dog",
-		breed: "Husky",
+		breed: "Siberian Husky",
 		estimatedAge: "2 years",
 		gender: "Male",
 		colour: "Black and White",
@@ -104,7 +110,7 @@ const SEED_ANIMALS: SeedAnimal[] = [
 	{
 		name: "Bula",
 		type: "dog",
-		breed: "Fijian mixed breed",
+		breed: "Mixed breed",
 		estimatedAge: "4 months",
 		gender: "Male",
 		colour: "Blonde/Tan",
@@ -286,9 +292,12 @@ const SEED_ANIMALS: SeedAnimal[] = [
 	},
 
 	// ------------------------------------------------------------- rabbits
+	// Species "other" + speciesName "Rabbit" - Rabbit is no longer a species
+	// dropdown option.
 	{
 		name: "Honey",
-		type: "rabbit",
+		type: "other",
+		speciesName: "Rabbit",
 		breed: "Lionhead",
 		estimatedAge: "1.5 years",
 		gender: "Female",
@@ -311,7 +320,8 @@ const SEED_ANIMALS: SeedAnimal[] = [
 	},
 	{
 		name: "Thumper",
-		type: "rabbit",
+		type: "other",
+		speciesName: "Rabbit",
 		breed: "Flemish Giant",
 		estimatedAge: "8 months",
 		gender: "Male",
@@ -334,7 +344,8 @@ const SEED_ANIMALS: SeedAnimal[] = [
 	},
 	{
 		name: "Domino",
-		type: "rabbit",
+		type: "other",
+		speciesName: "Rabbit",
 		breed: "Dutch",
 		estimatedAge: "2 years",
 		gender: "Male",
@@ -353,7 +364,8 @@ const SEED_ANIMALS: SeedAnimal[] = [
 	},
 	{
 		name: "Misty",
-		type: "rabbit",
+		type: "other",
+		speciesName: "Rabbit",
 		breed: "Netherland Dwarf",
 		estimatedAge: "1 year",
 		gender: "Female",
@@ -372,13 +384,13 @@ const SEED_ANIMALS: SeedAnimal[] = [
 	},
 
 	// ------------------------------------------------------------ hamsters
-	// The `animal_type` enum has no hamster value; hamsters are stored as
-	// "other" with breed "Hamster" (from the Breed dropdown), matching the
-	// registration form.
+	// Species "other" + speciesName "Hamster" (what staff type when they pick
+	// Other), matching the registration form.
 	{
 		name: "Snowball",
 		type: "other",
-		breed: "Hamster",
+		speciesName: "Hamster",
+		breed: "Winter White Dwarf",
 		estimatedAge: "7 months",
 		gender: "Female",
 		colour: "White",
@@ -401,7 +413,8 @@ const SEED_ANIMALS: SeedAnimal[] = [
 	{
 		name: "Nugget",
 		type: "other",
-		breed: "Hamster",
+		speciesName: "Hamster",
+		breed: "Syrian",
 		estimatedAge: "4 months",
 		gender: "Female",
 		colour: "Brown",
@@ -489,7 +502,7 @@ for (const seed of SEED_ANIMALS) {
 	const [existing] = await db
 		.select({ id: animals.id, photoUrls: animals.photoUrls })
 		.from(animals)
-		.where(and(eq(animals.name, seed.name), eq(animals.type, seed.type), isNull(animals.deletedAt)));
+		.where(and(eq(animals.name, seed.name), isNull(animals.deletedAt)));
 
 	if (existing) {
 		// Already seeded - but if an earlier run had to fall back to Commons
@@ -501,7 +514,7 @@ for (const seed of SEED_ANIMALS) {
 			console.log(`repair  ${seed.name} (${seed.type}) - photos re-uploaded`);
 		} else {
 			skipped += 1;
-			console.log(`skip    ${seed.name} (${seed.type}) - already exists`);
+			console.log(`skip    ${seed.name} - already exists`);
 		}
 		continue;
 	}

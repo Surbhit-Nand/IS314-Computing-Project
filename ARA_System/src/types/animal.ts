@@ -11,10 +11,17 @@ export type VaccinationStatus = "not_vaccinated" | "vaccinated";
 // flagging the skew here rather than silently changing them.
 export type AnimalSize = "small" | "medium" | "large" | "extra_large";
 
-// Triage priority assigned by staff at registration time. Stored on the
-// animal record (not derived from rescue-report urgency, which stays on the
-// rescue module). Null only for animals registered before this field existed.
+// Veterinary triage priority, stored on the animal record (not derived from
+// rescue-report urgency, which stays on the rescue module). Set by staff on
+// the Register/Edit forms (VeterinaryPriorityField.tsx) and read by the vet
+// queue. Null only for animals registered while the field was missing.
 export type VeterinaryPriority = "critical" | "high" | "moderate" | "routine";
+
+// New animals start at Moderate ("stable condition that still requires
+// veterinary assessment") - every new intake needs a vet assessment, and
+// staff raise it to High/Critical for injured animals or lower it to Routine.
+// Mirrors DEFAULT_VETERINARY_PRIORITY in server/src/modules/animals/animals.routes.ts.
+export const DEFAULT_VETERINARY_PRIORITY: VeterinaryPriority = "moderate";
 
 // Priority meanings shown to staff under the form select, per the brief.
 export const PRIORITY_OPTIONS: { value: VeterinaryPriority; label: string; description: string }[] = [
@@ -68,6 +75,9 @@ export type Animal = {
   publicId: string;
   name: string;
   type: AnimalType;
+  // The typed species for type "other" (e.g. "Rabbit"); null for dogs/cats.
+  // Display it via speciesLabel() in utils/format.ts.
+  speciesName: string | null;
   breed: string | null;
   estimatedAge: string | null;
   gender: string | null;
@@ -93,7 +103,14 @@ export type Animal = {
 // server-generated `publicId`).
 export type AnimalFormInput = {
   name: string;
-  type: AnimalType;
+  // Dog, Cat or Other only - "rabbit" is no longer offered (existing rabbits
+  // became other + "<breed> Rabbit" in migration 0015).
+  type: FormSpecies;
+  // Other only: the species staff type in place of the Species dropdown
+  // (e.g. "Rabbit"). Ignored (and cleared by the API) for dogs and cats.
+  speciesName: string;
+  // Dog/Cat: a breed from the breeds table. Other: free text, e.g.
+  // "Holland Lop", "Unknown" or "Mixed breed".
   breed: string;
   estimatedAge: string;
   gender: string;
@@ -110,9 +127,12 @@ export type AnimalFormInput = {
   // "" until staff actively pick one - same required-select pattern as
   // `gender` - validated in validateAnimalForm.ts before submission.
   size: AnimalSize | "";
-  // Required on registration; legacy animals may edit-in a value later.
+  // Required. Register starts at DEFAULT_VETERINARY_PRIORITY; Edit starts at
+  // the saved value ("" for legacy animals with none, so staff must pick).
   veterinaryPriority: VeterinaryPriority | "";
 };
+
+export type FormSpecies = "dog" | "cat" | "other";
 
 // Turns "Available for Adoption" / "Adopted" into the simple two-value label
 // the brief asks for, derived from the richer lifecycle `status` enum rather

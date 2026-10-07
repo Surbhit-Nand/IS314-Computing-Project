@@ -73,6 +73,7 @@ npm run server:check  # typecheck the server package only
 npm run db:generate   # create a Drizzle migration from schema.ts
 npm run db:migrate    # apply migrations — run AFTER every pull, BEFORE server:dev
 npm run db:seed:animals # idempotent demo animal profiles (photos → Cloudinary)
+npm run db:seed:breeds  # idempotent dog/cat breed list for the breeds table (after migration 0015)
 npm run build         # tsc -b && vite build (typechecks frontend+server)
 npm run lint          # eslint .
 npm test             # node:test via tsx — server + frontend suites
@@ -136,6 +137,27 @@ npm test             # node:test via tsx — server + frontend suites
   run its statements manually against the live DB, then record the journal
   row exactly as the migrator would (`hash` = sha256 of the raw `.sql` file,
   `created_at` = the journal `when`) into `drizzle.__drizzle_migrations`.
+- **`db:generate` is currently broken** (since the ai-search merge): snapshots
+  `0011`/`0013` and `0012`/`0014` point at the same parent, so drizzle-kit
+  reports a "collision" and refuses to generate. `0015_breeds_and_rabbit_species`
+  and `0016_animal_species_name` were therefore hand-written (no snapshot),
+  like `0007`. Until someone repairs
+  the snapshot chain, write new migrations by hand, add the journal entry
+  yourself with a `when` newer than the latest applied row, and update
+  `schema.ts` to match.
+- **Species / breeds (migrations 0015 + 0016)**: staff register Dog, Cat or
+  Other only. `rabbit` remains in the `animal_type` enum but the API rejects
+  it. For `type = 'other'`, the typed species lives in `animals.species_name`
+  ("Rabbit", "Guinea Pig") and `breed` is free text ("Holland Lop",
+  "Unknown"); dogs/cats always have `species_name` NULL. Display species via
+  `speciesLabel()` in `src/utils/format.ts`, never `capitalize(animal.type)`.
+  Dog/cat breeds must exist in the `breeds` table (seeded by
+  `db:seed:breeds`); legacy values not in the table still display but must be
+  re-picked on the next edit.
+- **Veterinary priority** is set by staff on the Register/Edit forms
+  (`VeterinaryPriorityField.tsx`, default Moderate on Register). Kept
+  self-contained so it can move to the vet module later - that file's header
+  lists every piece to remove.
 
 ## Core functionality status (build/test checklist)
 

@@ -1,7 +1,11 @@
-import { useState, type ChangeEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import { uploadAnimalPhoto } from "../../services/animalsApi";
-import { PRIORITY_OPTIONS, sizeOptionLabel, type AnimalFormInput, type AnimalSize } from "../../types/animal";
-import { BREED_OPTIONS, COLOUR_OPTIONS } from "./animalOptions";
+import { sizeOptionLabel, type AnimalFormInput, type AnimalSize, type FormSpecies } from "../../types/animal";
+import { COLOUR_OPTIONS, OTHER_ANIMAL_SUGGESTIONS } from "./animalOptions";
+import { NARRATIVE_MAX_LENGTH, NARRATIVE_MIN_LENGTH, formatNameText } from "./animalFieldRules";
+import type { BreedOptions } from "./useBreedOptions";
+import { VeterinaryPriorityField } from "./VeterinaryPriorityField";
+import { getAnimalFormErrors, type AnimalFormField } from "./validateAnimalForm";
 
 const SIZE_OPTIONS: AnimalSize[] = ["small", "medium", "large", "extra_large"];
 
@@ -11,14 +15,87 @@ type AnimalProfileFieldsProps = {
   // Clerk session tokens are short-lived, so this fetches a fresh one right
   // before each upload rather than the caller passing a single static token.
   getToken: () => Promise<string | null>;
+  // Dog/cat breed list from the breeds table (useBreedOptions), owned by the
+  // page so its submit-time validation checks against the same list.
+  breedOptions: BreedOptions;
+  // Set by the page after a blocked submit, so every problem shows at once -
+  // otherwise a field's error only appears once staff have left that field.
+  showAllErrors: boolean;
 };
+
+// One field label: bold teal text, plus a red asterisk only while the field
+// still needs a valid value (empty or invalid per getAnimalFormErrors - the
+// same rules that block saving), so a filled-in Edit form shows none.
+function FieldLabel({ children, needsValue }: { children: ReactNode; needsValue: boolean }) {
+  return (
+    <span className="animal-field-label">
+      {children}
+      {needsValue && (
+        <span className="animal-field-required" aria-hidden="true">
+          {" "}
+          *
+        </span>
+      )}
+    </span>
+  );
+}
+
+function FieldError({ id, message }: { id: string; message: string | undefined }) {
+  if (!message) return null;
+  return (
+    <span id={id} className="animal-field-error">
+      {message}
+    </span>
+  );
+}
 
 // The full set of animal-profile form fields, shared between the
 // Registration form and the Edit form so both pages render identical inputs
 // instead of two copies that could drift apart.
-export function AnimalProfileFields({ value, onChange, getToken }: AnimalProfileFieldsProps) {
+export function AnimalProfileFields({ value, onChange, getToken, breedOptions, showAllErrors }: AnimalProfileFieldsProps) {
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [uploadError, setUploadError] = useState("");
+  const [touched, setTouched] = useState<Partial<Record<AnimalFormField, boolean>>>({});
+  const speciesInputRef = useRef<HTMLInputElement>(null);
+  // Set by handleSpeciesChange when staff pick Other; consumed once the typed
+  // Species box has rendered.
+  const focusSpeciesInput = useRef(false);
+
+  useEffect(() => {
+    if (focusSpeciesInput.current && value.type === "other") {
+      speciesInputRef.current?.focus();
+      focusSpeciesInput.current = false;
+    }
+  }, [value.type]);
+
+  const errors = getAnimalFormErrors(value, breedOptions.options);
+  // A breed saved before the breeds table existed (e.g. "Husky", or Aqua's
+  // "cat") still displays on the profile, but has to be replaced on save.
+  const hasLegacyBreed =
+    value.type !== "other" &&
+    value.breed !== "" &&
+    breedOptions.options !== undefined &&
+    !breedOptions.options.includes(value.breed);
+
+  function errorFor(field: AnimalFormField): string | undefined {
+    const showLegacyBreedError = field === "breed" && hasLegacyBreed;
+    return showAllErrors || touched[field] || showLegacyBreedError ? errors[field] : undefined;
+  }
+
+  function markTouched(field: AnimalFormField) {
+    setTouched((previous) => (previous[field] ? previous : { ...previous, [field]: true }));
+  }
+
+  // Props for a validated input: invalid styling, screen-reader link to its
+  // error message, and "touched" tracking on blur.
+  function fieldProps(field: AnimalFormField) {
+    const error = errorFor(field);
+    return {
+      "aria-invalid": error ? true : undefined,
+      "aria-describedby": error ? `animal-${field}-error` : undefined,
+      onBlur: () => markTouched(field),
+    };
+  }
 
   // Updates a single text/select field on the form without touching the rest.
   function setField<K extends keyof AnimalFormInput>(key: K, fieldValue: AnimalFormInput[K]) {
@@ -59,88 +136,194 @@ export function AnimalProfileFields({ value, onChange, getToken }: AnimalProfile
     );
   }
 
-  // Breed options depend on species, so switching species clears whatever
-  // breed was picked - it likely doesn't exist in the new species' list.
-  function handleSpeciesChange(nextType: AnimalFormInput["type"]) {
-    onChange({ ...value, type: nextType, breed: "" });
+  // Breed means something different per species (a listed breed for dogs and
+  // cats, free text for Other), so switching species clears it along with
+  // any typed species name.
+  function handleSpeciesChange(nextType: FormSpecies) {
+    // Picking Other swaps the dropdown for a text box - move focus into it so
+    // staff can type straight away (not on page load, only on the switch).
+    focusSpeciesInput.current = nextType === "other";
+    onChange({ ...value, type: nextType, speciesName: "", breed: "" });
+  }
+
+  // Tidies capitalisation when staff leave a typed name field, but only once
+  // the value is valid - never rewrites something they still need to fix.
+  function formatOnBlur(field: "speciesName" | "breed") {
+    markTouched(field);
+    if (!errors[field] && value[field].trim()) setField(field, formatNameText(value[field]));
+  }
+
+  // Description / Behaviour / Rescue history: textarea, live character count
+  // and the field's error underneath.
+  function narrativeField(field: "description" | "behaviour" | "rescueHistory", label: string, rows: number) {
+    const length = value[field].trim().length;
+    const outOfRange = length > 0 && (length < NARRATIVE_MIN_LENGTH || length > NARRATIVE_MAX_LENGTH);
+    return (
+      <label className="animal-form-full">
+        <FieldLabel needsValue={Boolean(errors[field])}>{label}</FieldLabel>
+        <textarea
+          rows={rows}
+          value={value[field]}
+          maxLength={NARRATIVE_MAX_LENGTH + 200}
+          onChange={(event) => setField(field, event.target.value)}
+          required
+          {...fieldProps(field)}
+        />
+        <span className={outOfRange ? "animal-field-counter out-of-range" : "animal-field-counter"}>
+          {length} / {NARRATIVE_MAX_LENGTH} characters (minimum {NARRATIVE_MIN_LENGTH}, at least 5 words)
+        </span>
+        <FieldError id={`animal-${field}-error`} message={errorFor(field)} />
+      </label>
+    );
   }
 
   return (
-    <div className="animal-form-grid">
+    <div className="animal-form-grid animal-profile-fields">
+      {Object.keys(errors).length > 0 && (
+        <p className="animal-form-required-note animal-form-full">
+          All fields are required. A red <span className="animal-field-required">*</span> marks a field that
+          still needs a valid value.
+        </p>
+      )}
+
       <label>
-        Name
+        <FieldLabel needsValue={Boolean(errors.name)}>Name</FieldLabel>
         <input
           type="text"
           value={value.name}
           onChange={(event) => setField("name", event.target.value)}
           required
+          {...fieldProps("name")}
         />
+        <FieldError id="animal-name-error" message={errorFor("name")} />
       </label>
 
-      <label>
-        Species
-        <select
-          value={value.type}
-          onChange={(event) => handleSpeciesChange(event.target.value as AnimalFormInput["type"])}
-        >
-          <option value="dog">Dog</option>
-          <option value="cat">Cat</option>
-          <option value="rabbit">Rabbit</option>
-          <option value="other">Other</option>
-        </select>
-      </label>
+      {/* Species: Dog / Cat / Other dropdown. Choosing Other turns this same
+          field into a text box for the species itself (Rabbit, Snake...),
+          with a button to go back to the dropdown. */}
+      {value.type === "other" ? (
+        <label>
+          <FieldLabel needsValue={Boolean(errors.speciesName)}>Species</FieldLabel>
+          <input
+            ref={speciesInputRef}
+            type="text"
+            list="animal-species-suggestions"
+            placeholder="Type the animal, e.g. Rabbit, Snake, Guinea Pig"
+            value={value.speciesName}
+            onChange={(event) => setField("speciesName", event.target.value)}
+            maxLength={60}
+            required
+            {...fieldProps("speciesName")}
+            onBlur={() => formatOnBlur("speciesName")}
+          />
+          <datalist id="animal-species-suggestions">
+            {OTHER_ANIMAL_SUGGESTIONS.map((suggestion) => (
+              <option key={suggestion} value={suggestion} />
+            ))}
+          </datalist>
+          <button type="button" className="animal-species-switch" onClick={() => handleSpeciesChange("dog")}>
+            ← Choose Dog or Cat instead
+          </button>
+          <FieldError id="animal-speciesName-error" message={errorFor("speciesName")} />
+        </label>
+      ) : (
+        <label>
+          <FieldLabel needsValue={Boolean(errors.type)}>Species</FieldLabel>
+          <select
+            value={value.type}
+            onChange={(event) => handleSpeciesChange(event.target.value as FormSpecies)}
+            {...fieldProps("type")}
+          >
+            <option value="dog">Dog</option>
+            <option value="cat">Cat</option>
+            <option value="other">Other (type the animal)</option>
+          </select>
+          <FieldError id="animal-type-error" message={errorFor("type")} />
+        </label>
+      )}
+
+      {/* Breed is always shown: a list from the breeds table for dogs and
+          cats, free text for Other (no breed list exists for every animal). */}
+      {value.type === "other" ? (
+        <label>
+          <FieldLabel needsValue={Boolean(errors.breed)}>Breed</FieldLabel>
+          <input
+            type="text"
+            list="animal-other-breed-suggestions"
+            placeholder="e.g. Holland Lop, or Unknown / Mixed breed"
+            value={value.breed}
+            onChange={(event) => setField("breed", event.target.value)}
+            maxLength={60}
+            required
+            {...fieldProps("breed")}
+            onBlur={() => formatOnBlur("breed")}
+          />
+          <datalist id="animal-other-breed-suggestions">
+            <option value="Unknown" />
+            <option value="Mixed breed" />
+          </datalist>
+          <FieldError id="animal-breed-error" message={errorFor("breed")} />
+        </label>
+      ) : (
+        <label>
+          <FieldLabel needsValue={Boolean(errors.breed)}>Breed</FieldLabel>
+          <select
+            value={value.breed}
+            onChange={(event) => setField("breed", event.target.value)}
+            disabled={breedOptions.isLoading}
+            {...fieldProps("breed")}
+          >
+            <option value="">{breedOptions.isLoading ? "Loading breeds..." : "Select breed"}</option>
+            {hasLegacyBreed && (
+              <option value={value.breed} disabled>
+                {value.breed} (not in the breed list - please choose another)
+              </option>
+            )}
+            {(breedOptions.options ?? []).map((breed) => (
+              <option key={breed} value={breed}>
+                {breed}
+              </option>
+            ))}
+          </select>
+          {breedOptions.error && <span className="animal-field-error">{breedOptions.error}</span>}
+          <FieldError id="animal-breed-error" message={errorFor("breed")} />
+        </label>
+      )}
+
+      <VeterinaryPriorityField
+        value={value.veterinaryPriority}
+        onChange={(next) => setField("veterinaryPriority", next)}
+        label={<FieldLabel needsValue={Boolean(errors.veterinaryPriority)}>Veterinary priority</FieldLabel>}
+        error={<FieldError id="animal-veterinaryPriority-error" message={errorFor("veterinaryPriority")} />}
+        inputProps={fieldProps("veterinaryPriority")}
+      />
 
       <label>
-        Veterinary priority
-        <select
-          value={value.veterinaryPriority}
-          onChange={(event) => setField("veterinaryPriority", event.target.value as AnimalFormInput["veterinaryPriority"])}
-          required
-        >
-          <option value="">Select priority</option>
-          {PRIORITY_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label} - {option.description}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <label>
-        Breed
-        <select value={value.breed} onChange={(event) => setField("breed", event.target.value)}>
-          <option value="">Select breed</option>
-          {BREED_OPTIONS[value.type].map((breed) => (
-            <option key={breed} value={breed}>
-              {breed}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <label>
-        Estimated age
+        <FieldLabel needsValue={Boolean(errors.estimatedAge)}>Estimated age</FieldLabel>
         <input
           type="text"
           placeholder="e.g. 2 years"
           value={value.estimatedAge}
           onChange={(event) => setField("estimatedAge", event.target.value)}
           required
+          {...fieldProps("estimatedAge")}
         />
+        <FieldError id="animal-estimatedAge-error" message={errorFor("estimatedAge")} />
       </label>
 
       <label>
-        Gender
-        <select value={value.gender} onChange={(event) => setField("gender", event.target.value)}>
+        <FieldLabel needsValue={Boolean(errors.gender)}>Gender</FieldLabel>
+        <select value={value.gender} onChange={(event) => setField("gender", event.target.value)} {...fieldProps("gender")}>
           <option value="">Select gender</option>
           <option value="Male">Male</option>
           <option value="Female">Female</option>
         </select>
+        <FieldError id="animal-gender-error" message={errorFor("gender")} />
       </label>
 
       <label>
-        Colour
-        <select value={value.colour} onChange={(event) => setField("colour", event.target.value)}>
+        <FieldLabel needsValue={Boolean(errors.colour)}>Colour</FieldLabel>
+        <select value={value.colour} onChange={(event) => setField("colour", event.target.value)} {...fieldProps("colour")}>
           <option value="">Select colour</option>
           {COLOUR_OPTIONS.map((colour) => (
             <option key={colour} value={colour}>
@@ -148,13 +331,15 @@ export function AnimalProfileFields({ value, onChange, getToken }: AnimalProfile
             </option>
           ))}
         </select>
+        <FieldError id="animal-colour-error" message={errorFor("colour")} />
       </label>
 
       <label>
-        Size
+        <FieldLabel needsValue={Boolean(errors.size)}>Size</FieldLabel>
         <select
           value={value.size}
           onChange={(event) => setField("size", event.target.value as AnimalFormInput["size"])}
+          {...fieldProps("size")}
         >
           <option value="">Select size</option>
           {SIZE_OPTIONS.map((size) => (
@@ -163,55 +348,34 @@ export function AnimalProfileFields({ value, onChange, getToken }: AnimalProfile
             </option>
           ))}
         </select>
+        <FieldError id="animal-size-error" message={errorFor("size")} />
       </label>
 
       <label>
-        Vaccination status
+        <FieldLabel needsValue={Boolean(errors.vaccinationStatus)}>Vaccination status</FieldLabel>
         <select
           value={value.vaccinationStatus}
           onChange={(event) =>
             setField("vaccinationStatus", event.target.value as AnimalFormInput["vaccinationStatus"])
           }
+          {...fieldProps("vaccinationStatus")}
         >
           <option value="not_vaccinated">Not yet vaccinated - open</option>
           <option value="vaccinated">Vaccinated</option>
         </select>
+        <FieldError id="animal-vaccinationStatus-error" message={errorFor("vaccinationStatus")} />
       </label>
 
-      <label className="animal-form-full">
-        Description
-        <textarea
-          rows={4}
-          value={value.description}
-          onChange={(event) => setField("description", event.target.value)}
-          required
-        />
-      </label>
-
-      <label className="animal-form-full">
-        Behaviour
-        <textarea
-          rows={3}
-          value={value.behaviour}
-          onChange={(event) => setField("behaviour", event.target.value)}
-          required
-        />
-      </label>
-
-      <label className="animal-form-full">
-        Rescue history
-        <textarea
-          rows={3}
-          value={value.rescueHistory}
-          onChange={(event) => setField("rescueHistory", event.target.value)}
-          required
-        />
-      </label>
+      {narrativeField("description", "Description", 4)}
+      {narrativeField("behaviour", "Behaviour", 3)}
+      {narrativeField("rescueHistory", "Rescue history", 3)}
 
       <div className="animal-form-full animal-photo-field">
         <span className="animal-photo-label">
-          Photos ({value.photoUrls.length} of {MAX_PHOTOS}) - the first photo is used as the
-          main profile picture
+          <FieldLabel needsValue={Boolean(errors.photoUrls)}>
+            Photos ({value.photoUrls.length} of {MAX_PHOTOS})
+          </FieldLabel>{" "}
+          - the first photo is used as the main profile picture
         </span>
         <div className="animal-photo-list">
           {value.photoUrls.map((url, index) => (
@@ -237,6 +401,7 @@ export function AnimalProfileFields({ value, onChange, getToken }: AnimalProfile
           </p>
         )}
         {uploadError && <p className="invite-feedback error">{uploadError}</p>}
+        <FieldError id="animal-photoUrls-error" message={showAllErrors ? errors.photoUrls : undefined} />
       </div>
     </div>
   );

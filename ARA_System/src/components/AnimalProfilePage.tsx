@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { adoptionStatusLabel, sizeDisplayLabel, vaccinationStatusLabel, type Animal } from "../types/animal";
 import { useFavoriteAnimals } from "../utils/favorites";
-import { capitalize } from "../utils/format";
+import { speciesLabel } from "../utils/format";
 import { Breadcrumbs } from "./Breadcrumbs";
 import { PhotoLightbox } from "./PhotoLightbox";
 import { SiteHeader, type SiteHeaderView } from "./SiteHeader";
@@ -84,7 +84,7 @@ export function AnimalProfilePage({ animal, isLoaded, isSignedIn, currentPage, o
                   onClick={() => setIsLightboxOpen(true)}
                 />
               ) : (
-                <span className="animal-image-label">{capitalize(animal.type)}</span>
+                <span className="animal-image-label">{speciesLabel(animal)}</span>
               )}
               <button
                 type="button"
@@ -152,7 +152,7 @@ export function AnimalProfilePage({ animal, isLoaded, isSignedIn, currentPage, o
               <dl className="profile-facts">
                 <div>
                   <dt>Species</dt>
-                  <dd>{capitalize(animal.type)}</dd>
+                  <dd>{speciesLabel(animal)}</dd>
                 </div>
                 <div>
                   <dt>Breed</dt>

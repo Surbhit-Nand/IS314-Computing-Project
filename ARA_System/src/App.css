@@ -2100,6 +2100,87 @@
   font-weight: 800;
 }
 
+/* Register / Edit animal profile only (.animal-profile-fields). The shared
+   .animal-form-grid styles above also serve the rescue and adoption forms,
+   so these label/error/counter rules are scoped to leave those unchanged.
+   Field names read as headings (larger, bold, teal) above normal-weight
+   inputs, with a red asterisk on required fields. */
+.animal-profile-fields label {
+  gap: 6px;
+  font-size: inherit;
+  font-weight: 400;
+}
+
+.animal-profile-fields .animal-field-label,
+.animal-profile-fields .animal-photo-label .animal-field-label {
+  color: var(--teal-dark);
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.animal-profile-fields .animal-photo-label {
+  font-weight: 600;
+  color: var(--slate);
+}
+
+.animal-field-required {
+  color: var(--red);
+  font-weight: 800;
+}
+
+.animal-form-required-note {
+  margin: 0;
+  color: var(--slate);
+  font-size: 0.85rem;
+}
+
+.animal-profile-fields input,
+.animal-profile-fields select,
+.animal-profile-fields textarea {
+  font-size: 0.95rem;
+}
+
+.animal-profile-fields [aria-invalid="true"] {
+  border-color: var(--red);
+}
+
+.animal-field-error {
+  color: var(--red);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.animal-field-counter {
+  align-self: flex-end;
+  color: var(--slate);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.animal-field-counter.out-of-range {
+  color: var(--red);
+}
+
+/* "Choose Dog or Cat instead" under the typed Species box - a small text
+   link back to the Species dropdown. */
+.animal-species-switch {
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--teal-dark);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.animal-species-switch:hover,
+.animal-species-switch:focus-visible {
+  text-decoration: underline;
+}
+
 .animal-photo-list {
   display: flex;
   flex-wrap: wrap;

@@ -9,6 +9,7 @@ import { fetchAnimalById, updateAnimal } from "../../services/animalsApi";
 import type { Animal, AnimalFormInput } from "../../types/animal";
 import { isDevBypassEnabled } from "../../utils/devBypass";
 import { AnimalProfileFields } from "./AnimalProfileFields";
+import { useBreedOptions } from "./useBreedOptions";
 import { validateAnimalForm } from "./validateAnimalForm";
 
 type EditAnimalProfileProps = {
@@ -19,10 +20,15 @@ type EditAnimalProfileProps = {
 // Converts the API's Animal record (with nullable fields) into the plain
 // string-based shape the form inputs need.
 function toFormInput(animal: Animal): AnimalFormInput {
+  // Rabbit is no longer a species option - migrations 0015/0016 made existing
+  // rabbits other + species "Rabbit". If one is ever still typed "rabbit"
+  // (e.g. on a database without those migrations) it opens the same way.
+  const isLegacyRabbit = animal.type === "rabbit";
   return {
     name: animal.name,
-    type: animal.type,
-    breed: animal.breed ?? "",
+    type: animal.type === "rabbit" ? "other" : animal.type,
+    speciesName: isLegacyRabbit ? "Rabbit" : (animal.speciesName ?? ""),
+    breed: animal.breed?.trim() ?? "",
     estimatedAge: animal.estimatedAge ?? "",
     gender: animal.gender ?? "",
     colour: animal.colour ?? "",
@@ -36,7 +42,8 @@ function toFormInput(animal: Animal): AnimalFormInput {
     // Legacy animals registered before this field existed have size: null -
     // fall back to the unselected placeholder so staff can pick one now.
     size: animal.size ?? "",
-    // Same fallback for veterinary priority - staff can set it on an edit.
+    // Legacy animals with no priority start unselected, so staff must pick
+    // one before saving (VeterinaryPriorityField.tsx).
     veterinaryPriority: animal.veterinaryPriority ?? "",
   };
 }
@@ -51,6 +58,9 @@ export function EditAnimalProfile({ animalId, onNavigate }: EditAnimalProfilePro
     isDevBypassEnabled || role === "staff" || role === "veterinarian" || role === "manager" || role === "admin";
 
   const [form, setForm] = useState<AnimalFormInput | null>(null);
+  const breedOptions = useBreedOptions(form?.type);
+  // Turned on by a blocked save so every field's problem shows at once.
+  const [showAllErrors, setShowAllErrors] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -86,8 +96,9 @@ export function EditAnimalProfile({ animalId, onNavigate }: EditAnimalProfilePro
     event.preventDefault();
     if (!form) return;
 
-    const validationError = validateAnimalForm(form);
+    const validationError = validateAnimalForm(form, breedOptions.options);
     if (validationError) {
+      setShowAllErrors(true);
       window.alert(validationError);
       setSaveError(validationError);
       return;
@@ -191,7 +202,13 @@ export function EditAnimalProfile({ animalId, onNavigate }: EditAnimalProfilePro
             {saveError && <p className="invite-feedback error">{saveError}</p>}
 
             <form className="animal-form" onSubmit={handleSubmit}>
-              <AnimalProfileFields value={form} onChange={setForm} getToken={getToken} />
+              <AnimalProfileFields
+                value={form}
+                onChange={setForm}
+                getToken={getToken}
+                breedOptions={breedOptions}
+                showAllErrors={showAllErrors}
+              />
               <div className="animal-form-actions">
                 {/* No confirmation - the form has no persisted draft to lose
                     (nothing is saved until "Save changes" succeeds), so

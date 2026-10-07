@@ -1,83 +1,97 @@
 import type { AnimalFormInput } from "../../types/animal";
+import {
+  validateNarrativeText,
+  validateOtherBreedName,
+  validateSpeciesName,
+} from "./animalFieldRules";
 
-// Free-text fields must be at least this long (after trimming) - short
-// enough for a real one-line note, long enough to rule out "n/a"-style
-// placeholder junk.
-const MIN_TEXT_LENGTH = 10;
+export type AnimalFormField = keyof AnimalFormInput;
+export type AnimalFormErrors = Partial<Record<AnimalFormField, string>>;
 
-// Catches the kind of garbage the lecturer demo flagged (e.g. "B, B, B, B"),
-// where a field looks non-empty but is really the same letter repeated with
-// punctuation/spacing around it. Strips everything but letters and checks
-// there's more than one distinct one.
-function isNonsenseText(value: string): boolean {
-  const letters = value.replace(/[^a-zA-Z]/g, "");
-  if (letters.length === 0) return true;
-  return new Set(letters.toLowerCase()).size <= 1;
-}
+// Every problem on the registration/edit form, keyed by field, so each error
+// can be shown under its own input (and decides each field's red asterisk).
+// The text rules (Description, Behaviour, Rescue history, the typed species
+// and an Other breed) come from animalFieldRules.ts and are enforced again by
+// the API. `knownBreeds` is the dog/cat list loaded from the breeds table -
+// when given, a breed that isn't in it (e.g. a legacy "Husky" on an old
+// profile) must be re-picked before saving.
+export function getAnimalFormErrors(input: AnimalFormInput, knownBreeds?: string[]): AnimalFormErrors {
+  const errors: AnimalFormErrors = {};
 
-// Runs the length + nonsense checks shared by every long free-text field,
-// returning a field-specific error message or null if it passes.
-function validateFreeText(value: string, fieldLabel: string): string | null {
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return `Please enter ${fieldLabel}.`;
-  }
-  if (trimmed.length < MIN_TEXT_LENGTH) {
-    return `Please enter at least ${MIN_TEXT_LENGTH} characters for ${fieldLabel}.`;
-  }
-  if (isNonsenseText(trimmed)) {
-    return `${fieldLabel[0].toUpperCase()}${fieldLabel.slice(1)} doesn't look like a real entry - please check it.`;
-  }
-  return null;
-}
+  if (!input.name.trim()) errors.name = "Please enter the animal's name.";
 
-// Checks the required fields on the registration/edit form before it's
-// submitted to the server. Returns the first problem found (or null if the
-// form is valid) so the caller can both alert() it and show it inline,
-// per the brief's "block submission and show an alert" requirement.
-export function validateAnimalForm(input: AnimalFormInput): string | null {
-  if (!input.name.trim()) {
-    return "Please enter the animal's name.";
-  }
-  if (!input.breed.trim()) {
-    return "Please select the animal's breed.";
-  }
-  if (!input.estimatedAge.trim()) {
-    return "Please enter the animal's estimated age.";
-  }
-  if (!input.gender.trim()) {
-    return "Please select the animal's gender.";
-  }
-  if (!input.colour.trim()) {
-    return "Please select the animal's colour.";
-  }
-  if (!input.size) {
-    return "Please select the animal's size.";
+  if (input.type !== "dog" && input.type !== "cat" && input.type !== "other") {
+    errors.type = "Please choose Dog, Cat or Other.";
   }
 
-  const descriptionError = validateFreeText(input.description, "a description for the animal");
-  if (descriptionError) return descriptionError;
+  if (input.type === "other") {
+    const speciesProblem = validateSpeciesName(input.speciesName);
+    if (speciesProblem) errors.speciesName = speciesProblem;
+    const breedProblem = validateOtherBreedName(input.breed);
+    if (breedProblem) errors.breed = breedProblem;
+  } else if (!input.breed.trim()) {
+    errors.breed = "Please select the animal's breed.";
+  } else if (knownBreeds && !knownBreeds.includes(input.breed)) {
+    errors.breed = "Please select a breed from the list.";
+  }
 
-  const behaviourError = validateFreeText(input.behaviour, "the animal's behaviour/temperament");
-  if (behaviourError) return behaviourError;
+  // Veterinary priority (see VeterinaryPriorityField.tsx).
+  if (!["critical", "high", "moderate", "routine"].includes(input.veterinaryPriority)) {
+    errors.veterinaryPriority = "Please select the animal's veterinary priority.";
+  }
 
-  const rescueHistoryError = validateFreeText(input.rescueHistory, "the animal's rescue history");
-  if (rescueHistoryError) return rescueHistoryError;
+  if (!input.estimatedAge.trim()) errors.estimatedAge = "Please enter the animal's estimated age.";
+  if (!input.gender.trim()) errors.gender = "Please select the animal's gender.";
+  if (!input.colour.trim()) errors.colour = "Please select the animal's colour.";
+  if (!input.size) errors.size = "Please select the animal's size.";
+
+  const description = validateNarrativeText(input.description, "Description");
+  if (description) errors.description = description;
+  const behaviour = validateNarrativeText(input.behaviour, "Behaviour");
+  if (behaviour) errors.behaviour = behaviour;
+  const rescueHistory = validateNarrativeText(input.rescueHistory, "Rescue history");
+  if (rescueHistory) errors.rescueHistory = rescueHistory;
 
   if (input.photoUrls.length === 0) {
-    return "Please upload at least one photo of the animal.";
-  }
-  if (input.photoUrls.length > 3) {
-    return "Please upload no more than 3 photos of the animal.";
-  }
-  if (!input.veterinaryPriority) {
-    return "Please select the animal's veterinary priority.";
-  }
-  // Vaccination status is checked by value below, which also rejects the
-  // empty string - a separate truthiness check here would be redundant.
-  if (input.vaccinationStatus !== "not_vaccinated" && input.vaccinationStatus !== "vaccinated") {
-    return "Please select a vaccination status.";
+    errors.photoUrls = "Please upload at least one photo of the animal.";
+  } else if (input.photoUrls.length > 3) {
+    errors.photoUrls = "Please upload no more than 3 photos of the animal.";
   }
 
+  if (input.vaccinationStatus !== "not_vaccinated" && input.vaccinationStatus !== "vaccinated") {
+    errors.vaccinationStatus = "Please select a vaccination status.";
+  }
+
+  return errors;
+}
+
+// Order errors are reported in when the form is submitted - top to bottom,
+// matching the order the fields appear on screen.
+const FIELD_ORDER: AnimalFormField[] = [
+  "name",
+  "type",
+  "speciesName",
+  "breed",
+  "veterinaryPriority",
+  "estimatedAge",
+  "gender",
+  "colour",
+  "size",
+  "vaccinationStatus",
+  "description",
+  "behaviour",
+  "rescueHistory",
+  "photoUrls",
+];
+
+// Checks the form before it's submitted to the server. Returns the first
+// problem found (or null if the form is valid) so the caller can both
+// alert() it and show it inline, per the brief's "block submission and show
+// an alert" requirement.
+export function validateAnimalForm(input: AnimalFormInput, knownBreeds?: string[]): string | null {
+  const errors = getAnimalFormErrors(input, knownBreeds);
+  for (const field of FIELD_ORDER) {
+    if (errors[field]) return errors[field];
+  }
   return null;
 }

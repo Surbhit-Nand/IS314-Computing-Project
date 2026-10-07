@@ -1,47 +1,25 @@
-import type { AnimalType } from "../../types/animal";
-
-// Common breeds per species for the Breed dropdown (replaces free text, per
-// lecturer feedback that free text let garbage input through). "Other" is
-// always included as a fallback for anything not listed.
-export const BREED_OPTIONS: Record<AnimalType, string[]> = {
-  dog: [
-    "Fijian mixed breed",
-    "Labrador Retriever",
-    "Golden Retriever",
-    "German Shepherd",
-    "Rottweiler",
-    "Poodle",
-    "Beagle",
-    "Bulldog",
-    "Chihuahua",
-    "Husky",
-    "Other",
-  ],
-  cat: [
-    "Domestic Shorthair",
-    "Domestic Mediumhair",
-    "Domestic Longhair",
-    "British Shorthair",
-    "Siamese",
-    "Persian",
-    "Russian Blue",
-    "Ragdoll",
-    "Maine Coon",
-    "Other",
-  ],
-  rabbit: [
-    "Holland Lop",
-    "Netherland Dwarf",
-    "Mini Rex",
-    "Lionhead",
-    "Flemish Giant",
-    "Dutch",
-    "English Angora",
-    "Mixed breed",
-    "Other",
-  ],
-  other: ["Hamster", "Guinea Pig", "Bird", "Mixed/Unknown", "Other"],
-};
+// Autocomplete suggestions for the typed Species box shown when staff pick
+// Other. Suggestions only - any properly formatted name is accepted (see
+// validateSpeciesName in animalFieldRules.ts). Dog and cat breeds come from
+// the breeds table via GET /api/animals/breeds/:species instead.
+export const OTHER_ANIMAL_SUGGESTIONS = [
+  "Rabbit",
+  "Hamster",
+  "Guinea Pig",
+  "Mouse",
+  "Rat",
+  "Snake",
+  "Lizard",
+  "Ferret",
+  "Bird",
+  "Parrot",
+  "Chicken",
+  "Duck",
+  "Goat",
+  "Pig",
+  "Tortoise",
+  "Turtle",
+];
 
 // General colour list, kept species-agnostic since coat colours mostly
 // overlap across dogs/cats/rabbits/etc.

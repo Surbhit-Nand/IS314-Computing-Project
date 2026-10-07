@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Animal } from "../types/animal";
-import { capitalize } from "../utils/format";
+import { breedLineLabel, speciesLabel } from "../utils/format";
 import { useFavoriteAnimals } from "../utils/favorites";
 import { DonateModal } from "../features/donations/DonateModal";
 import { SiteFooter } from "./SiteFooter";
@@ -207,7 +207,7 @@ export function HomePage({ isLoaded, isSignedIn, currentPage, onNavigate, onView
                   }
                 >
                   {!animal.photoUrls[0] && (
-                    <span className="animal-image-label">{capitalize(animal.type)}</span>
+                    <span className="animal-image-label">{speciesLabel(animal)}</span>
                   )}
                   <button
                     type="button"
@@ -227,7 +227,7 @@ export function HomePage({ isLoaded, isSignedIn, currentPage, onNavigate, onView
                 </div>
                 <div className="pet-card-body">
                   <h3 className="pet-card-name">{animal.name}</h3>
-                  <p className="pet-card-breed">{animal.breed ?? "Breed not recorded"}</p>
+                  <p className="pet-card-breed">{breedLineLabel(animal)}</p>
                   {animal.behaviour && <p className="pet-card-blurb">{animal.behaviour}</p>}
                   <p className="pet-card-line">
                     <span aria-hidden="true">🐾</span>

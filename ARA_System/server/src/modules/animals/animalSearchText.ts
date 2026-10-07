@@ -29,6 +29,7 @@ export type AnimalSearchTextSource = Pick<
 	typeof animals.$inferSelect,
 	| "name"
 	| "type"
+	| "speciesName"
 	| "breed"
 	| "estimatedAge"
 	| "size"
@@ -46,6 +47,7 @@ export type AnimalSearchTextSource = Pick<
 export const ANIMAL_SEARCHABLE_FIELDS = [
 	"name",
 	"type",
+	"speciesName",
 	"breed",
 	"estimatedAge",
 	"size",
@@ -99,7 +101,13 @@ export function buildAnimalSearchText(animal: AnimalSearchTextSource): string {
 	};
 
 	add(labelled("Name", present(animal.name)));
-	add(labelled("Species", TYPE_LABELS[animal.type] ?? present(animal.type)));
+	// An "other" animal's real species is the name staff typed ("Rabbit");
+	// "Other pet" only when none was recorded.
+	const species =
+		animal.type === "other"
+			? (present(animal.speciesName) ?? TYPE_LABELS.other)
+			: (TYPE_LABELS[animal.type] ?? present(animal.type));
+	add(labelled("Species", species));
 	add(labelled("Breed", present(animal.breed)));
 	add(labelled("Size", animal.size ? (SIZE_LABELS[animal.size] ?? animal.size) : null));
 	add(labelled("Estimated age", present(animal.estimatedAge)));

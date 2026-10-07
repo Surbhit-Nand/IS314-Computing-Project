@@ -17,6 +17,18 @@ function authHeaders(token: string, extra?: Record<string, string>) {
   return { Authorization: `Bearer ${token}`, ...extra };
 }
 
+// Breed names for the registration/edit Breed dropdown, from the breeds table
+// (GET /api/animals/breeds/:species). Dog and cat only - "other" animals type
+// their animal type in instead.
+export async function fetchBreeds(species: "dog" | "cat"): Promise<string[]> {
+  const response = await fetch(`${apiBaseUrl}/api/animals/breeds/${species}`);
+  const result = await readApiResponse<string[] | { error?: string }>(response);
+  if (!response.ok || !Array.isArray(result)) {
+    throw new Error((result as { error?: string }).error ?? "The breed list could not be loaded.");
+  }
+  return result;
+}
+
 // Fetches every animal profile (staff-only) for the Manage Animal Profiles page.
 export async function fetchStaffAnimals(token: string): Promise<Animal[]> {
   const response = await fetch(`${apiBaseUrl}/api/animals/staff`, {

@@ -14,22 +14,30 @@ import {
 	updateAnimalProfile,
 	uploadAnimalPhoto,
 } from "./animals.service.js";
+import {
+	formatNameText,
+	validateNarrativeText,
+	validateOtherBreedName,
+	validateSpeciesName,
+} from "./animalFieldRules.js";
+import { findBreedName, findBreedNames } from "./breeds.repository.js";
 
-// Rejects free text that's just one letter repeated (e.g. "B, B, B, B" once
-// punctuation/spacing is stripped) - the garbage input flagged in the
-// lecturer demo. Mirrors validateAnimalForm.ts's isNonsenseText on the
-// frontend; kept as a second, server-side check rather than trusting the
+// Description / Behaviour / Rescue history: length, word-count, real-letters
+// and no-repetition rules from animalFieldRules.ts - the same rules the form
+// runs (validateAnimalForm.ts), enforced again here rather than trusting the
 // client alone.
-function isNotNonsenseText(value: string): boolean {
-	const letters = value.replace(/[^a-zA-Z]/g, "");
-	if (letters.length === 0) return false;
-	return new Set(letters.toLowerCase()).size > 1;
+function narrativeText(fieldLabel: string) {
+	return z.string().superRefine((value, context) => {
+		const problem = validateNarrativeText(value, fieldLabel);
+		if (problem) context.addIssue({ code: "custom", message: problem });
+	});
 }
 
-const freeText = z
-	.string()
-	.min(10, "Must be at least 10 characters")
-	.refine(isNotNonsenseText, "Doesn't look like a real entry");
+// Species staff can register/edit. "rabbit" is still a value of the DB enum
+// but is no longer accepted: rabbits, hamsters, snakes etc. are "other", with
+// the typed species in `speciesName` (migrations 0015 and 0016 converted the
+// existing rows).
+const speciesSchema = z.enum(["dog", "cat", "other"], { error: "Species must be Dog, Cat or Other." });
 
 // Fields a staff member fills in when registering a new animal. `publicId`
 // is deliberately absent here — the server generates it, staff never type
@@ -38,28 +46,42 @@ const freeText = z
 // enter it and it's never part of an edit either.
 const animalSchema = z.object({
 	name: z.string().min(1),
-	type: z.enum(["dog", "cat", "rabbit", "other"]),
-	breed: z.string().min(1),
+	type: speciesSchema,
+	// Required when type is "other" (the typed species, e.g. "Rabbit");
+	// ignored and cleared for dogs and cats. Checked in resolveSpeciesAndBreed().
+	speciesName: z.string().optional(),
+	// Checked further in resolveSpeciesAndBreed(): dog/cat breeds must be in
+	// the breeds table, an "other" breed must be a valid name.
+	breed: z.string().trim().min(1, "Breed is required."),
 	// Left optional here, matching its pre-existing behaviour - the lecturer
 	// confirmed Age validation already works correctly (blocked client-side
 	// in validateAnimalForm.ts), so this field is untouched per that feedback.
 	estimatedAge: z.string().optional(),
 	gender: z.string().optional(),
 	colour: z.string().min(1),
-	description: freeText,
-	behaviour: freeText,
-	rescueHistory: freeText,
+	description: narrativeText("Description"),
+	behaviour: narrativeText("Behaviour"),
+	rescueHistory: narrativeText("Rescue history"),
 	// Between 1 and 3 photos - photoUrls[0] is the animal's main/profile
 	// picture (used on listing cards and as the profile hero), enforced here
 	// and again client-side in validateAnimalForm.ts.
 	photoUrls: z.array(z.string().url()).min(1).max(3),
 	vaccinationStatus: z.enum(["not_vaccinated", "vaccinated"]),
 	size: z.enum(["small", "medium", "large", "extra_large"]),
-	// Triage priority is selected by staff during registration (not inherited
-	// from any rescue-report urgency). Required - an animal cannot be
-	// registered without one.
-	veterinaryPriority: z.enum(["critical", "high", "moderate", "routine"]),
+	// Veterinary priority (triage criticality) set by staff so the animal
+	// reaches the vet queue. Optional here; a create without one gets
+	// DEFAULT_VETERINARY_PRIORITY, an edit without one leaves it unchanged.
+	// Self-contained so it's easy to remove if the group moves it to the vet
+	// module (see src/features/animals/VeterinaryPriorityField.tsx).
+	veterinaryPriority: z
+		.enum(["critical", "high", "moderate", "routine"], {
+			error: "Veterinary priority must be Critical, High, Moderate or Routine.",
+		})
+		.optional(),
 });
+
+// Mirrors DEFAULT_VETERINARY_PRIORITY in src/types/animal.ts.
+const DEFAULT_VETERINARY_PRIORITY = "moderate";
 
 // Same shape, but every field is optional since an edit can touch just one
 // or two fields at a time.
@@ -83,6 +105,43 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 *
 // string (taking the first value in the unexpected array case).
 function getIdParam(value: string | string[]): string {
 	return Array.isArray(value) ? value[0] : value;
+}
+
+// The message staff see when a create/edit is rejected: the rule's own
+// wording for custom checks, otherwise "<field>: <zod message>".
+function firstIssueMessage(error: z.ZodError): string {
+	const issue = error.issues[0];
+	if (!issue) return "Invalid animal profile";
+	if (issue.code === "custom" || issue.path.length === 0) return issue.message;
+	return `${issue.path.join(".")}: ${issue.message}`;
+}
+
+type SpeciesResolution =
+	| { speciesName: string | null; breed: string; error?: undefined }
+	| { speciesName?: undefined; breed?: undefined; error: string };
+
+// Checks species + breed as a pair and returns the values to store:
+// - Dog/cat: the breed must be in the breeds table (stored in the table's own
+//   spelling), so "abc" or "123" can't be saved even by bypassing the form;
+//   speciesName is always cleared (their species is `type`).
+// - Other: speciesName is the typed species ("Rabbit") and breed is free text
+//   ("Holland Lop", "Unknown"), both validated and capitalised.
+async function resolveSpeciesAndBreed(
+	type: "dog" | "cat" | "other",
+	speciesName: string,
+	breed: string,
+): Promise<SpeciesResolution> {
+	if (type === "other") {
+		const speciesProblem = validateSpeciesName(speciesName);
+		if (speciesProblem) return { error: speciesProblem };
+		const breedProblem = validateOtherBreedName(breed);
+		if (breedProblem) return { error: breedProblem };
+		return { speciesName: formatNameText(speciesName), breed: formatNameText(breed) };
+	}
+	const canonical = await findBreedName(type, breed);
+	return canonical
+		? { speciesName: null, breed: canonical }
+		: { error: `"${breed}" isn't a recognised ${type} breed - please choose one from the list.` };
 }
 
 export const animalsRouter = Router();
@@ -124,6 +183,22 @@ animalsRouter.post("/ai-search", async (request, response, next) => {
 			});
 			return;
 		}
+		next(error);
+	}
+});
+
+// Breeds for the registration/edit Breed dropdown, loaded from the breeds
+// table. Public, read-only reference data (no animal data). Declared before
+// GET "/:id" so "breeds" is never read as an animal id.
+animalsRouter.get("/breeds/:species", async (request, response, next) => {
+	const species = getIdParam(request.params.species);
+	if (species !== "dog" && species !== "cat") {
+		response.status(400).json({ error: "Breeds are listed for dog or cat only." });
+		return;
+	}
+	try {
+		response.json(await findBreedNames(species));
+	} catch (error) {
 		next(error);
 	}
 });
@@ -192,12 +267,28 @@ animalsRouter.post(
 	async (request, response, next) => {
 		const parsed = animalSchema.safeParse(request.body);
 		if (!parsed.success) {
-			response.status(400).json({ error: "Invalid animal profile" });
+			response.status(400).json({ error: firstIssueMessage(parsed.error) });
 			return;
 		}
 
 		try {
-			response.status(201).json(await registerAnimal(parsed.data));
+			const species = await resolveSpeciesAndBreed(
+				parsed.data.type,
+				parsed.data.speciesName ?? "",
+				parsed.data.breed,
+			);
+			if (species.error !== undefined) {
+				response.status(400).json({ error: species.error });
+				return;
+			}
+			response.status(201).json(
+				await registerAnimal({
+					...parsed.data,
+					speciesName: species.speciesName,
+					breed: species.breed,
+					veterinaryPriority: parsed.data.veterinaryPriority ?? DEFAULT_VETERINARY_PRIORITY,
+				}),
+			);
 		} catch (error) {
 			next(error);
 		}
@@ -212,12 +303,46 @@ animalsRouter.patch(
 	async (request, response, next) => {
 		const parsed = animalUpdateSchema.safeParse(request.body);
 		if (!parsed.success) {
-			response.status(400).json({ error: "Invalid animal profile" });
+			response.status(400).json({ error: firstIssueMessage(parsed.error) });
 			return;
 		}
 
 		try {
-			const animal = await updateAnimalProfile(getIdParam(request.params.id), parsed.data);
+			const id = getIdParam(request.params.id);
+			// Typed as the DB update (not the request) so speciesName can be null.
+			const update: Parameters<typeof updateAnimalProfile>[1] = { ...parsed.data };
+
+			// Species, typed species name and breed are only valid together, so if
+			// any of them changes, check all three (filling the rest from the saved
+			// profile). This is also what makes a legacy breed that isn't in the
+			// table (e.g. "Husky") get replaced the next time staff save it.
+			if (update.type !== undefined || update.breed !== undefined || update.speciesName !== undefined) {
+				const existing = await getAnimalById(id);
+				if (!existing) {
+					response.status(404).json({ error: "Animal not found" });
+					return;
+				}
+				const type = update.type ?? existing.type;
+				if (type === "rabbit") {
+					response.status(400).json({ error: "Species must be Dog, Cat or Other." });
+					return;
+				}
+				const species = await resolveSpeciesAndBreed(
+					type,
+					update.speciesName ?? existing.speciesName ?? "",
+					update.breed ?? existing.breed ?? "",
+				);
+				if (species.error !== undefined) {
+					response.status(400).json({ error: species.error });
+					return;
+				}
+				update.type = type;
+				update.breed = species.breed;
+				// null for dogs/cats, so switching an Other animal to Dog clears it.
+				update.speciesName = species.speciesName;
+			}
+
+			const animal = await updateAnimalProfile(id, update);
 			if (!animal) {
 				response.status(404).json({ error: "Animal not found" });
 				return;

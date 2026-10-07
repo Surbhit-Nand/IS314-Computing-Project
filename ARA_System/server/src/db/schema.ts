@@ -51,6 +51,13 @@ export const animals = pgTable("animals", {
 	publicId: text("public_id").notNull().unique(),
 	name: text("name").notNull(),
 	type: animalType("type").notNull(),
+	// The species staff typed for an animal whose `type` is "other" (e.g.
+	// "Rabbit", "Guinea Pig"), capitalised. Always null for dogs and cats -
+	// their species is `type`. Added by migration 0016, which split it out of
+	// `breed` (where Other animals used to keep it) for existing rows.
+	speciesName: text("species_name"),
+	// Dog/cat: a name from the `breeds` table. Other: free text validated by
+	// validateOtherBreedName (e.g. "Holland Lop", "Unknown", "Mixed breed").
 	breed: text("breed"),
 	estimatedAge: text("estimated_age"),
 	gender: text("gender"),
@@ -94,6 +101,24 @@ export const animals = pgTable("animals", {
 	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 	updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// The allowed breeds for dogs and cats - the Breed dropdown is loaded from
+// here and the API rejects any dog/cat breed not in this table. Species
+// "other" has no rows: its "breed" is the animal-type name staff type in
+// (e.g. "Hamster"). Seeded by `npm run db:seed:breeds` (safe to re-run).
+// Animals store the breed as plain text rather than a foreign key, so legacy
+// values that aren't in this table (e.g. "Husky") still display; staff just
+// have to pick a valid breed the next time they edit and save.
+export const breeds = pgTable(
+	"breeds",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		species: animalType("species").notNull(),
+		name: text("name").notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+	},
+	(table) => [uniqueIndex("breeds_species_name_unique").on(table.species, table.name)],
+);
 
 export const rescueReports = pgTable("rescue_reports", {
 	id: uuid("id").defaultRandom().primaryKey(),

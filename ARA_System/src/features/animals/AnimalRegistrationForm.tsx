@@ -5,9 +5,10 @@ import { SiteHeader, type SiteHeaderView } from "../../components/SiteHeader";
 import { Breadcrumbs } from "../../components/Breadcrumbs";
 import { SuccessToast } from "../../components/SuccessToast";
 import { createAnimal } from "../../services/animalsApi";
-import type { AnimalFormInput } from "../../types/animal";
+import { DEFAULT_VETERINARY_PRIORITY, type AnimalFormInput } from "../../types/animal";
 import { isDevBypassEnabled } from "../../utils/devBypass";
 import { AnimalProfileFields } from "./AnimalProfileFields";
+import { useBreedOptions } from "./useBreedOptions";
 import { validateAnimalForm } from "./validateAnimalForm";
 
 type AnimalRegistrationFormProps = {
@@ -17,6 +18,7 @@ type AnimalRegistrationFormProps = {
 const emptyForm: AnimalFormInput = {
   name: "",
   type: "dog",
+  speciesName: "",
   breed: "",
   estimatedAge: "",
   gender: "",
@@ -27,7 +29,9 @@ const emptyForm: AnimalFormInput = {
   photoUrls: [],
   vaccinationStatus: "not_vaccinated",
   size: "",
-  veterinaryPriority: "",
+  // Pre-selected so a new animal never reaches the vet queue as "Not set";
+  // staff change it on the form if the animal is more or less urgent.
+  veterinaryPriority: DEFAULT_VETERINARY_PRIORITY,
 };
 
 // Staff-only page: registers a brand-new animal profile. The unique Animal
@@ -41,6 +45,9 @@ export function AnimalRegistrationForm({ onNavigate }: AnimalRegistrationFormPro
     isDevBypassEnabled || role === "staff" || role === "veterinarian" || role === "manager" || role === "admin";
 
   const [form, setForm] = useState<AnimalFormInput>(emptyForm);
+  const breedOptions = useBreedOptions(form.type);
+  // Turned on by a blocked submit so every field's problem shows at once.
+  const [showAllErrors, setShowAllErrors] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [createdPublicId, setCreatedPublicId] = useState("");
@@ -55,8 +62,9 @@ export function AnimalRegistrationForm({ onNavigate }: AnimalRegistrationFormPro
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const validationError = validateAnimalForm(form);
+    const validationError = validateAnimalForm(form, breedOptions.options);
     if (validationError) {
+      setShowAllErrors(true);
       window.alert(validationError);
       setErrorMessage(validationError);
       return;
@@ -72,6 +80,7 @@ export function AnimalRegistrationForm({ onNavigate }: AnimalRegistrationFormPro
       setCreatedPublicId(animal.publicId);
       setSuccessToastMessage(`✓ ${animal.name} registered successfully!`);
       setForm(emptyForm);
+      setShowAllErrors(false);
     } catch (error) {
       const message = error instanceof Error ? error.message : "The animal profile could not be created.";
       window.alert(message);
@@ -153,7 +162,13 @@ export function AnimalRegistrationForm({ onNavigate }: AnimalRegistrationFormPro
         {errorMessage && !createdPublicId && <p className="invite-feedback error">{errorMessage}</p>}
 
         <form className="animal-form" onSubmit={handleSubmit}>
-          <AnimalProfileFields value={form} onChange={setForm} getToken={getToken} />
+          <AnimalProfileFields
+            value={form}
+            onChange={setForm}
+            getToken={getToken}
+            breedOptions={breedOptions}
+            showAllErrors={showAllErrors}
+          />
           <button type="submit" className="teal-button submit-button" disabled={isSubmitting}>
             {isSubmitting ? "Registering..." : "Register animal"}
           </button>

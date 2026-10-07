@@ -8,6 +8,7 @@ import { SuccessToast } from "../../components/SuccessToast";
 import { deleteAnimal, fetchStaffAnimals } from "../../services/animalsApi";
 import { adoptionStatusLabel, vaccinationStatusLabel, type Animal } from "../../types/animal";
 import { isDevBypassEnabled } from "../../utils/devBypass";
+import { speciesLabel } from "../../utils/format";
 
 type ManageAnimalProfilesProps = {
   onNavigate: (view: SiteHeaderView | "staff-dashboard" | "register-animal") => void;
@@ -83,7 +84,7 @@ export function ManageAnimalProfiles({ onNavigate, onSelectAnimal }: ManageAnima
     const term = searchTerm.trim().toLowerCase();
     if (!term) return animals;
     return animals.filter((animal) =>
-      [animal.publicId, animal.name, animal.breed ?? "", animal.type]
+      [animal.publicId, animal.name, animal.breed ?? "", animal.type, speciesLabel(animal)]
         .join(" ")
         .toLowerCase()
         .includes(term),
@@ -193,7 +194,7 @@ export function ManageAnimalProfiles({ onNavigate, onSelectAnimal }: ManageAnima
                 <span className="animal-table-details">
                   <strong>{animal.name}</strong>
                   <span>
-                    {animal.publicId} - {animal.type} - {animal.breed ?? "Unknown breed"}
+                    {animal.publicId} - {speciesLabel(animal)} - {animal.breed ?? "Unknown breed"}
                   </span>
                 </span>
                 <span className="role-pill muted">{adoptionStatusLabel(animal.status)}</span>
