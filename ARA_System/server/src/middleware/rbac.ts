@@ -1,12 +1,20 @@
 import type { NextFunction, Request, Response } from "express";
 import { env } from "../config/env.js";
 import { clerkClient } from "../services/clerkClient.js";
+import { retryTransient } from "../shared/retry/retry.js";
 import {
 	managerOrAdminRoles,
-	rescuerOrAboveRoles,
+	dispatcherRoles,
+	normalizeRole,
+	rescueQueueRoles,
 	staffOrAboveRoles,
 	type Role,
 } from "../shared/types/roles.js";
+
+// Only veterinarian accounts can access veterinary routes. Staff register
+// animals and run rescue/adoption ops but cannot view medical records or
+// issue clearance.
+const veterinaryRoles: readonly Role[] = ["veterinarian"];
 
 // Looks up the signed-in Clerk user's role and rejects the request (403) if
 // their role isn't in the allowed list. requireClerkSession must run first
@@ -32,10 +40,18 @@ function requireRole(allowedRoles: readonly Role[], deniedMessage: string) {
 				return;
 			}
 
-			const user = await clerkClient.users.getUser(request.clerkUserId);
-			const role = user.publicMetadata.role;
+			// The Clerk lookup runs per request; a transient Clerk API blip used
+		// to 500 every staff route immediately. Retry it the same way as DB
+		// queries - still fail-closed (403/500) on persistent outages, and no
+		// role caching so revocation stays immediate.
+		const user = await retryTransient(() =>
+			clerkClient.users.getUser(request.clerkUserId as string),
+		);
+			// normalizeRole maps a pre-rename `rescuer` account onto `dispatcher`
+			// so legacy accounts keep passing the gates they used to pass.
+			const role = normalizeRole(user.publicMetadata.role);
 
-			if (!allowedRoles.includes(role as Role)) {
+			if (role === undefined || !allowedRoles.includes(role)) {
 				response.status(403).json({ error: deniedMessage });
 				return;
 			}
@@ -52,16 +68,24 @@ export const requireStaffOrAbove = requireRole(
 	"Staff, veterinarian, manager, or admin access is required",
 );
 
-// Gate for the rescue-report workflow: rescuers plus every staff-and-above
-// role, since they all dispatch reports. The rescue routes mount this as soon
-// as the veterinarian module's placeholder wiring is replaced.
-export const requireRescuerOrAbove = requireRole(
-	rescuerOrAboveRoles,
-	"Rescuer, staff, veterinarian, manager, or admin access is required",
+// Gate for rescue queue reads: dispatchers plus staff-and-above roles.
+export const requireDispatcher = requireRole(
+	dispatcherRoles,
+	"Dispatcher access is required",
+);
+
+export const requireRescueQueueAccess = requireRole(
+	rescueQueueRoles,
+	"Dispatcher, staff, veterinarian, manager, or admin access is required",
 );
 
 // Gate for manager-only actions: staff account/invitation management.
 export const requireManagerOrAdmin = requireRole(
 	managerOrAdminRoles,
 	"Manager or admin access is required",
+);
+
+export const requireVeterinaryAccess = requireRole(
+	veterinaryRoles,
+	"Veterinarian access is required",
 );

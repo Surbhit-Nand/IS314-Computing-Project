@@ -1,31 +1,22 @@
-import { SignInButton, UserButton, useAuth, useUser } from "@clerk/react";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { SignInButton, useAuth, useUser } from "@clerk/react";
+import { useEffect, useMemo, useState } from "react";
 import spcaLogo from "../../assets/spca-logo.png";
-import { fetchStaffAnimals } from "../../services/animalsApi";
-import { fetchAllRescueReports, updateRescueReport } from "../../services/rescueApi";
+import { fetchAllRescueReports } from "../../services/rescueApi";
 import { rescueStatusClass, rescueUrgencyLabel } from "../../types/rescue";
-import type { RescueReport, RescueUrgency } from "../../types/rescue";
-import type { Animal } from "../../types/animal";
+import type { RescueReport, RescueReportStatus, RescueUrgency } from "../../types/rescue";
 import { isDevBypassEnabled } from "../../utils/devBypass";
 import { Breadcrumbs } from "../../components/Breadcrumbs";
+import { SiteHeader, type SiteHeaderView } from "../../components/SiteHeader";
 import { SkeletonLoader } from "../../components/SkeletonLoader";
 
 type ManageRescueReportsProps = {
-  onNavigate: (view: "home" | "staff-dashboard" | "rescue-report-phone") => void;
+  onNavigate: (view: SiteHeaderView) => void;
 };
 
-// Single source of truth for the lifecycle order on the client side - keep in
-// sync with RESCUE_REPORT_STATUSES in server/src/modules/rescue/rescue.service.ts.
-const REPORT_STATUSES = ["submitted", "assigned", "rescued", "closed"] as const;
-type ReportStatus = (typeof REPORT_STATUSES)[number];
-
-// The active queue only shows reports still being worked on - resolved
-// reports stay in the database (never deleted) but are excluded here and
-// from the status dropdown.
-const ACTIVE_STATUSES = REPORT_STATUSES.filter(
-  (status): status is Exclude<ReportStatus, "closed"> => status !== "closed",
-);
-
+// The staff queue shows every report still being worked on. Resolved reports
+// stay in the database (they are never deleted) but are excluded here and from
+// the status dropdown - staff review resolved cases via Mission History.
+const ACTIVE_STATUSES: RescueReportStatus[] = ["submitted", "assigned", "in_progress", "awaiting_reassignment"];
 const STATUS_FILTERS = ["all", ...ACTIVE_STATUSES] as const;
 
 // Urgency sort order for the queue: highest first.
@@ -38,9 +29,9 @@ const URGENCY_RANK: Record<RescueUrgency, number> = {
 
 // Reporter-facing progress steps shown at the top of an expanded report. The
 // stored statuses sit on this timeline: "submitted" is received (so its
-// current stage reads "Under Review"), "assigned" -> "Assigned", "rescued" ->
-// "In Progress", and "closed" -> "Resolved". Used purely for display - the
-// underlying status values/options are unchanged.
+// current stage reads "Under Review"), "assigned" -> "Assigned",
+// "in_progress" -> "In Progress", and "resolved" -> "Resolved". Used purely
+// for display.
 const REPORT_TIMELINE = [
   { label: "Submitted" },
   { label: "Under Review" },
@@ -49,19 +40,21 @@ const REPORT_TIMELINE = [
   { label: "Resolved" },
 ] as const;
 
-const CURRENT_STAGE: Record<ReportStatus, number> = {
+const CURRENT_STAGE: Record<RescueReportStatus, number> = {
   submitted: 1,
   assigned: 2,
-  rescued: 3,
-  closed: 4,
+  in_progress: 3,
+  awaiting_reassignment: 2,
+  resolved: 4,
 };
 
 // Short, friendly badge labels for each stored status.
-const STATUS_BADGE_LABEL: Record<ReportStatus, string> = {
+const STATUS_BADGE_LABEL: Record<RescueReportStatus, string> = {
   submitted: "Under Review",
   assigned: "Assigned",
-  rescued: "In Progress",
-  closed: "Resolved",
+  in_progress: "In Progress",
+  awaiting_reassignment: "Needs Dispatcher",
+  resolved: "Resolved",
 };
 
 function formatDate(value: string): string {
@@ -72,9 +65,10 @@ function formatDate(value: string): string {
   });
 }
 
-// Staff-only page: the full rescue queue. Each report expands into a dispatch
-// panel where staff assign a rescuer, attach an animal profile, leave a
-// handling note, and move the report forward through its lifecycle.
+// Staff-only page: the full rescue queue, restored as a read-only review
+// surface. Every report is listed with its details; dispatchers own the
+// actual mission updates now (claim / start / debrief in the portal), so this
+// page shows what each report's state is without letting staff change it.
 export function ManageRescueReports({ onNavigate }: ManageRescueReportsProps) {
   const { getToken, isLoaded, isSignedIn } = useAuth();
   const { user } = useUser();
@@ -87,20 +81,13 @@ export function ManageRescueReports({ onNavigate }: ManageRescueReportsProps) {
     role === "admin";
 
   const [reports, setReports] = useState<RescueReport[]>([]);
-  const [animals, setAnimals] = useState<Animal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<(typeof STATUS_FILTERS)[number]>("all");
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [savingMessage, setSavingMessage] = useState("");
-  const [savingError, setSavingError] = useState("");
-  // Live "assign dispatcher" value for each open dispatch card - status options
-  // unlock as soon as a name is typed, before the report is saved.
-  const [pendingAssignment, setPendingAssignment] = useState<Record<string, string>>({});
 
-  // Loads the rescue queue plus the animal list (for linking reports to an
-  // intake profile) once the staff member's access is confirmed.
+  // Loads the full rescue queue once the staff member's access is confirmed.
   useEffect(() => {
     if (!isLoaded || !isSignedIn || !hasStaffAccess) return;
 
@@ -108,25 +95,14 @@ export function ManageRescueReports({ onNavigate }: ManageRescueReportsProps) {
       try {
         const token = await getToken();
         if (!token) throw new Error("Your Clerk session has expired.");
-        const [loadedReports, loadedAnimals] = await Promise.all([
-          fetchAllRescueReports(token),
-          fetchStaffAnimals(token),
-        ]);
-        setReports(loadedReports);
-        setAnimals(loadedAnimals);
+        setReports(await fetchAllRescueReports(token));
       } catch (error) {
-        setLoadError(error instanceof Error ? error.message : "Rescue reports could not be loaded.");
+        setLoadError(error instanceof Error ? error.message : "Rescue alerts could not be loaded.");
       } finally {
         setIsLoading(false);
       }
     })();
   }, [getToken, hasStaffAccess, isLoaded, isSignedIn]);
-
-  // Empty-string contacts/notes are normalized to nothing before dispatch so
-  // untouched optional fields don't get stored as blank values.
-  function normalizeOptional(value: string): string | undefined {
-    return value.trim() === "" ? undefined : value.trim();
-  }
 
   // Applies the text search and status filter client-side over the loaded
   // queue, hides resolved reports, and sorts by urgency (Critical first,
@@ -135,7 +111,7 @@ export function ManageRescueReports({ onNavigate }: ManageRescueReportsProps) {
   const visibleReports = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
     return reports
-      .filter((report) => report.status !== "closed")
+      .filter((report) => report.status !== "resolved")
       .filter((report) => {
         if (statusFilter !== "all" && report.status !== statusFilter) return false;
         if (!term) return true;
@@ -151,56 +127,6 @@ export function ManageRescueReports({ onNavigate }: ManageRescueReportsProps) {
       });
   }, [reports, searchTerm, statusFilter]);
 
-  async function handleDispatch(
-    event: FormEvent<HTMLFormElement>,
-    report: RescueReport,
-  ) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    const nextStatus = String(form.get("status") ?? "");
-    const assignedTo = normalizeOptional(String(form.get("assignedTo") ?? ""));
-    const officeNote = normalizeOptional(String(form.get("officeNote") ?? ""));
-    const animalId = String(form.get("animalId") ?? "") || undefined;
-
-    // Moving past Under Review (to Assigned/In Progress/Resolved) requires a
-    // dispatcher. Mirrored server-side; this keeps the failure message clear.
-    const nextStatusIndex = REPORT_STATUSES.indexOf(nextStatus as ReportStatus);
-    const hasAssignedTo = Boolean(assignedTo) || Boolean(report.assignedTo);
-    if (
-      nextStatus !== report.status &&
-      nextStatusIndex > REPORT_STATUSES.indexOf("submitted") &&
-      !hasAssignedTo
-    ) {
-      setSavingError("Assign a dispatcher before moving the report past Under Review.");
-      return;
-    }
-
-    setSavingMessage("");
-    setSavingError("");
-    try {
-      const token = await getToken();
-      if (!token) throw new Error("Your Clerk session has expired. Please sign in again.");
-      const updated = await updateRescueReport(token, report.id, {
-        ...(nextStatus !== report.status ? { status: nextStatus } : {}),
-        ...(assignedTo !== undefined ? { assignedTo } : {}),
-        ...(officeNote !== undefined ? { officeNote } : {}),
-        ...(animalId !== undefined ? { animalId } : {}),
-      });
-      setReports((previous) => previous.map((item) => (item.id === updated.id ? updated : item)));
-      setSavingMessage(`Report ${updated.reference} updated.`);
-    } catch (error) {
-      setSavingError(
-        error instanceof Error ? error.message : "The rescue report could not be updated.",
-      );
-    }
-  }
-
-  function nextStatusOptions(current: string): ReportStatus[] {
-    const currentIndex = REPORT_STATUSES.indexOf(current as ReportStatus);
-    if (currentIndex === -1) return [];
-    return REPORT_STATUSES.slice(currentIndex + 1);
-  }
-
   if (!isLoaded || !isSignedIn) {
     return (
       <main className="dashboard-locked">
@@ -211,7 +137,7 @@ export function ManageRescueReports({ onNavigate }: ManageRescueReportsProps) {
           </div>
           <p className="eyebrow">SPCA operations</p>
           <h1>Sign in to continue</h1>
-          <p>Dispatching rescue reports is available to authorised team members.</p>
+          <p>The rescue queue is available to authorised team members.</p>
           <SignInButton mode="modal">
             <button type="button" className="teal-button">
               Log in
@@ -243,29 +169,12 @@ export function ManageRescueReports({ onNavigate }: ManageRescueReportsProps) {
 
   return (
     <main className="dashboard-page">
-      <header className="dashboard-header">
-        <div className="dashboard-brand">
-          <button type="button" className="brand-button" onClick={() => onNavigate("home")}>
-            <img src={spcaLogo} alt="SPCA Fiji logo" className="brand-logo" />
-          </button>
-          <div>
-            <p className="eyebrow">SPCA operations</p>
-            <h1>Rescue report dispatch</h1>
-          </div>
-        </div>
-        <div className="dashboard-header-actions">
-          <button
-            type="button"
-            className="teal-button"
-            onClick={() => onNavigate("rescue-report-phone")}
-          >
-            Log phone report
-          </button>
-          <div className="user-avatar-circle">
-            <UserButton />
-          </div>
-        </div>
-      </header>
+      <SiteHeader
+        isLoaded={isLoaded}
+        isSignedIn={isSignedIn}
+        currentPage="manage-rescue-reports"
+        onNavigate={onNavigate}
+      />
 
       <Breadcrumbs
         trail={[
@@ -274,11 +183,27 @@ export function ManageRescueReports({ onNavigate }: ManageRescueReportsProps) {
         ]}
       />
 
+      <header className="rescue-page-head">
+        <div className="rescue-page-head-text">
+          <p className="eyebrow">SPCA operations</p>
+          <h1>Rescue alert queue</h1>
+        </div>
+        <div className="rescue-workspace-actions">
+          <button
+            type="button"
+            className="teal-button"
+            onClick={() => onNavigate("rescue-report-phone")}
+          >
+            Log phone alert
+          </button>
+        </div>
+      </header>
+
       <section className="dashboard-panel">
         <div className="panel-heading">
           <div>
-            <p className="eyebrow">Rescue reports</p>
-            <h2>{visibleReports.length} report{visibleReports.length === 1 ? "" : "s"}</h2>
+            <p className="eyebrow">Rescue alerts</p>
+            <h2>{visibleReports.length} alert{visibleReports.length === 1 ? "" : "s"}</h2>
           </div>
           <div className="rescue-queue-controls">
             <select
@@ -291,7 +216,7 @@ export function ManageRescueReports({ onNavigate }: ManageRescueReportsProps) {
                 <option key={status} value={status}>
                   {status === "all"
                     ? "All statuses"
-                    : `Status: ${STATUS_BADGE_LABEL[status as ReportStatus]}`}
+                    : `Status: ${STATUS_BADGE_LABEL[status as RescueReportStatus]}`}
                 </option>
               ))}
             </select>
@@ -305,22 +230,24 @@ export function ManageRescueReports({ onNavigate }: ManageRescueReportsProps) {
           </div>
         </div>
 
-        {savingMessage && <p className="invite-feedback success">{savingMessage}</p>}
-        {savingError && <p className="invite-feedback error">{savingError}</p>}
-
         {isLoading && <SkeletonLoader variant="card" />}
         {!isLoading && loadError && <p className="dashboard-data-state error">{loadError}</p>}
         {!isLoading && !loadError && visibleReports.length === 0 && (
-          <p className="dashboard-data-state">No rescue reports match your filters.</p>
+          <p className="dashboard-data-state">No rescue alerts match your filters.</p>
         )}
 
         {!isLoading && !loadError && visibleReports.length > 0 && (
-          <div className="rescue-queue">
+          <div className="rescue-queue reports-queue">
+            <div className="reports-queue-head" aria-hidden="true">
+              <span>Alert</span>
+              <span>Location &amp; Reporter</span>
+              <span>Status</span>
+              <span>Dispatcher</span>
+              <span>Urgency</span>
+            </div>
             {visibleReports.map((report) => {
               const isExpanded = expandedId === report.id;
               const currentStage = CURRENT_STAGE[report.status];
-              const hasDispatcher =
-                (pendingAssignment[report.id] ?? report.assignedTo ?? "").trim() !== "";
               return (
                 <div key={report.id} className={`rescue-card${isExpanded ? " expanded" : ""}`}>
                   <button
@@ -329,31 +256,36 @@ export function ManageRescueReports({ onNavigate }: ManageRescueReportsProps) {
                     onClick={() => setExpandedId(isExpanded ? null : report.id)}
                     aria-expanded={isExpanded}
                   >
-                    <div className="rescue-summary-main">
+                    <span className="rescue-col-report">
                       <strong className="rescue-summary-ref">{report.reference}</strong>
+                    </span>
+                    <span className="rescue-col-location">
                       <span className="rescue-summary-loc">
                         {report.location}
                         {report.source === "phone" ? " (phone)" : ""}
                       </span>
                       <span className="rescue-summary-reporter">by {report.reporterName}</span>
-                    </div>
-                    <div className="rescue-summary-badges">
+                    </span>
+                    <span className="rescue-col-status">
                       <span className={`rescue-status-badge ${rescueStatusClass(report.status)}`}>
                         {STATUS_BADGE_LABEL[report.status]}
                       </span>
+                    </span>
+                    <span className="rescue-col-dispatcher">
                       <span className={`rescue-assignee-badge${report.assignedTo ? " assigned" : ""}`}>
                         {report.assignedTo ?? "Unassigned"}
                       </span>
+                    </span>
+                    <span className="rescue-col-urgency">
                       <span className={`rescue-urgency-badge ${report.urgency}`} title={rescueUrgencyLabel(report.urgency)}>
                         {report.urgency}
                       </span>
-                      <span className="rescue-view-action">View / Manage</span>
-                    </div>
+                    </span>
                   </button>
 
                   {isExpanded && (
                     <div className="rescue-detail-body">
-                      <div className="rescue-progress-tracker" aria-label="Report progress">
+                      <div className="rescue-progress-tracker" aria-label="Alert progress">
                         {REPORT_TIMELINE.map((stage, index) => (
                           <div
                             key={stage.label}
@@ -367,7 +299,7 @@ export function ManageRescueReports({ onNavigate }: ManageRescueReportsProps) {
 
                       <div className="rescue-detail-columns">
                         <div className="rescue-details-card">
-                          <h3 className="rescue-card-title">Report Details</h3>
+                          <h3 className="rescue-card-title">Alert Details</h3>
                           <dl className="rescue-details-list">
                             <div className="rescue-detail-field">
                               <dt>Reference number</dt>
@@ -444,11 +376,8 @@ export function ManageRescueReports({ onNavigate }: ManageRescueReportsProps) {
                           )}
                         </div>
 
-                        <form
-                          className="rescue-dispatch-card"
-                          onSubmit={(event) => void handleDispatch(event, report)}
-                        >
-                          <h3 className="rescue-card-title">Dispatch & Status</h3>
+                        <div className="rescue-dispatch-card">
+                          <h3 className="rescue-card-title">Mission status</h3>
 
                           <div className="dispatch-field">
                             <span className="dispatch-label">Current status</span>
@@ -457,75 +386,25 @@ export function ManageRescueReports({ onNavigate }: ManageRescueReportsProps) {
                             </span>
                           </div>
 
-                          <label className="dispatch-field">
-                            <span className="dispatch-label">Assign dispatcher</span>
-                            <input
-                              type="text"
-                              name="assignedTo"
-                              placeholder="e.g. Jo Vatubua"
-                              value={pendingAssignment[report.id] ?? report.assignedTo ?? ""}
-                              onChange={(event) =>
-                                setPendingAssignment((previous) => ({
-                                  ...previous,
-                                  [report.id]: event.target.value,
-                                }))
-                              }
-                            />
-                          </label>
+                          <div className="dispatch-field">
+                            <span className="dispatch-label">Dispatcher</span>
+                            <strong>{report.assignedTo ?? "Available for a dispatcher to accept"}</strong>
+                          </div>
 
-                          <label className="dispatch-field">
-                            <span className="dispatch-label">Link animal profile</span>
-                            <select name="animalId" defaultValue={report.animalId ?? ""}>
-                              <option value="">No profile linked yet</option>
-                              {animals.map((animal) => (
-                                <option key={animal.id} value={animal.id}>
-                                  {animal.publicId} - {animal.name} ({animal.type})
-                                </option>
-                              ))}
-                            </select>
-                          </label>
+                          {report.assignedAt && (
+                            <div className="dispatch-field">
+                              <span className="dispatch-label">Assigned on</span>
+                              <strong>{formatDate(report.assignedAt)}</strong>
+                            </div>
+                          )}
 
-                          <label className="dispatch-field">
-                            <span className="dispatch-label">Update status</span>
-                            <select name="status" defaultValue={report.status}>
-                              <option value={report.status}>
-                                {STATUS_BADGE_LABEL[report.status]}
-                              </option>
-                              {nextStatusOptions(report.status).map((status) => {
-                                const locked =
-                                  !hasDispatcher &&
-                                  REPORT_STATUSES.indexOf(status) >
-                                    REPORT_STATUSES.indexOf("submitted");
-                                return (
-                                  <option key={status} value={status} disabled={locked}>
-                                    {locked
-                                      ? "Assign a dispatcher first"
-                                      : `Move to: ${STATUS_BADGE_LABEL[status]}`}
-                                  </option>
-                                );
-                              })}
-                            </select>
-                            {!hasDispatcher && nextStatusOptions(report.status).length > 0 && (
-                              <span className="dispatch-hint">
-                                Assign a dispatcher to unlock status changes.
-                              </span>
-                            )}
-                          </label>
-
-                          <label className="dispatch-field">
-                            <span className="dispatch-label">Internal handling notes</span>
-                            <textarea
-                              name="officeNote"
-                              rows={4}
-                              placeholder="Notes for your team (not shown to the reporter)"
-                              defaultValue={report.officeNote ?? ""}
-                            />
-                          </label>
-
-                          <button type="submit" className="teal-button dispatch-save">
-                            Save Changes
-                          </button>
-                        </form>
+                          {report.officeNote && (
+                            <div className="dispatch-field">
+                              <span className="dispatch-label">Internal handling notes</span>
+                              <p>{report.officeNote}</p>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )}

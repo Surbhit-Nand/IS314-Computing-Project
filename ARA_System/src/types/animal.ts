@@ -11,6 +11,30 @@ export type VaccinationStatus = "not_vaccinated" | "vaccinated";
 // flagging the skew here rather than silently changing them.
 export type AnimalSize = "small" | "medium" | "large" | "extra_large";
 
+// Triage priority assigned by staff at registration time. Stored on the
+// animal record (not derived from rescue-report urgency, which stays on the
+// rescue module). Null only for animals registered before this field existed.
+export type VeterinaryPriority = "critical" | "high" | "moderate" | "routine";
+
+// Priority meanings shown to staff under the form select, per the brief.
+export const PRIORITY_OPTIONS: { value: VeterinaryPriority; label: string; description: string }[] = [
+  { value: "critical", label: "Critical", description: "Life-threatening condition or severe injury requiring immediate veterinary attention" },
+  { value: "high", label: "High", description: "Serious medical condition that should be seen quickly" },
+  { value: "moderate", label: "Moderate", description: "Stable condition that still requires veterinary assessment" },
+  { value: "routine", label: "Routine", description: "No urgent medical concern; normal assessment/follow-up" },
+];
+
+const PRIORITY_LABELS: Record<VeterinaryPriority, string> = {
+  critical: "Critical",
+  high: "High",
+  moderate: "Moderate",
+  routine: "Routine",
+};
+
+export function priorityLabel(priority: VeterinaryPriority): string {
+  return PRIORITY_LABELS[priority];
+}
+
 const SIZE_INFO: Record<AnimalSize, { label: string; range: string }> = {
   small: { label: "Small", range: "Up to 10 kg" },
   medium: { label: "Medium", range: "10-25 kg" },
@@ -55,7 +79,9 @@ export type Animal = {
   photoUrls: string[];
   vaccinationStatus: VaccinationStatus;
   size: AnimalSize | null;
+  veterinaryPriority: VeterinaryPriority | null;
   medicallyCleared: boolean;
+  veterinaryStatus?: string;
   status: AnimalLifecycleStatus;
   createdAt: string;
   updatedAt: string;
@@ -84,6 +110,8 @@ export type AnimalFormInput = {
   // "" until staff actively pick one - same required-select pattern as
   // `gender` - validated in validateAnimalForm.ts before submission.
   size: AnimalSize | "";
+  // Required on registration; legacy animals may edit-in a value later.
+  veterinaryPriority: VeterinaryPriority | "";
 };
 
 // Turns "Available for Adoption" / "Adopted" into the simple two-value label

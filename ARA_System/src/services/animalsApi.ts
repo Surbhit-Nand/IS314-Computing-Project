@@ -74,11 +74,13 @@ export async function createAnimal(token: string, input: AnimalFormInput): Promi
   return result as Animal;
 }
 
-// Updates an existing animal profile.
+// Updates an existing animal profile. `input` is partial so an editor can
+// touch just one or two fields (e.g. a vet recording an estimated age
+// during an assessment) without re-sending the whole form.
 export async function updateAnimal(
   token: string,
   id: string,
-  input: AnimalFormInput,
+  input: Partial<AnimalFormInput>,
 ): Promise<Animal> {
   const response = await fetch(`${apiBaseUrl}/api/animals/${id}`, {
     method: "PATCH",
@@ -105,4 +107,21 @@ export async function deleteAnimal(token: string, id: string): Promise<Animal> {
     throw new Error((result as { error?: string }).error ?? "The animal profile could not be deleted.");
   }
   return result as Animal;
+}
+
+// Natural-language search: returns ranked animal IDs (most relevant first).
+// Profiles are already loaded; IDs avoid duplicate data and internal fields.
+export async function searchAnimalsWithAI(query: string): Promise<string[]> {
+  const response = await fetch(`${apiBaseUrl}/api/animals/ai-search`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query }),
+  });
+  const result = await readApiResponse<{ results?: string[]; error?: string }>(response);
+  if (!response.ok) {
+    throw new Error(
+      result.error ?? "The search could not be completed. Please try again.",
+    );
+  }
+  return result.results ?? [];
 }

@@ -1,35 +1,56 @@
-import { SignInButton, SignUpButton, UserButton, useUser } from "@clerk/react";
-import { useState } from "react";
+import { SignInButton, SignUpButton, UserButton, useAuth, useUser } from "@clerk/react";
+import { useEffect, useState } from "react";
 import spcaLogo from "../assets/spca-logo.png";
 import { DonateModal } from "../features/donations/DonateModal";
+import {
+  fetchMyNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
+} from "../services/notificationsApi";
+import type { NotificationsInbox } from "../types/notification";
 import { isDevBypassEnabled } from "../utils/devBypass";
+import { isDispatcherRole } from "../utils/roles";
 
 export type SiteHeaderView =
   | "home"
   | "animal-listings"
+  | "animal-profile"
   | "about"
   | "login"
   | "register"
   | "dashboard"
   | "staff-dashboard"
-  | "rescuer-dashboard"
+  | "dispatcher-dashboard"
+  | "rescue-board"
+  | "rescue-active"
+  | "rescue-history"
   | "user-dashboard"
   | "rescue-report"
+  | "my-reports"
   | "adoption-apply"
   | "my-applications"
+  | "my-profile"
   | "manage-adoption-applications"
   | "register-animal"
   | "manage-animals"
   | "edit-animal"
   | "manage-rescue-reports"
   | "rescue-report-phone"
-  | "reports";
+  | "reports"
+  | "veterinary-dashboard"
+  | "veterinary-record"
+  | "vet-appointments"
+  | "vet-appointment-details";
 
 type SiteHeaderProps = {
   isLoaded: boolean;
   isSignedIn: boolean | undefined;
   currentPage: string;
   onNavigate: (view: SiteHeaderView) => void;
+  // The veterinary module is a focused work screen: hide the public-site
+  // links (Home, About Us, Animals, Rescue Report, Adopt, Donate) so vets
+  // aren't shown navigation they don't use inside the module.
+  hideSiteNav?: boolean;
 };
 
 // Shared public-site header. On screens narrower than 980px the nav links
@@ -40,40 +61,115 @@ export function SiteHeader({
   isSignedIn,
   currentPage,
   onNavigate,
+  hideSiteNav = false,
 }: SiteHeaderProps) {
   const { user } = useUser();
+  const { getToken } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [donateOpen, setDonateOpen] = useState(false);
+  // Applicant inbox for the header bell. Fetched on sign-in and refreshed
+  // every minute so adoption status moves surface without a page reload.
+  // Failures stay silent - the bell just shows nothing rather than breaking
+  // the header when the API is down.
+  const [inbox, setInbox] = useState<NotificationsInbox | null>(null);
+  const [bellOpen, setBellOpen] = useState(false);
+
+  useEffect(() => {
+    // The bell only renders for signed-in sessions, so nothing needs clearing
+    // on sign-out - the next sign-in overwrites the inbox below.
+    if (!isLoaded || !isSignedIn) return;
+    let cancelled = false;
+    async function loadInbox() {
+      try {
+        const token = await getToken();
+        if (!token || cancelled) return;
+        const data = await fetchMyNotifications(token);
+        if (!cancelled) setInbox(data);
+      } catch {
+        if (!cancelled) setInbox(null);
+      }
+    }
+    void loadInbox();
+    const timer = window.setInterval(() => void loadInbox(), 60000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [getToken, isLoaded, isSignedIn]);
+
+  async function handleMarkAllRead() {
+    try {
+      const token = await getToken();
+      if (!token) return;
+      await markAllNotificationsRead(token);
+      setInbox((previous) =>
+        previous
+          ? { items: previous.items.map((item) => ({ ...item, readAt: item.readAt ?? new Date().toISOString() })), unreadCount: 0 }
+          : previous,
+      );
+    } catch {
+      // Leave the bell as-is; the next poll retries.
+    }
+  }
+
+  async function handleOpenNotification(id: string, entityType: string | null) {
+    setBellOpen(false);
+    try {
+      const token = await getToken();
+      if (!token) return;
+      await markNotificationRead(token, id);
+      setInbox((previous) =>
+        previous
+          ? {
+              items: previous.items.map((item) =>
+                item.id === id ? { ...item, readAt: item.readAt ?? new Date().toISOString() } : item,
+              ),
+              unreadCount: Math.max(0, previous.unreadCount - 1),
+            }
+          : previous,
+      );
+    } catch {
+      // Read state syncs on the next poll.
+    }
+    if (entityType === "adoption_application") {
+      navigate("my-applications");
+    }
+  }
   const userRole = user?.publicMetadata.role;
   const isAdmin = userRole === "manager" || userRole === "admin";
-  const isRescuer = userRole === "rescuer";
+  const isDispatcher = isDispatcherRole(userRole);
+  const isVeterinarian = userRole === "veterinarian";
   // isDevBypassEnabled is OR'd in here only so the "Dashboard" nav buttons
   // appear locally without a real role - see src/utils/devBypass.ts.
-  const isStaff = isDevBypassEnabled || isRescuer || userRole === "staff" || userRole === "veterinarian";
+  const isStaff = isDevBypassEnabled || isDispatcher || userRole === "staff" || isVeterinarian;
   // Module-level work (register animals, review adoptions) is staff work -
-  // rescuers keep the rescue queue and public site only.
+  // Dispatchers keep the rescue queue and public site only.
   const isStaffModuleRole =
-    isDevBypassEnabled || isAdmin || userRole === "staff" || userRole === "veterinarian";
+    isDevBypassEnabled || isAdmin || userRole === "staff" || isVeterinarian;
   // Internal screens rendered by account-type dashboards and staff forms swap
   // the public prompts for team navigation; staff can still preview the
   // public site through the "View public site" link.
   const internalPages = new Set([
     "dashboard",
     "staff-dashboard",
-    "rescuer-dashboard",
+    "dispatcher-dashboard",
     "register-animal",
     "manage-animals",
     "edit-animal",
+    "manage-rescue-reports",
     "reports",
   ]);
   const isInternalPage = (isStaff || isAdmin) && internalPages.has(currentPage);
+  const isRescuePage = new Set(["rescue-board", "rescue-active", "rescue-history"]).has(currentPage);
 
   function dashboardView(): SiteHeaderView {
     return isAdmin
       ? "dashboard"
-      : isRescuer
-        ? "rescuer-dashboard"
-        : "staff-dashboard";
+      : isDispatcher
+        ? "dispatcher-dashboard"
+        : isVeterinarian
+          ? "veterinary-dashboard"
+          : "staff-dashboard";
   }
 
   function navigate(view: SiteHeaderView) {
@@ -83,17 +179,19 @@ export function SiteHeader({
 
   return (
     <header className="site-header">
-      <button
-        type="button"
-        className={`nav-toggle${menuOpen ? " open" : ""}`}
-        aria-label="Toggle navigation menu"
-        aria-expanded={menuOpen}
-        onClick={() => setMenuOpen((open) => !open)}
-      >
-        <span />
-        <span />
-        <span />
-      </button>
+      {!hideSiteNav ? (
+        <button
+          type="button"
+          className={`nav-toggle${menuOpen ? " open" : ""}`}
+          aria-label="Toggle navigation menu"
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen((open) => !open)}
+        >
+          <span />
+          <span />
+          <span />
+        </button>
+      ) : null}
 
       <button
         type="button"
@@ -103,11 +201,18 @@ export function SiteHeader({
         <img src={spcaLogo} alt="SPCA Fiji logo" className="brand-logo" />
       </button>
 
+      {!hideSiteNav ? (
       <nav
         className={`main-nav${menuOpen ? " open" : ""}`}
         aria-label="Main navigation"
       >
-        {isInternalPage ? (
+        {isRescuePage ? (
+          <>
+            <button type="button" className={currentPage === "rescue-board" ? "nav-link active" : "nav-link"} onClick={() => navigate("rescue-board")}>Mission Board</button>
+            <button type="button" className={currentPage === "rescue-active" ? "nav-link active" : "nav-link"} onClick={() => navigate("rescue-active")}>Active Mission</button>
+            <button type="button" className={currentPage === "rescue-history" ? "nav-link active" : "nav-link"} onClick={() => navigate("rescue-history")}>Mission History</button>
+          </>
+        ) : isInternalPage ? (
           <>
             {/* Staff-first layout: signed-in staff see team navigation on
                 their internal screens, with the public site one click away. */}
@@ -216,10 +321,12 @@ export function SiteHeader({
             </button>
             <button
               type="button"
-              className="nav-link"
+              className={
+                currentPage === "rescue-report" ? "nav-link active" : "nav-link"
+              }
               onClick={() => navigate("rescue-report")}
             >
-              Rescue Report
+              Rescue Alert
             </button>
             {/* Staff, vets, and managers run the rescue operation, so the
                 public adopt and donate prompts are hidden for their accounts. */}
@@ -227,9 +334,17 @@ export function SiteHeader({
               <button
                 type="button"
                 className={
-                  currentPage === "animal-listings" ? "nav-link active" : "nav-link"
+                  currentPage === "adoption-apply" || currentPage === "my-applications"
+                    ? "nav-link active"
+                    : "nav-link"
                 }
-                onClick={() => navigate("animal-listings")}
+                onClick={() => {
+                  navigate("animal-listings");
+                  // Adopt points at the listings page, so clicking it while
+                  // already there is a same-view no-op - scroll to top so it
+                  // still feels responsive.
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
               >
                 Adopt
               </button>
@@ -249,10 +364,65 @@ export function SiteHeader({
           </>
         )}
       </nav>
+      ) : null}
 
       <div className="header-actions">
         {!isLoaded ? null : isSignedIn ? (
           <>
+            <div className="notification-bell-wrap">
+              <button
+                type="button"
+                className="notification-bell"
+                onClick={() => setBellOpen((open) => !open)}
+                aria-label={inbox && inbox.unreadCount > 0 ? `Notifications, ${inbox.unreadCount} unread` : "Notifications"}
+                aria-expanded={bellOpen}
+              >
+                <span aria-hidden="true">🔔</span>
+                {inbox && inbox.unreadCount > 0 && (
+                  <span className="notification-badge" aria-hidden="true">
+                    {inbox.unreadCount > 9 ? "9+" : inbox.unreadCount}
+                  </span>
+                )}
+              </button>
+              {bellOpen && (
+                <div className="notification-panel" role="dialog" aria-label="Notifications">
+                  <div className="notification-panel-head">
+                    <strong>Notifications</strong>
+                    {inbox && inbox.unreadCount > 0 && (
+                      <button type="button" className="mini-button" onClick={() => void handleMarkAllRead()}>
+                        Mark all read
+                      </button>
+                    )}
+                  </div>
+                  {!inbox || inbox.items.length === 0 ? (
+                    <p className="notification-empty">You are all caught up.</p>
+                  ) : (
+                    <ul className="notification-list">
+                      {inbox.items.slice(0, 10).map((item) => (
+                        <li key={item.id}>
+                          <button
+                            type="button"
+                            className={`notification-item${item.readAt ? "" : " unread"}`}
+                            onClick={() => void handleOpenNotification(item.id, item.entityType)}
+                          >
+                            <span className="notification-item-title">{item.title}</span>
+                            {item.body && <span className="notification-item-body">{item.body}</span>}
+                            <span className="notification-item-time">
+                              {new Date(item.createdAt).toLocaleString(undefined, {
+                                day: "numeric",
+                                month: "short",
+                                hour: "numeric",
+                                minute: "2-digit",
+                              })}
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
             <button
               type="button"
               className="teal-button dashboard-link"
@@ -260,21 +430,25 @@ export function SiteHeader({
                 navigate(
                   isAdmin
                     ? "dashboard"
-                    : isRescuer
-                      ? "rescuer-dashboard"
-                      : isStaff
-                        ? "staff-dashboard"
-                        : "user-dashboard",
+                    : isDispatcher
+                      ? "dispatcher-dashboard"
+                      : isVeterinarian
+                        ? "veterinary-dashboard"
+                        : isStaff
+                          ? "staff-dashboard"
+                          : "user-dashboard",
                 )
               }
             >
               {isAdmin
                 ? "Admin dashboard"
-                : isRescuer
-                  ? "Rescue dashboard"
-                  : isStaff
-                    ? "Staff dashboard"
-                    : "My dashboard"}
+                : isDispatcher
+                  ? "Dispatcher dashboard"
+                  : isVeterinarian
+                    ? "Veterinary dashboard"
+                    : isStaff
+                      ? "Staff dashboard"
+                      : "My dashboard"}
             </button>
             <div className="user-avatar-circle">
               <UserButton />

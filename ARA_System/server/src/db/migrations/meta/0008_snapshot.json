@@ -1,6 +1,6 @@
 {
-  "id": "29ddf826-e52e-4375-bed9-e04609992f29",
-  "prevId": "f5af7bc5-8770-4fc8-8635-e019482beb8c",
+  "id": "0199150e-69e0-4ce8-9757-acd72d11acb4",
+  "prevId": "1b71d801-0869-4eea-8592-424012091a68",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -58,6 +58,101 @@
           "notNull": true,
           "default": "'submitted'"
         },
+        "review_notes": {
+          "name": "review_notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "adoption_animal_unique_active": {
+          "name": "adoption_animal_unique_active",
+          "columns": [
+            {
+              "expression": "animal_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"adoption_applications\".\"status\" IN ('approved', 'completed')",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "adoption_applications_animal_id_animals_id_fk": {
+          "name": "adoption_applications_animal_id_animals_id_fk",
+          "tableFrom": "adoption_applications",
+          "tableTo": "animals",
+          "columnsFrom": [
+            "animal_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.adoption_status_history": {
+      "name": "adoption_status_history",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "application_id": {
+          "name": "application_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "changed_by_clerk_user_id": {
+          "name": "changed_by_clerk_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "note": {
+          "name": "note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -68,12 +163,12 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "adoption_applications_animal_id_animals_id_fk": {
-          "name": "adoption_applications_animal_id_animals_id_fk",
-          "tableFrom": "adoption_applications",
-          "tableTo": "animals",
+        "adoption_status_history_application_id_adoption_applications_id_fk": {
+          "name": "adoption_status_history_application_id_adoption_applications_id_fk",
+          "tableFrom": "adoption_status_history",
+          "tableTo": "adoption_applications",
           "columnsFrom": [
-            "animal_id"
+            "application_id"
           ],
           "columnsTo": [
             "id"
@@ -202,6 +297,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'intake'"
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
         },
         "created_at": {
           "name": "created_at",
@@ -341,6 +442,13 @@
           "notNull": true,
           "default": "'completed'"
         },
+        "payment_method": {
+          "name": "payment_method",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'card'"
+        },
         "message": {
           "name": "message",
           "type": "text",
@@ -369,6 +477,102 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.rescue_report_status_history": {
+      "name": "rescue_report_status_history",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "report_id": {
+          "name": "report_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "from_status": {
+          "name": "from_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "to_status": {
+          "name": "to_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "changed_by_clerk_user_id": {
+          "name": "changed_by_clerk_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "dispatcher_name": {
+          "name": "dispatcher_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "outcome": {
+          "name": "outcome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "additional_remarks": {
+          "name": "additional_remarks",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "image_urls": {
+          "name": "image_urls",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "rescue_report_status_history_report_id_rescue_reports_id_fk": {
+          "name": "rescue_report_status_history_report_id_rescue_reports_id_fk",
+          "tableFrom": "rescue_report_status_history",
+          "tableTo": "rescue_reports",
+          "columnsFrom": [
+            "report_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.rescue_reports": {
       "name": "rescue_reports",
       "schema": "",
@@ -379,6 +583,12 @@
           "primaryKey": true,
           "notNull": true,
           "default": "gen_random_uuid()"
+        },
+        "reference": {
+          "name": "reference",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
         },
         "animal_id": {
           "name": "animal_id",
@@ -392,11 +602,54 @@
           "primaryKey": false,
           "notNull": false
         },
+        "reporter_name": {
+          "name": "reporter_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "reporter_phone": {
+          "name": "reporter_phone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reporter_email": {
+          "name": "reporter_email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "location": {
           "name": "location",
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "latitude": {
+          "name": "latitude",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "longitude": {
+          "name": "longitude",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "animal_type": {
+          "name": "animal_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "animal_breed": {
+          "name": "animal_breed",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "condition_description": {
           "name": "condition_description",
@@ -410,6 +663,20 @@
           "primaryKey": false,
           "notNull": true
         },
+        "photo_urls": {
+          "name": "photo_urls",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'online'"
+        },
         "status": {
           "name": "status",
           "type": "text",
@@ -417,8 +684,39 @@
           "notNull": true,
           "default": "'submitted'"
         },
+        "assigned_to": {
+          "name": "assigned_to",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "assigned_to_clerk_user_id": {
+          "name": "assigned_to_clerk_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "assigned_at": {
+          "name": "assigned_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "office_note": {
+          "name": "office_note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
@@ -442,7 +740,15 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "rescue_reports_reference_unique": {
+          "name": "rescue_reports_reference_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "reference"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false

@@ -1,6 +1,6 @@
 import { useState, type ChangeEvent } from "react";
 import { uploadAnimalPhoto } from "../../services/animalsApi";
-import { sizeOptionLabel, type AnimalFormInput, type AnimalSize } from "../../types/animal";
+import { PRIORITY_OPTIONS, sizeOptionLabel, type AnimalFormInput, type AnimalSize } from "../../types/animal";
 import { BREED_OPTIONS, COLOUR_OPTIONS } from "./animalOptions";
 
 const SIZE_OPTIONS: AnimalSize[] = ["small", "medium", "large", "extra_large"];
@@ -87,6 +87,22 @@ export function AnimalProfileFields({ value, onChange, getToken }: AnimalProfile
           <option value="cat">Cat</option>
           <option value="rabbit">Rabbit</option>
           <option value="other">Other</option>
+        </select>
+      </label>
+
+      <label>
+        Veterinary priority
+        <select
+          value={value.veterinaryPriority}
+          onChange={(event) => setField("veterinaryPriority", event.target.value as AnimalFormInput["veterinaryPriority"])}
+          required
+        >
+          <option value="">Select priority</option>
+          {PRIORITY_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label} - {option.description}
+            </option>
+          ))}
         </select>
       </label>
 

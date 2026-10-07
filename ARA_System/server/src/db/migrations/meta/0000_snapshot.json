@@ -1,5 +1,5 @@
 {
-  "id": "96f28d05-752c-4766-8105-727bc044de16",
+  "id": "fa60eb6b-0587-463b-9260-7594ef28b97a",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -142,6 +142,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "rescue_date": {
           "name": "rescue_date",
           "type": "date",
@@ -166,6 +172,21 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'[]'::jsonb"
+        },
+        "vaccination_status": {
+          "name": "vaccination_status",
+          "type": "vaccination_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'not_vaccinated'"
+        },
+        "size": {
+          "name": "size",
+          "type": "animal_size",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
         },
         "medically_cleared": {
           "name": "medically_cleared",
@@ -270,6 +291,84 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.donations": {
+      "name": "donations",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "donor_clerk_user_id": {
+          "name": "donor_clerk_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "donor_name": {
+          "name": "donor_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "donor_email": {
+          "name": "donor_email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "amount_cents": {
+          "name": "amount_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "currency": {
+          "name": "currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'USD'"
+        },
+        "status": {
+          "name": "status",
+          "type": "donation_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'completed'"
+        },
+        "message": {
+          "name": "message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "stripe_checkout_session_id": {
+          "name": "stripe_checkout_session_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.rescue_reports": {
       "name": "rescue_reports",
       "schema": "",
@@ -280,6 +379,12 @@
           "primaryKey": true,
           "notNull": true,
           "default": "gen_random_uuid()"
+        },
+        "reference": {
+          "name": "reference",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
         },
         "animal_id": {
           "name": "animal_id",
@@ -293,11 +398,42 @@
           "primaryKey": false,
           "notNull": false
         },
+        "reporter_name": {
+          "name": "reporter_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "reporter_phone": {
+          "name": "reporter_phone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reporter_email": {
+          "name": "reporter_email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "location": {
           "name": "location",
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "animal_type": {
+          "name": "animal_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "animal_breed": {
+          "name": "animal_breed",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "condition_description": {
           "name": "condition_description",
@@ -311,6 +447,20 @@
           "primaryKey": false,
           "notNull": true
         },
+        "photo_urls": {
+          "name": "photo_urls",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'online'"
+        },
         "status": {
           "name": "status",
           "type": "text",
@@ -318,8 +468,33 @@
           "notNull": true,
           "default": "'submitted'"
         },
+        "assigned_to": {
+          "name": "assigned_to",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "assigned_to_clerk_user_id": {
+          "name": "assigned_to_clerk_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "office_note": {
+          "name": "office_note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
@@ -343,7 +518,15 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "rescue_reports_reference_unique": {
+          "name": "rescue_reports_reference_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "reference"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -429,6 +612,16 @@
     }
   },
   "enums": {
+    "public.animal_size": {
+      "name": "animal_size",
+      "schema": "public",
+      "values": [
+        "small",
+        "medium",
+        "large",
+        "extra_large"
+      ]
+    },
     "public.animal_status": {
       "name": "animal_status",
       "schema": "public",
@@ -448,6 +641,24 @@
         "cat",
         "rabbit",
         "other"
+      ]
+    },
+    "public.donation_status": {
+      "name": "donation_status",
+      "schema": "public",
+      "values": [
+        "pending",
+        "completed",
+        "failed",
+        "refunded"
+      ]
+    },
+    "public.vaccination_status": {
+      "name": "vaccination_status",
+      "schema": "public",
+      "values": [
+        "not_vaccinated",
+        "vaccinated"
       ]
     }
   },

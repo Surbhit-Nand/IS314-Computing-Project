@@ -7,11 +7,28 @@ import {
   updateAdoptionApplication,
 } from "../../services/adoptionsApi";
 import {
+  fetchMyNotifications,
+  markAllNotificationsRead,
+} from "../../services/notificationsApi";
+import {
   adoptionStatusClass,
   adoptionStatusLabel,
+  adoptionStatusShortLabel,
+  type AdoptionAnimalSummary,
   type AdoptionApplication,
   type AdoptionStatus,
 } from "../../types/adoption";
+import {
+  isGiftAdoption,
+  questionnaireSections,
+} from "./AdoptionQuestionnaireAnswers";
+import {
+  ACTIVE_STATUS_FILTERS,
+  HISTORY_STATUS_FILTERS,
+  QUEUE_TAB_STATUSES,
+  isTerminalAdoptionStatus,
+  type AdoptionQueueTab,
+} from "./adoptionQueue";
 import { SkeletonLoader } from "../../components/SkeletonLoader";
 import { isDevBypassEnabled } from "../../utils/devBypass";
 import { Breadcrumbs } from "../../components/Breadcrumbs";
@@ -28,8 +45,9 @@ const SHORT_STATUS_LABEL: Record<AdoptionStatus, string> = {
   rejected: "Rejected",
 };
 
-// The statuses shown in the queue filter, plus the "all" option.
-const STATUS_FILTERS = ["all", "submitted", "under_review", "approved", "rejected"] as const;
+// Status filter value: "all" plus every lifecycle state (the dropdown
+// options themselves adapt to the active tab - see ACTIVE/HISTORY_STATUS_FILTERS).
+type QueueStatusFilter = "all" | AdoptionStatus;
 
 // Mirrors ALLOWED_TRANSITIONS in server/src/modules/adoptions/adoptions.service.ts:
 // submitted -> under_review/rejected, under_review -> approved/rejected,
@@ -41,6 +59,27 @@ const NEXT_STATUSES: Record<AdoptionStatus, AdoptionStatus[]> = {
   completed: [],
   rejected: [],
 };
+
+// Copy for the "Medical clearance" row. Lifted out of the JSX because the
+// three-way branch reads as an unreadable nested ternary inline.
+function clearanceDetail(animal: AdoptionAnimalSummary | null) {
+  if (!animal) return "Unknown - animal no longer on record";
+  return animal.medicallyCleared
+    ? "Cleared by the veterinary team - eligible for approval."
+    : "Not yet cleared - a veterinarian must clear this animal before the application can be approved.";
+}
+
+// The warning appended to a "Move to" option. Approval reads differently
+// depending on whether the vet has cleared the animal yet.
+function transitionHint(status: AdoptionStatus, awaitingClearance: boolean) {
+  if (status === "approved") {
+    return awaitingClearance
+      ? " (blocked - animal not medically cleared)"
+      : " (this animal can only be approved once)";
+  }
+  if (status === "completed") return " (removes the animal from public listings)";
+  return "";
+}
 
 function formatDate(value: string): string {
   return new Date(value).toLocaleString(undefined, {
@@ -71,12 +110,17 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<(typeof STATUS_FILTERS)[number]>("all");
+  const [queueTab, setQueueTab] = useState<AdoptionQueueTab>("active");
+  const [statusFilter, setStatusFilter] = useState<QueueStatusFilter>("all");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   // Status-history detail per expanded application, fetched on expand.
   const [detailById, setDetailById] = useState<Record<string, AdoptionApplication>>({});
   const [savingMessage, setSavingMessage] = useState("");
   const [savingError, setSavingError] = useState("");
+  // Unread "new submission" notifications for the signed-in staffer. The
+  // header bell lives on public pages only, so the queue surfaces its own
+  // count that the reviewer can acknowledge once they've seen the list.
+  const [unreadSubmissions, setUnreadSubmissions] = useState(0);
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn || !hasStaffAccess) return;
@@ -94,13 +138,55 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
         setIsLoading(false);
       }
     })();
+
+    void (async () => {
+      try {
+        const token = await getToken();
+        if (!token) return;
+        const inbox = await fetchMyNotifications(token);
+        setUnreadSubmissions(
+          inbox.items.filter((item) => item.type === "adoption.submitted" && !item.readAt).length,
+        );
+      } catch {
+        // The queue itself is the source of truth; a bell failure hides the
+        // chip rather than blocking reviews.
+      }
+    })();
   }, [getToken, hasStaffAccess, isLoaded, isSignedIn]);
 
+  async function acknowledgeSubmissions() {
+    try {
+      const token = await getToken();
+      if (!token) return;
+      await markAllNotificationsRead(token);
+      setUnreadSubmissions(0);
+    } catch {
+      // Count syncs on the next visit.
+    }
+  }
+
+  // Tab counts for the Active/History switch. Computed from the full list
+  // so switching tabs never loses the search/filter context.
+  const activeCount = applications.filter(
+    (application) => !isTerminalAdoptionStatus(application.status),
+  ).length;
+  const historyCount = applications.length - activeCount;
+
+  function switchTab(tab: AdoptionQueueTab) {
+    setQueueTab(tab);
+    setStatusFilter("all");
+    setExpandedId(null);
+  }
+
   // Newest applications on top; older ones in the same status group below.
+  // The tab splits live work (Active) from finished applications (History)
+  // before search/status narrow it further.
   const visibleApplications = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
+    const tabStatuses = QUEUE_TAB_STATUSES[queueTab];
     return applications
       .filter((application) => {
+        if (!tabStatuses.includes(application.status)) return false;
         if (statusFilter !== "all" && application.status !== statusFilter) return false;
         if (!term) return true;
         return [
@@ -116,7 +202,7 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
         (a, b) =>
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
       );
-  }, [applications, searchTerm, statusFilter]);
+  }, [applications, queueTab, searchTerm, statusFilter]);
 
   async function openDetail(id: string) {
     setExpandedId(id);
@@ -237,19 +323,51 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
       />
 
       <section className="dashboard-panel">
+        <div className="queue-tabs" role="tablist" aria-label="Adoption queue sections">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={queueTab === "active"}
+            className={`queue-tab${queueTab === "active" ? " active" : ""}`}
+            onClick={() => switchTab("active")}
+          >
+            Active ({activeCount})
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={queueTab === "history"}
+            className={`queue-tab${queueTab === "history" ? " active" : ""}`}
+            onClick={() => switchTab("history")}
+          >
+            History ({historyCount})
+          </button>
+        </div>
         <div className="panel-heading">
           <div>
-            <p className="eyebrow">Adoption applications</p>
+            <p className="eyebrow">
+              {queueTab === "active" ? "Needs review" : "Finished applications"}
+            </p>
             <h2>{visibleApplications.length} application{visibleApplications.length === 1 ? "" : "s"}</h2>
+            {unreadSubmissions > 0 && (
+              <button
+                type="button"
+                className="chip"
+                title="New submissions since you last acknowledged them - click to mark seen"
+                onClick={() => void acknowledgeSubmissions()}
+              >
+                {unreadSubmissions} new
+              </button>
+            )}
           </div>
           <div className="rescue-queue-controls">
             <select
               className="animal-search-input filter-select"
               value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value as (typeof STATUS_FILTERS)[number])}
+              onChange={(event) => setStatusFilter(event.target.value as QueueStatusFilter)}
               aria-label="Filter by status"
             >
-              {STATUS_FILTERS.map((status) => (
+              {["all", ...(queueTab === "active" ? ACTIVE_STATUS_FILTERS : HISTORY_STATUS_FILTERS)].map((status) => (
                 <option key={status} value={status}>
                   {status === "all"
                     ? "All statuses"
@@ -273,7 +391,11 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
         {isLoading && <SkeletonLoader variant="card" />}
         {!isLoading && loadError && <p className="dashboard-data-state error">{loadError}</p>}
         {!isLoading && !loadError && visibleApplications.length === 0 && (
-          <p className="dashboard-data-state">No adoption applications match your filters.</p>
+          <p className="dashboard-data-state">
+            {queueTab === "history"
+              ? "No finished applications yet."
+              : "No adoption applications match your filters."}
+          </p>
         )}
 
         {!isLoading && !loadError && visibleApplications.length > 0 && (
@@ -282,6 +404,13 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
               const isExpanded = expandedId === application.id;
               const detail = detailById[application.id] ?? application;
               const nextStatuses = NEXT_STATUSES[application.status] ?? [];
+
+              // Only a veterinarian can set animals.medically_cleared (clearAnimal,
+              // behind requireVeterinaryAccess) and the server refuses
+              // under_review -> approved without it, so flag it here rather than
+              // let the reviewer find out from a rejected save. Read off `detail`
+              // so an expanded row uses the freshest fetch.
+              const awaitingClearance = !!detail.animal && !detail.animal.medicallyCleared;
               return (
                 <div key={application.id} className={`rescue-card${isExpanded ? " expanded" : ""}`}>
                   <button
@@ -306,6 +435,22 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
                       </span>
                     </div>
                     <div className="rescue-summary-badges">
+                      {awaitingClearance && (
+                        <span
+                          className="adoption-clearance-badge"
+                          title="A veterinarian has not cleared this animal yet, so this application cannot be approved."
+                        >
+                          Not cleared
+                        </span>
+                      )}
+                      {isGiftAdoption(application) && (
+                        <span
+                          className="adoption-clearance-badge"
+                          title="This adoption is a gift for someone else - confirm the recipient is ready for a pet."
+                        >
+                          Gift - extra review
+                        </span>
+                      )}
                       <span className={`adoption-status-badge ${adoptionStatusClass(application.status)}`}>
                         {SHORT_STATUS_LABEL[application.status]}
                       </span>
@@ -332,6 +477,10 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
                               </dd>
                             </div>
                             <div className="rescue-detail-field">
+                              <dt>Medical clearance</dt>
+                              <dd>{clearanceDetail(detail.animal)}</dd>
+                            </div>
+                            <div className="rescue-detail-field">
                               <dt>Date submitted</dt>
                               <dd>
                                 {formatDate(application.createdAt)}
@@ -340,22 +489,18 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
                                   : ""}
                               </dd>
                             </div>
-                            <div className="rescue-detail-field full">
-                              <dt>About their home</dt>
-                              <dd>{application.homeDetails}</dd>
-                            </div>
-                            <div className="rescue-detail-field full">
-                              <dt>About their family</dt>
-                              <dd>{application.familyDetails}</dd>
-                            </div>
-                            <div className="rescue-detail-field full">
-                              <dt>Existing pets</dt>
-                              <dd>{application.existingPets || "None mentioned"}</dd>
-                            </div>
-                            <div className="rescue-detail-field full">
-                              <dt>Experience with animals</dt>
-                              <dd>{application.animalExperience || "None mentioned"}</dd>
-                            </div>
+                            {questionnaireSections(detail).map((section) => (
+                              <div key={section.title} className="rescue-detail-field full">
+                                <dt>{section.title}</dt>
+                                <dd>
+                                  {section.rows.map((row) => (
+                                    <p key={row.label} className="adoption-answer-row">
+                                      <strong>{row.label}:</strong> {row.value}
+                                    </p>
+                                  ))}
+                                </dd>
+                              </div>
+                            ))}
                           </dl>
 
                           {detail.history && detail.history.length > 0 && (
@@ -376,6 +521,7 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
                           )}
                         </div>
 
+                        {nextStatuses.length > 0 ? (
                         <form
                           className="rescue-dispatch-card"
                           onSubmit={(event) => void handleReview(event, application)}
@@ -384,8 +530,11 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
 
                           <div className="dispatch-field">
                             <span className="dispatch-label">Current status</span>
-                            <span className={`adoption-status-badge ${adoptionStatusClass(application.status)}`}>
-                              {adoptionStatusLabel(application.status)}
+                            <span
+                              className={`adoption-status-badge ${adoptionStatusClass(application.status)}`}
+                              title={adoptionStatusLabel(application.status)}
+                            >
+                              {adoptionStatusShortLabel(application.status)}
                             </span>
                           </div>
 
@@ -396,10 +545,13 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
                                 {SHORT_STATUS_LABEL[application.status]}
                               </option>
                               {nextStatuses.map((status) => (
-                                <option key={status} value={status}>
+                                <option
+                                  key={status}
+                                  value={status}
+                                  disabled={status === "approved" && awaitingClearance}
+                                >
                                   Move to: {SHORT_STATUS_LABEL[status]}
-                                  {status === "approved" ? " (this animal can only be approved once)" : ""}
-                                  {status === "completed" ? " (removes the animal from public listings)" : ""}
+                                  {transitionHint(status, awaitingClearance)}
                                 </option>
                               ))}
                             </select>
@@ -422,20 +574,32 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
                             />
                           </label>
 
-                          {application.status === "rejected" && application.reviewNotes && (
+                          {awaitingClearance && (
                             <p className="dispatch-hint">
-                              Already rejected - this application is closed.
+                              {detail.animal?.name} has not been medically cleared by a
+                              veterinarian yet, so this application cannot be approved. Ask the
+                              veterinary team to issue clearance first - you can still move it to
+                              Under Review or reject it in the meantime.
                             </p>
                           )}
 
                           <button
                             type="submit"
                             className="teal-button dispatch-save"
-                            disabled={nextStatuses.length === 0}
                           >
                             Save review
                           </button>
                         </form>
+                        ) : (
+                          <div className="rescue-dispatch-card">
+                            <h3 className="rescue-card-title">Review & Status</h3>
+                            <p className="dispatch-hint">
+                              This application is {SHORT_STATUS_LABEL[application.status].toLowerCase()} and
+                              closed - no further action is needed. The full record stays here
+                              for reference.
+                            </p>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}

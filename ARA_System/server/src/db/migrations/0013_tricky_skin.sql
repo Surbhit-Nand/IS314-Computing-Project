@@ -1,0 +1,23 @@
+-- AI animal search (semantic search with pgvector).
+--
+-- drizzle-kit generated only the ALTER TABLE below; it has no way to know that
+-- the `vector` type comes from an extension that must be enabled first, so the
+-- CREATE EXTENSION statement is added here by hand. Both statements run in the
+-- one transaction drizzle's migrator wraps this file in, so the column can
+-- never be created before its type exists.
+--
+-- `IF NOT EXISTS` on both statements (the hand-written migrations in this
+-- folder use the same style as 0007_*) so re-running after a partial manual
+-- apply is harmless.
+--
+-- The table itself is NOT touched otherwise: the column is nullable and purely
+-- additive, no existing field is renamed or dropped, and no existing row is
+-- modified. Animals keep working with a null embedding - they are simply not
+-- matched by AI search until `npm run ai:backfill` gives them one.
+--
+-- The 768 width MUST match ANIMAL_SEARCH_EMBEDDING_DIMENSIONS in
+-- server/src/config/aiSearchConfig.ts and the vector length the embedding
+-- provider returns. Changing it needs a migration that rewrites the column.
+CREATE EXTENSION IF NOT EXISTS vector;
+--> statement-breakpoint
+ALTER TABLE "animals" ADD COLUMN IF NOT EXISTS "search_embedding" vector(768);

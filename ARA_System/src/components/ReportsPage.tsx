@@ -273,7 +273,7 @@ export function ReportsPage({ onNavigate }: ReportsPageProps) {
           <small>All-time snapshot</small>
         </article>
         <article>
-          <span>Rescue reports</span>
+          <span>Rescue alerts</span>
           <strong>
             {rescue ? (
               rescue.total
@@ -514,12 +514,12 @@ function RescuePanel({ rescue }: { rescue: AnalyticsReport["rescue"] }) {
   return (
     <PanelShell
       eyebrow="Rescue"
-      title="Rescue reports"
+      title="Rescue alerts"
       note={`${rescue.total} in period`}
     >
       {rescue.trend.length > 0 && (
         <div>
-          <p className="report-chart-title">Reports per month</p>
+          <p className="report-chart-title">Alerts per month</p>
           <TrendChart points={rescue.trend} />
         </div>
       )}

@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Animal, AnimalSize } from "../types/animal";
 import { capitalize } from "../utils/format";
 import { useFavoriteAnimals } from "../utils/favorites";
+import { searchAnimalsWithAI } from "../services/animalsApi";
 import { SiteFooter } from "./SiteFooter";
 import { SiteHeader, type SiteHeaderView } from "./SiteHeader";
 
@@ -54,6 +55,16 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const { isFavorite, toggle } = useFavoriteAnimals();
 
+  // AI (natural-language) search state. `aiRanking` is null while no AI search
+  // is applied, in which case the listing shows every public animal exactly as
+  // before; when it holds ids, they are the search's ranked best matches.
+  const [aiRanking, setAiRanking] = useState<string[] | null>(null);
+  const [aiQuery, setAiQuery] = useState("");
+  const [aiSearching, setAiSearching] = useState(false);
+  const [aiSearchError, setAiSearchError] = useState("");
+  // Guards against a slow earlier request overwriting a newer search's results.
+  const searchRun = useRef(0);
+
   useEffect(() => {
     void fetch(`${apiBaseUrl}/api/animals`)
       .then(async (response) => {
@@ -92,50 +103,105 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
     setFilters((previous) => ({ ...previous, [key]: value }));
   }
 
-  // Applies the free-text description search followed by each characteristic
-  // filter. Any search matches on name, breed, colour, behaviour, description,
-  // and size so a natural-language phrase like "small calm dog" finds the
-  // right profiles. Size, colour and vaccination come straight off the
-  // profile's structured fields rather than being inferred from free text.
-  const visible = useMemo(() => {
-    const query = searchText.trim().toLowerCase();
+  // Drops back to the normal listing (every public animal, in the order the API
+  // returned them). Used for a cleared query and whenever search can't run.
+  function resetAiSearch() {
+    searchRun.current += 1;
+    setAiRanking(null);
+    setAiQuery("");
+    setAiSearchError("");
+    setAiSearching(false);
+  }
 
-    return animals.filter((animal) => {
-      if (query) {
-        const haystack = [
-          animal.name,
-          animal.type,
-          animal.breed,
-          animal.colour,
-          animal.behaviour,
-          animal.description,
-          animal.gender,
-          animal.size ?? "",
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
-        if (!haystack.includes(query)) return false;
-      }
+  // Runs a natural-language search. The result is only ever the *order* the
+  // cards appear in: each match is the full profile already loaded from
+  // GET /api/animals, so opening a card behaves exactly as it does in the
+  // normal listing.
+  async function runAiSearch() {
+    const query = searchText.trim();
+    // Fewer than two characters can't describe an animal, and the server
+    // rejects them: treat it as "no search" rather than an error.
+    if (query.length < 2) {
+      resetAiSearch();
+      return;
+    }
 
-      if (filters.type !== "all") {
-        // "Other" groups anything that isn't a dog or cat (rabbits, birds,
-        // etc.) so those profiles show under a single species option.
-        const isOther = filters.type === "other" && animal.type !== "dog" && animal.type !== "cat";
-        if (!isOther && animal.type !== filters.type) return false;
-      }
-      if (filters.gender !== "all" && (animal.gender ?? "").toLowerCase() !== filters.gender) return false;
-      if (filters.breed !== "all" && (animal.breed ?? "").trim().toLowerCase() !== filters.breed.toLowerCase())
-        return false;
-      if (filters.behaviour !== "all" && behaviourKey(animal.behaviour) !== filters.behaviour) return false;
-      if (filters.size !== "all" && animal.size !== filters.size) return false;
-      if (filters.colour !== "all" && (animal.colour ?? "").trim().toLowerCase() !== filters.colour.toLowerCase())
-        return false;
-      if (filters.vaccination !== "all" && animal.vaccinationStatus !== filters.vaccination) return false;
+    const run = searchRun.current + 1;
+    searchRun.current = run;
+    setAiSearching(true);
+    setAiSearchError("");
 
-      return true;
-    });
-  }, [animals, searchText, filters]);
+    try {
+      const hits = await searchAnimalsWithAI(query);
+      if (searchRun.current !== run) return; // a newer search has taken over
+      // If the server returns no matches, treat this as a completed search
+      // with an empty result set (do NOT fall back to all animals).
+      setAiRanking(hits.length === 0 ? [] : hits);
+      setAiQuery(query);
+    } catch (error: unknown) {
+      if (searchRun.current !== run) return;
+      // AI search is assistive only, so a provider outage falls back to the
+      // full listing rather than blocking the page. The sidebar filters keep
+      // working throughout.
+      setAiRanking(null);
+      setAiQuery("");
+      setAiSearchError(
+        error instanceof Error
+          ? error.message
+          : "AI search is unavailable right now. You can still browse animals or use the filters.",
+      );
+    } finally {
+      if (searchRun.current === run) setAiSearching(false);
+    }
+  }
+
+  // The animals the AI search picked, in the order it ranked them.
+  // - aiRanking === null: no AI search active -> show full listing
+  // - aiRanking.length === 0: AI search completed but returned no matches -> show empty set
+  // - aiRanking.length > 0: show only those ranked matches, in order
+  const ranked = useMemo(() => {
+    if (aiRanking === null) return animals;
+    if (aiRanking.length === 0) return [];
+    const rank = new Map(aiRanking.map((id, index) => [id, index]));
+    return animals
+      .filter((animal) => rank.has(animal.id))
+      .sort((first, second) => (rank.get(first.id) ?? 0) - (rank.get(second.id) ?? 0));
+  }, [animals, aiRanking]);
+
+  // Applies each characteristic filter to the (optionally AI-ranked) animals.
+  // Size, colour and vaccination come straight off the profile's structured
+  // fields rather than being inferred from free text.
+  const visible = useMemo(
+    () =>
+      ranked.filter((animal) => {
+        if (filters.type !== "all") {
+          // "Other" groups anything that isn't a dog or cat (rabbits, birds,
+          // etc.) so those profiles show under a single species option.
+          const isOther = filters.type === "other" && animal.type !== "dog" && animal.type !== "cat";
+          if (!isOther && animal.type !== filters.type) return false;
+        }
+        if (filters.gender !== "all" && (animal.gender ?? "").toLowerCase() !== filters.gender)
+          return false;
+        if (
+          filters.breed !== "all" &&
+          (animal.breed ?? "").trim().toLowerCase() !== filters.breed.toLowerCase()
+        )
+          return false;
+        if (filters.behaviour !== "all" && behaviourKey(animal.behaviour) !== filters.behaviour)
+          return false;
+        if (filters.size !== "all" && animal.size !== filters.size) return false;
+        if (
+          filters.colour !== "all" &&
+          (animal.colour ?? "").trim().toLowerCase() !== filters.colour.toLowerCase()
+        )
+          return false;
+        if (filters.vaccination !== "all" && animal.vaccinationStatus !== filters.vaccination)
+          return false;
+
+        return true;
+      }),
+    [ranked, filters],
+  );
 
   const activeFilterCount =
     (filters.type !== "all" ? 1 : 0) +
@@ -149,6 +215,7 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
   function clearFilters() {
     setFilters(EMPTY_FILTERS);
     setSearchText("");
+    resetAiSearch();
   }
 
   return (
@@ -165,34 +232,49 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
           <p className="eyebrow">Adopt a friend</p>
           <h1>Find your new companion</h1>
           <p className="lead-copy">
-            Every animal below is looking for a loving home. Search by
-            personality or type, then narrow by species, breed, gender, size
-            and behaviour.
+            Every animal below is looking for a loving home. Describe the animal
+            you are hoping for in your own words, then narrow the results by
+            species, breed, gender, size and behaviour.
           </p>
-          <div className="search-card catalog-search">
+          {/* A form so Enter works as well as the button, and so the browser's
+              own search field semantics stay intact. */}
+          <form
+            className="search-card catalog-search"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void runAiSearch();
+            }}
+          >
             <label htmlFor="catalog-search">
-              Search by personality or type
+              Describe the animal you are looking for
             </label>
             <div className="search-row">
               <input
                 id="catalog-search"
-                type="text"
+                type="search"
                 placeholder="Small, calm dog good with children"
                 value={searchText}
-                onChange={(event) => setSearchText(event.target.value)}
+                onChange={(event) => {
+                  const next = event.target.value;
+                  setSearchText(next);
+                  // Clearing (or shortening) the box clears the search too, so
+                  // the listing is never left showing results for a query the
+                  // visitor can no longer see.
+                  if (next.trim().length < 2) resetAiSearch();
+                }}
               />
-              <button type="button" className="teal-button small-button">
-                Search
+              <button type="submit" className="teal-button small-button" disabled={aiSearching}>
+                {aiSearching ? "Searching…" : "Search"}
               </button>
             </div>
-          </div>
+          </form>
         </section>
 
         <div className="catalog-layout">
           <aside className="catalog-sidebar" aria-label="Filter animals">
             <div className="catalog-sidebar-head">
               <h2>Filters</h2>
-              {(activeFilterCount > 0 || searchText) && (
+              {(activeFilterCount > 0 || aiQuery) && (
                 <button type="button" className="text-button" onClick={clearFilters}>
                   Clear all
                 </button>
@@ -342,7 +424,7 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
           <section className="catalog-results" aria-label="Animal listings">
             <div className="catalog-results-head">
               <p className="animals-summary">
-                {animalsLoading ? (
+                {animalsLoading || aiSearching ? (
                   <span
                     className="skeleton-bar skeleton-width-3"
                     aria-hidden="true"
@@ -351,16 +433,27 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
                   `${visible.length} of ${animals.length} animals available for adoption`
                 )}
               </p>
+              {aiQuery && (
+                <p className="animals-summary">
+                  Best matches for “{aiQuery}”
+                </p>
+              )}
             </div>
 
             <div className="animal-grid catalog-grid">
               {animalsError && (
                 <p className="dashboard-data-state error">{animalsError}</p>
               )}
-              {!animalsLoading && !animalsError && visible.length === 0 && (
+              {/* The listing and the filters stay usable after a failed search,
+                  so this is a notice rather than a blocking error. */}
+              {aiSearchError && (
+                <p className="dashboard-data-state">{aiSearchError}</p>
+              )}
+              {!animalsLoading && !animalsError && !aiSearching && visible.length === 0 && (
                 <p className="dashboard-data-state">
-                  No animals match your search. Try removing a filter or
-                  showing all animals.
+                  {aiQuery
+                    ? `No animals available match “${aiQuery}”. Try a different description.`
+                    : "No animals match your search. Try removing a filter or showing all animals."}
                 </p>
               )}
               {visible.map((animal) => (

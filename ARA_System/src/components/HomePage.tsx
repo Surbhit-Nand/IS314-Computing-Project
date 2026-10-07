@@ -284,7 +284,7 @@ export function HomePage({ isLoaded, isSignedIn, currentPage, onNavigate, onView
               className="teal-button"
               onClick={() => onNavigate("rescue-report")}
             >
-              Submit rescue report
+              Submit rescue alert
             </button>
             <button
               type="button"
