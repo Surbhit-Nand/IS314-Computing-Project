@@ -2,6 +2,9 @@ import { useState } from "react";
 import { adoptionStatusLabel, sizeDisplayLabel, vaccinationStatusLabel, type Animal } from "../types/animal";
 import { useFavoriteAnimals } from "../utils/favorites";
 import { capitalize } from "../utils/format";
+import { buildAnimalTags } from "../utils/animalTags";
+import { savePendingAdoption } from "../utils/pendingAdoption";
+import { AnimalTagChips } from "./AnimalTagChips";
 import { Breadcrumbs } from "./Breadcrumbs";
 import { SiteHeader, type SiteHeaderView } from "./SiteHeader";
 
@@ -63,6 +66,7 @@ export function AnimalProfilePage({ animal, isLoaded, isSignedIn, currentPage, o
           {/* Name comes before the photo on every profile, regardless of
               how many photos an animal has. */}
           <h1 className="profile-name">{animal.name}</h1>
+          <AnimalTagChips tags={buildAnimalTags(animal)} />
 
           <section className="profile-hero">
             <div
@@ -184,7 +188,13 @@ export function AnimalProfilePage({ animal, isLoaded, isSignedIn, currentPage, o
                 <button
                   type="button"
                   className="teal-button profile-adopt-button"
-                  onClick={() => onNavigate("adoption-apply")}
+                  onClick={() => {
+                    // Remember this animal across the sign-in/register round
+                    // trip (and a reload): App restores it once a session
+                    // exists, and the form clears it on successful submit.
+                    savePendingAdoption(animal.id);
+                    onNavigate("adoption-apply");
+                  }}
                 >
                   Adopt {animal.name}
                 </button>

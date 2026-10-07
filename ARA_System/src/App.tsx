@@ -1,5 +1,5 @@
 import { useAuth, useUser } from "@clerk/react";
-import { Suspense, lazy, useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import spcaLogo from "./assets/spca-logo.png";
 import "./App.css";
 import "./features/veterinary/veterinary.css";
@@ -94,6 +94,8 @@ const VeterinaryUpcomingAppointments = lazy(() =>
 import type { VeterinaryAppointment } from "./types/veterinary";
 import type { Animal } from "./types/animal";
 import { isDispatcherRole } from "./utils/roles";
+import { clearPendingAdoption, readPendingAdoption } from "./utils/pendingAdoption";
+import { apiBaseUrl } from "./services/apiClient.js";
 
 export type View =
   | "home"
@@ -190,6 +192,37 @@ function App() {
               ? "staff-dashboard"
               : null;
   const activeView = staffLanding ?? view;
+
+  // Resumes a pending adoption across the sign-in/register round trip: if an
+  // anonymous visitor clicked Adopt, the animal id was stashed in
+  // localStorage (see AnimalProfilePage). Once a session exists and no animal
+  // is in memory, reload that animal from the public listing so the form
+  // survives auth and reloads. Staff-first landing wins - staff accounts keep
+  // their dashboard instead of being pulled into the form.
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn || !user || viewedAnimal || staffLanding) return;
+    const pendingAnimalId = readPendingAdoption();
+    if (!pendingAnimalId) return;
+    let cancelled = false;
+    void fetch(`${apiBaseUrl}/api/animals`)
+      .then((response) => (response.ok ? (response.json() as Promise<Animal[]>) : []))
+      .then((list) => {
+        if (cancelled || !Array.isArray(list)) return;
+        const found = list.find((item) => item.id === pendingAnimalId);
+        if (found) {
+          setViewedAnimal(found);
+          setView("adoption-apply");
+        } else {
+          // Adopted, removed, or otherwise gone: drop the stash so it can
+          // never resurface, and leave the visitor where they are.
+          clearPendingAdoption();
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoaded, isSignedIn, user, viewedAnimal, staffLanding]);
 
   // Keep the public Home page from flashing before auth resolves. Signed-in
   // sessions briefly lag on the Clerk user profile hydration, so both
