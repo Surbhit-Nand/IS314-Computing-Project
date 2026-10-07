@@ -5,6 +5,8 @@ import { submitRescueReport, uploadRescuePhoto } from "../../services/rescueApi"
 import { reverseGeocodePlace, searchPlaces, type PlaceLookup } from "../../services/geocoding";
 import { RescueLocationMap } from "./RescueLocationMap";
 import type { RescueReportFormInput, RescueUrgency } from "../../types/rescue";
+import { DEFAULT_DIAL_CODE, dialCodeByCode, expectedLengthLabel, formatPhone, isValidPhoneNational } from "../../utils/phone";
+import { PhoneInput } from "../../components/PhoneInput";
 import { Breadcrumbs } from "../../components/Breadcrumbs";
 import { SiteHeader, type SiteHeaderView } from "../../components/SiteHeader";
 
@@ -58,6 +60,9 @@ export function RescueReportForm({ variant, source, isLoaded, onNavigate, onShow
   const { isSignedIn } = useUser();
   const { getToken } = useAuth();
   const [form, setForm] = useState<RescueReportFormInput>({ ...emptyForm, source });
+  // Dial-code half of the optional reporter phone number (Fiji default).
+  // Combined into `+code number` on submit; empty stays empty.
+  const [reporterPhoneCode, setReporterPhoneCode] = useState(DEFAULT_DIAL_CODE);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -265,6 +270,13 @@ export function RescueReportForm({ variant, source, isLoaded, onNavigate, onShow
       window.alert("Please fill in the reporter name, location, and condition description.");
       return;
     }
+    if (form.reporterPhone.trim() && !isValidPhoneNational(form.reporterPhone, reporterPhoneCode)) {
+      const band = dialCodeByCode(reporterPhoneCode);
+      window.alert(
+        `Enter a valid ${band.name} phone number (${expectedLengthLabel(reporterPhoneCode)}) or leave it blank.`,
+      );
+      return;
+    }
 
     setErrorMessage("");
     setIsSubmitting(true);
@@ -276,7 +288,15 @@ export function RescueReportForm({ variant, source, isLoaded, onNavigate, onShow
       if (isSignedIn && !token) {
         throw new Error("Your sign-in session has expired. Please sign in again.");
       }
-      const report = await submitRescueReport(form, token ?? undefined);
+      const report = await submitRescueReport(
+        {
+          ...form,
+          reporterPhone: form.reporterPhone.trim()
+            ? formatPhone(reporterPhoneCode, form.reporterPhone)
+            : "",
+        },
+        token ?? undefined,
+      );
       setCreatedReference(report.reference);
       locationManuallyEditedRef.current = false;
       setForm({ ...emptyForm, source });
@@ -305,17 +325,14 @@ export function RescueReportForm({ variant, source, isLoaded, onNavigate, onShow
         />
       </label>
 
-      <label>
-        <span className="form-label-text">
-          Phone number <em className="optional-hint">(optional)</em>
-        </span>
-        <input
-          type="tel"
-          placeholder="e.g. 9900000"
-          value={form.reporterPhone}
-          onChange={(event) => setField("reporterPhone", event.target.value)}
-        />
-      </label>
+      <PhoneInput
+        label="Phone number"
+        code={reporterPhoneCode}
+        number={form.reporterPhone}
+        onCodeChange={setReporterPhoneCode}
+        onNumberChange={(value) => setField("reporterPhone", value)}
+        hint={<em className="optional-hint">(optional)</em>}
+      />
 
       <label className="animal-form-full">
         <span className="form-label-text">
