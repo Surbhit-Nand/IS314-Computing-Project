@@ -1,5 +1,5 @@
 import { SignInButton, useAuth, useUser } from "@clerk/react";
-import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
 import spcaLogo from "../assets/spca-logo.png";
 import {
   acceptMission,
@@ -35,6 +35,7 @@ import { RescueReadOnlyMap } from "../features/rescue/RescueReadOnlyMap";
 import { ProgressImageUpload } from "../features/rescue/ProgressImageUpload";
 import { SiteHeader } from "./SiteHeader";
 import type { SiteHeaderView } from "./SiteHeader";
+import type { NavigateDestination, RescueDetailSource } from "../navigation/araNavigation";
 
 // The views this portal can send the user to. App.tsx's navigate() accepts the
 // wider View union, so it type-checks against this narrower signature.
@@ -45,6 +46,9 @@ export type RescuePage = "rescue-board" | "rescue-active" | "rescue-history";
 type RescueOperationsPortalProps = {
   onNavigate: (view: PortalView) => void;
   page?: RescuePage;
+  detailMissionId?: string | null;
+  detailSource?: RescueDetailSource | null;
+  onNavigateDestination: NavigateDestination;
 };
 
 // Reporter-facing progress steps shown at the top of a mission's detail page -
@@ -182,7 +186,7 @@ function matchesSearch(mission: RescueMission, term: string): boolean {
 // dashboard and the staff "rescue queue" page. Role-aware: dispatchers run
 // the mission lifecycle (Accept / Start / update / Debrief); staff follow
 // every mission read-only and receive intake handoffs.
-export function RescueOperationsPortal({ onNavigate, page = "rescue-board" }: RescueOperationsPortalProps) {
+export function RescueOperationsPortal({ onNavigate, page = "rescue-board", detailMissionId = null, detailSource = null, onNavigateDestination }: RescueOperationsPortalProps) {
   const { getToken, isLoaded, isSignedIn } = useAuth();
   const { user } = useUser();
   const role = user?.publicMetadata.role;
@@ -204,24 +208,19 @@ export function RescueOperationsPortal({ onNavigate, page = "rescue-board" }: Re
   const [actionError, setActionError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   // Mission Board "View Details" opens a modal over the list; Active Mission
-  // and Mission History rows open their own detail page. Both live inside this
-  // portal so the dispatcher navbar and the active search term survive the
-  // round trip. detailSource remembers which list the detail page came from,
-  // which drives both the back link label and the highlighted nav item.
+  // and Mission History rows open a history-backed detail page. Only the
+  // dialog stays local; detailMissionId/detailSource come from App history.
   const [boardModalId, setBoardModalId] = useState<string | null>(null);
-  const [detailMissionId, setDetailMissionId] = useState<string | null>(null);
-  const [detailSource, setDetailSource] = useState<"rescue-active" | "rescue-history" | null>(null);
+  const requestVersion = useRef(0);
 
-  // Navigating between the rescue pages resets the modal/detail state, so a
-  // stale detail view never lingers behind the wrong list. Adjusting state
+  // Navigating between rescue pages resets the local dialog. Restored detail
+  // context must remain intact. Adjusting state
   // during render (guarded by an inequality) is the sanctioned React pattern
   // for reacting to a prop change without a cascading effect.
   const [prevPage, setPrevPage] = useState<RescuePage>(page);
   if (prevPage !== page) {
     setPrevPage(page);
     setBoardModalId(null);
-    setDetailMissionId(null);
-    setDetailSource(null);
   }
 
   // Loads all three lists together once access is confirmed. After every
@@ -231,10 +230,12 @@ export function RescueOperationsPortal({ onNavigate, page = "rescue-board" }: Re
   useEffect(() => {
     if (!isLoaded || !isSignedIn || !hasAccess) return;
     void loadAll();
+    return () => { requestVersion.current += 1; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [getToken, hasAccess, isLoaded, isSignedIn]);
 
   async function loadAll() {
+    const version = ++requestVersion.current;
     try {
       const token = await getFreshClerkToken(getToken);
       if (!token) throw new Error("Your Clerk session has expired.");
@@ -244,28 +245,17 @@ export function RescueOperationsPortal({ onNavigate, page = "rescue-board" }: Re
           fetchMissionHistory(token),
           canAct ? fetchMyActiveMissions(token) : Promise.resolve({ assigned: [], inProgress: [] }),
         ]);
+      if (version !== requestVersion.current) return;
       setBoard(nextBoard);
       setHistory(nextHistory);
       setMyAssigned(nextActive.assigned);
       setMyInProgress(nextActive.inProgress);
       setLoadError("");
-      // If the mission open on a detail page just left every list this
-      // dispatcher can see, drop the detail view back to its list instead of
-      // showing a blank panel.
-      if (
-        detailMissionId &&
-        !nextBoard.some((mission) => mission.id === detailMissionId) &&
-        !nextHistory.some((mission) => mission.id === detailMissionId) &&
-        !nextActive.assigned.some((mission) => mission.id === detailMissionId) &&
-        !nextActive.inProgress.some((mission) => mission.id === detailMissionId)
-      ) {
-        setDetailMissionId(null);
-        setDetailSource(null);
-      }
     } catch (error) {
+      if (version !== requestVersion.current) return;
       setLoadError(error instanceof Error ? error.message : "Rescue operations could not be loaded.");
     } finally {
-      setIsLoading(false);
+      if (version === requestVersion.current) setIsLoading(false);
     }
   }
 
@@ -280,8 +270,7 @@ export function RescueOperationsPortal({ onNavigate, page = "rescue-board" }: Re
   // The mission shown on an Active / History detail page. A mission opened
   // from Active that just got resolved lives in `history` after the reload, so
   // it keeps rendering read-only there instead of collapsing. If it vanishes
-  // entirely (deleted, or never in a list the dispatcher sees) `loadAll`
-  // clears the detail state and the list shows again.
+  // entirely, the effect below replaces the entry with its source list.
   const detailMission = useMemo(() => {
     if (!detailMissionId) return null;
     return (
@@ -291,6 +280,13 @@ export function RescueOperationsPortal({ onNavigate, page = "rescue-board" }: Re
       null
     );
   }, [detailMissionId, history, myAssigned, myInProgress]);
+
+  useEffect(() => {
+    if (detailMissionId && !isLoading && !loadError && !detailMission) {
+      onNavigateDestination({ view: detailSource ?? page }, true);
+    }
+  }, [detailMissionId, detailMission, detailSource, page, isLoading, loadError, onNavigateDestination]);
+
 
   // Shared wrapper for every mutation: clears prior feedback, runs the API
   // call with a fresh Clerk token, then reloads so all tabs reflect the new
@@ -578,6 +574,7 @@ export function RescueOperationsPortal({ onNavigate, page = "rescue-board" }: Re
           {actionMessage && <p className="invite-feedback success">{actionMessage}</p>}
           {actionError && <p className="invite-feedback error">{actionError}</p>}
           <MissionDetailPage
+            key={detailMission.id}
             mission={detailMission}
             source={detailSource}
             canAct={canAct}
@@ -585,10 +582,7 @@ export function RescueOperationsPortal({ onNavigate, page = "rescue-board" }: Re
             clerkUserId={user?.id}
             canReceiveIntake={canReceiveIntake}
             getToken={getToken}
-            onBack={() => {
-              setDetailMissionId(null);
-              setDetailSource(null);
-            }}
+            onBack={() => onNavigateDestination({ view: detailSource ?? page })}
             onAccept={() => handleAccept(detailMission)}
             onStart={(input) => handleStart(detailMission, input)}
             onUpdate={(input) => handleUpdate(detailMission, input)}
@@ -723,8 +717,7 @@ export function RescueOperationsPortal({ onNavigate, page = "rescue-board" }: Re
                       missions={visibleAssigned}
                       group="assigned"
                       onOpen={(mission) => {
-                        setDetailMissionId(mission.id);
-                        setDetailSource("rescue-active");
+                        onNavigateDestination({ view: "rescue-active", rescueMissionId: mission.id, detailSource: "rescue-active" });
                       }}
                     />
                   ) : (
@@ -743,8 +736,7 @@ export function RescueOperationsPortal({ onNavigate, page = "rescue-board" }: Re
                       missions={visibleInProgress}
                       group="in_progress"
                       onOpen={(mission) => {
-                        setDetailMissionId(mission.id);
-                        setDetailSource("rescue-active");
+                        onNavigateDestination({ view: "rescue-active", rescueMissionId: mission.id, detailSource: "rescue-active" });
                       }}
                     />
                   ) : (
@@ -759,8 +751,7 @@ export function RescueOperationsPortal({ onNavigate, page = "rescue-board" }: Re
                 missions={visibleHistory}
                 group="history"
                 onOpen={(mission) => {
-                  setDetailMissionId(mission.id);
-                  setDetailSource("rescue-history");
+                  onNavigateDestination({ view: "rescue-history", rescueMissionId: mission.id, detailSource: "rescue-history" });
                 }}
               />
             )}

@@ -1,5 +1,5 @@
 import { useAuth, useUser } from "@clerk/react";
-import { Suspense, lazy, useEffect, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect } from "react";
 import spcaLogo from "./assets/spca-logo.png";
 import "./App.css";
 import "./features/veterinary/veterinary.css";
@@ -93,42 +93,12 @@ const VeterinaryUpcomingAppointments = lazy(() =>
 );
 import type { VeterinaryAppointment } from "./types/veterinary";
 import type { Animal } from "./types/animal";
-import { isDispatcherRole } from "./utils/roles";
+import { isDevBypassEnabled } from "./utils/devBypass";
+import { useAraNavigation } from "./navigation/useAraNavigation";
+import type { View, VeterinaryParent, CareScene } from "./navigation/araNavigation";
+export type { View } from "./navigation/araNavigation";
 import { clearPendingAdoption, readPendingAdoption } from "./utils/pendingAdoption";
 import { apiBaseUrl } from "./services/apiClient.js";
-
-export type View =
-  | "home"
-  | "animal-listings"
-  | "about"
-  | "animal-profile"
-  | "login"
-  | "register"
-  | "dashboard"
-  | "staff-dashboard"
-  | "dispatcher-dashboard"
-  | "rescue-board"
-  | "rescue-active"
-  | "rescue-history"
-  | "user-dashboard"
-  | "register-animal"
-  | "manage-animals"
-  | "edit-animal"
-  | "rescue-report"
-  | "rescue-report-phone"
-  | "my-reports"
-  | "manage-rescue-reports"
-  | "adoption-apply"
-  | "my-applications"
-  | "my-profile"
-  | "manage-adoption-applications"
-  | "reports"
-  | "veterinary-dashboard"
-  | "veterinary-record"
-  | "veterinary-records"
-  | "vet-appointments"
-  | "vet-booking"
-  | "vet-appointment-details";
 
 function PageLoadingFallback() {
   return (
@@ -150,57 +120,32 @@ function PageLoadingFallback() {
 }
 
 function App() {
-  const [view, setView] = useState<View>("home");
-  // Tracks which animal is being edited so EditAnimalProfile knows which
-  // profile to load - there is no router/URL param for this, so it rides
-  // alongside `view` in local state.
-  const [selectedAnimalId, setSelectedAnimalId] = useState<string | null>(null);
-  // The follow-up appointment a vet clicked "View" on. Like selectedAnimalId,
-  // there is no router param, so it rides in local state alongside `view`.
-  const [selectedAppointment, setSelectedAppointment] = useState<VeterinaryAppointment | null>(null);
-  // The animal a visitor clicked "View full profile" on. Holds the whole
-  // object (not just an id) since the public listing fetch that got us here
-  // already returned every field - no second request needed to render the
-  // profile page.
-  const [viewedAnimal, setViewedAnimal] = useState<Animal | null>(null);
   const { isLoaded, isSignedIn } = useAuth();
   const { user } = useUser();
-  // Staff-first landing: a staff-type account that lands on the public Home
-  // page (fresh sign-in, or any reload since view resets to "home") is shown
-  // its own dashboard instead. This is a pure derivation during render - the
-  // first navigation the staff member makes records them as actively browsing
-  // (landedForUserId), so afterwards they can freely visit the public site.
-  //
-  // Veterinarians get the veterinary dashboard rather than the generic staff
-  // one, because the vet pages ship with a hidden site navbar (see SiteHeader
-  // `hideSiteNav`). Deriving it here rather than redirecting from an effect
-  // keeps a single source of truth: an effect calling setView would race this
-  // derivation, which would win and strand them on the staff dashboard.
-  const [landedForUserId, setLandedForUserId] = useState<string | null>(null);
-
-  const role = user?.publicMetadata.role;
-  const staffLanding =
-    !isLoaded || !isSignedIn || !user || view !== "home" || landedForUserId === user.id
-      ? null
-      : role === "manager" || role === "admin"
-        ? "dashboard"
-        : isDispatcherRole(role)
-          ? "dispatcher-dashboard"
-          : role === "veterinarian"
-            ? "veterinary-dashboard"
-            : role === "staff"
-              ? "staff-dashboard"
-              : null;
-  const activeView = staffLanding ?? view;
+  const authReady = isLoaded && (!isSignedIn || !!user);
+  const { navigation, navigateTo, historyReady } = useAraNavigation(authReady, {
+    userId: isSignedIn ? user?.id ?? null : null,
+    role: isSignedIn ? user?.publicMetadata.role : undefined,
+    devBypass: isDevBypassEnabled,
+  });
+  const { view: activeView, selectedAnimalId, viewedAnimal } = navigation;
+  const veterinaryParent = navigation.veterinaryParent ?? "veterinary-dashboard";
+  const invalidVeterinaryContext = useCallback(() => {
+    navigateTo({ view: veterinaryParent }, true);
+  }, [navigateTo, veterinaryParent]);
+  const invalidEditContext = useCallback(() => {
+    navigateTo({ view: "manage-animals" }, true);
+  }, [navigateTo]);
 
   // Resumes a pending adoption across the sign-in/register round trip: if an
   // anonymous visitor clicked Adopt, the animal id was stashed in
-  // localStorage (see AnimalProfilePage). Once a session exists and no animal
-  // is in memory, reload that animal from the public listing so the form
-  // survives auth and reloads. Staff-first landing wins - staff accounts keep
-  // their dashboard instead of being pulled into the form.
+  // localStorage (see AnimalProfilePage). Once a session exists and the
+  // visitor is on the public Home landing, reload that animal from the public
+  // listing so the form survives auth and reloads. Staff-first landing wins -
+  // staff accounts land on their own dashboard (not the public Home), so they
+  // are never pulled into the form.
   useEffect(() => {
-    if (!isLoaded || !isSignedIn || !user || viewedAnimal || staffLanding) return;
+    if (!isLoaded || !isSignedIn || !user || viewedAnimal || activeView !== "home") return;
     const pendingAnimalId = readPendingAdoption();
     if (!pendingAnimalId) return;
     let cancelled = false;
@@ -210,8 +155,7 @@ function App() {
         if (cancelled || !Array.isArray(list)) return;
         const found = list.find((item) => item.id === pendingAnimalId);
         if (found) {
-          setViewedAnimal(found);
-          setView("adoption-apply");
+          navigateTo({ view: "adoption-apply", viewedAnimal: found });
         } else {
           // Adopted, removed, or otherwise gone: drop the stash so it can
           // never resurface, and leave the visitor where they are.
@@ -222,34 +166,31 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [isLoaded, isSignedIn, user, viewedAnimal, staffLanding]);
+  }, [isLoaded, isSignedIn, user, viewedAnimal, activeView, navigateTo]);
 
-  // Keep the public Home page from flashing before auth resolves. Signed-in
-  // sessions briefly lag on the Clerk user profile hydration, so both
-  // `isLoaded` and the `user` object must be ready before any page paints.
-  // Anonymous visitors hit `isLoaded=true` -> `isSignedIn=false` and see Home.
-  if (!isLoaded || (isSignedIn && !user)) {
-    return <PageLoadingFallback />;
-  }
+  if (!authReady || !historyReady) return <PageLoadingFallback />;
 
-  // Marks the current user as on a session that chose its own view, so the
-  // staff-first landing above only applies once per sign-in session.
   function navigate(nextView: View) {
-    if (user) setLandedForUserId(user.id);
-    setView(nextView);
+    // Profile <-> application carries this entry's animal, never a global last selection.
+    navigateTo(nextView === "animal-profile" || nextView === "adoption-apply"
+      ? { view: nextView, viewedAnimal }
+      : { view: nextView });
   }
 
   function handleViewAnimal(animal: Animal) {
-    setViewedAnimal(animal);
-    setView("animal-profile");
+    navigateTo({ view: "animal-profile", viewedAnimal: animal });
   }
 
-  function openMyReports() {
-    setView("my-reports");
+  function openMyReports() { navigate("my-reports"); }
+  function openMyApplications() { navigate("my-applications"); }
+  function selectVeterinaryAnimal(animalId: string, parent: VeterinaryParent) {
+    navigateTo({ view: "veterinary-record", selectedAnimalId: animalId, veterinaryParent: parent, careScene: "history" });
   }
-
-  function openMyApplications() {
-    setView("my-applications");
+  function selectAppointment(appointment: VeterinaryAppointment, parent: VeterinaryParent) {
+    navigateTo({ view: "vet-appointment-details", selectedAppointmentId: appointment.appointment.id, veterinaryParent: parent });
+  }
+  function changeCareScene(careScene: CareScene, replace = false) {
+    navigateTo({ ...navigation, careScene }, replace);
   }
 
   if (activeView === "dashboard") {
@@ -276,41 +217,40 @@ function App() {
     );
   }
 
-  // Veterinary views read activeView (not view) and are handed navigate (not
-  // setView) for the same reason as the landing derivation above: staffLanding
-  // wins over view until the session is marked as browsing, so reading `view`
-  // would never show the vet dashboard, and a raw setView would leave the vet
-  // pinned to it with no way to reach the medical history.
   if (
     activeView === "veterinary-dashboard" ||
-    activeView === "veterinary-record" ||
-    activeView === "vet-appointment-details"
+    (activeView === "veterinary-record" && navigation.veterinaryParent === "veterinary-dashboard") ||
+    (activeView === "vet-appointment-details" && navigation.veterinaryParent === "veterinary-dashboard")
   ) {
     return (
       <Suspense fallback={<PageLoadingFallback />}>
         <VeterinaryDashboard
+          key={activeView + ":" + (selectedAnimalId ?? navigation.selectedAppointmentId ?? "")}
           currentView={activeView}
           onNavigate={navigate}
-          onSelectAnimal={(animalId) => {
-            setSelectedAnimalId(animalId);
-            navigate("veterinary-record");
-          }}
+          onSelectAnimal={(id) => selectVeterinaryAnimal(id, "veterinary-dashboard")}
           selectedAnimalId={selectedAnimalId}
-          selectedAppointment={activeView === "vet-appointment-details" ? selectedAppointment : null}
-          onSelectAppointment={(appointment) => {
-            setSelectedAppointment(appointment);
-            navigate("vet-appointment-details");
-          }}
+          selectedAppointmentId={navigation.selectedAppointmentId}
+          onSelectAppointment={(appointment) => selectAppointment(appointment, "veterinary-dashboard")}
+          careScene={navigation.careScene ?? "history"}
+          onChangeCareScene={changeCareScene}
+          onInvalidContext={invalidVeterinaryContext}
           onViewAnimalProfile={handleViewAnimal}
         />
       </Suspense>
     );
   }
 
-  if (activeView === "vet-appointments") {
+  if (activeView === "vet-appointments" || (activeView === "vet-appointment-details" && navigation.veterinaryParent === "vet-appointments")) {
     return (
       <Suspense fallback={<PageLoadingFallback />}>
-        <VeterinaryUpcomingAppointments currentView={activeView} onNavigate={navigate} />
+        <VeterinaryUpcomingAppointments
+          key={navigation.selectedAppointmentId ?? "appointments"}
+          currentView={activeView} onNavigate={navigate}
+          selectedAppointmentId={navigation.selectedAppointmentId}
+          onSelectAppointment={(appointment) => selectAppointment(appointment, "vet-appointments")}
+          onInvalidContext={invalidVeterinaryContext}
+        />
       </Suspense>
     );
   }
@@ -323,10 +263,18 @@ function App() {
     );
   }
 
-  if (activeView === "veterinary-records") {
+  if (activeView === "veterinary-records" || (activeView === "veterinary-record" && navigation.veterinaryParent === "veterinary-records")) {
     return (
       <Suspense fallback={<PageLoadingFallback />}>
-        <VeterinaryMedicalHistory currentView={activeView} onNavigate={navigate} />
+        <VeterinaryMedicalHistory
+          key={selectedAnimalId ?? "records"}
+          currentView={activeView} onNavigate={navigate}
+          selectedAnimalId={selectedAnimalId}
+          onSelectAnimal={(id) => selectVeterinaryAnimal(id, "veterinary-records")}
+          careScene={navigation.careScene ?? "history"}
+          onChangeCareScene={changeCareScene}
+          onInvalidContext={invalidVeterinaryContext}
+        />
       </Suspense>
     );
   }
@@ -334,7 +282,7 @@ function App() {
   if (activeView === "dispatcher-dashboard") {
     return (
       <Suspense fallback={<PageLoadingFallback />}>
-        <RescueOperationsPortal page="rescue-board" onNavigate={navigate} />
+        <RescueOperationsPortal page="rescue-board" onNavigate={navigate} onNavigateDestination={navigateTo} />
       </Suspense>
     );
   }
@@ -373,6 +321,7 @@ function App() {
   if (activeView === "animal-profile" && viewedAnimal) {
     return (
       <AnimalProfilePage
+        key={viewedAnimal.id}
         animal={viewedAnimal}
         isLoaded={isLoaded}
         isSignedIn={isSignedIn}
@@ -395,10 +344,7 @@ function App() {
       <Suspense fallback={<PageLoadingFallback />}>
         <ManageAnimalProfiles
           onNavigate={navigate}
-          onSelectAnimal={(animalId) => {
-            setSelectedAnimalId(animalId);
-            navigate("edit-animal");
-          }}
+          onSelectAnimal={(animalId) => navigateTo({ view: "edit-animal", selectedAnimalId: animalId })}
         />
       </Suspense>
     );
@@ -407,7 +353,7 @@ function App() {
   if (activeView === "edit-animal" && selectedAnimalId) {
     return (
       <Suspense fallback={<PageLoadingFallback />}>
-        <EditAnimalProfile animalId={selectedAnimalId} onNavigate={navigate} />
+        <EditAnimalProfile key={selectedAnimalId} animalId={selectedAnimalId} onNavigate={navigate} onInvalidContext={invalidEditContext} />
       </Suspense>
     );
   }
@@ -463,7 +409,11 @@ function App() {
   if (activeView === "rescue-board" || activeView === "rescue-active" || activeView === "rescue-history") {
     return (
       <Suspense fallback={<PageLoadingFallback />}>
-        <RescueOperationsPortal page={activeView} onNavigate={navigate} />
+        <RescueOperationsPortal
+          page={activeView} onNavigate={navigate} onNavigateDestination={navigateTo}
+          detailMissionId={navigation.rescueMissionId ?? null}
+          detailSource={navigation.detailSource ?? null}
+        />
       </Suspense>
     );
   }
@@ -472,7 +422,8 @@ function App() {
     return (
       <Suspense fallback={<PageLoadingFallback />}>
         <AdoptionApplicationForm
-          animal={viewedAnimal}
+          key={viewedAnimal?.id}
+          animal={viewedAnimal ?? null}
           isLoaded={isLoaded}
           isSignedIn={isSignedIn}
           onShowMyApplications={openMyApplications}
