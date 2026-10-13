@@ -1,5 +1,5 @@
 import { useAuth, useUser } from "@clerk/react";
-import { Suspense, lazy, useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import spcaLogo from "./assets/spca-logo.png";
 import "./App.css";
 import "./features/veterinary/veterinary.css";
@@ -95,7 +95,8 @@ import type { VeterinaryAppointment } from "./types/veterinary";
 import type { Animal } from "./types/animal";
 import { isDispatcherRole } from "./utils/roles";
 import { clearPendingAdoption, readPendingAdoption } from "./utils/pendingAdoption";
-import { apiBaseUrl } from "./services/apiClient.js";
+import { apiBaseUrl, authHeaders } from "./services/apiClient.js";
+import { getFreshClerkToken } from "./utils/clerkToken";
 
 export type View =
   | "home"
@@ -163,7 +164,7 @@ function App() {
   // already returned every field - no second request needed to render the
   // profile page.
   const [viewedAnimal, setViewedAnimal] = useState<Animal | null>(null);
-  const { isLoaded, isSignedIn } = useAuth();
+  const { isLoaded, isSignedIn, getToken } = useAuth();
   const { user } = useUser();
   // Staff-first landing: a staff-type account that lands on the public Home
   // page (fresh sign-in, or any reload since view resets to "home") is shown
@@ -223,6 +224,47 @@ function App() {
       cancelled = true;
     };
   }, [isLoaded, isSignedIn, user, viewedAnimal, staffLanding]);
+
+  // Invitation role reconcile: the Clerk user.created webhook normally stamps
+  // publicMetadata.role from the staff invitation, but in local dev Clerk can't
+  // POST to localhost (no public URL), and an EXISTING account accepting an
+  // invitation only fires user.updated - which may also never arrive. Without
+  // a role the invitee is 403'd everywhere, so on session load ask our own
+  // API to self-reconcile: if a pending/accepted invitation matches this
+  // user's email and they have no role yet, it stamps one. Runs once per
+  // user per page load and only for role-less accounts; a successful stamp
+  // reloads the Clerk user so the staff-first landing derivation picks the
+  // new role up without a manual refresh.
+  const reconcileAttemptedForUserId = useRef<string | null>(null);
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn || !user) return;
+    if (user.publicMetadata.role) return;
+    if (reconcileAttemptedForUserId.current === user.id) return;
+    reconcileAttemptedForUserId.current = user.id;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const token = await getFreshClerkToken(getToken);
+        if (!token || cancelled) return;
+        const response = await fetch(`${apiBaseUrl}/api/admin/invitations/reconcile`, {
+          method: "POST",
+          headers: authHeaders(token),
+        });
+        if (!response.ok || cancelled) return;
+        const result = (await response.json()) as { role: string | null; stamped: boolean };
+        if (result.stamped && !cancelled) {
+          await user.reload();
+        }
+      } catch {
+        // Best-effort fallback only - the webhook path still applies where
+        // it works (e.g. production), so a failure here must not block the UI.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoaded, isSignedIn, user, getToken]);
 
   // Keep the public Home page from flashing before auth resolves. Signed-in
   // sessions briefly lag on the Clerk user profile hydration, so both

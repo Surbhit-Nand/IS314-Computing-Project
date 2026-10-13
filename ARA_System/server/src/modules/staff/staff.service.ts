@@ -1,4 +1,5 @@
 import { clerkClient } from "../../services/clerkClient.js";
+import { findInvitationRole, stampInvitationRole } from "../../services/invitationRole.js";
 import { logAuditEntry } from "../../shared/audit/audit.service.js";
 import { normalizeRole, invitationalStaffRoles } from "../../shared/types/roles.js";
 
@@ -127,7 +128,25 @@ export async function revokeStaffRole(actorClerkUserId: string, targetUserId: st
 }
 
 // Withdraws a pending invitation so the recipient can no longer accept it.
+// Managers may only revoke invitations for staff/veterinarian/dispatcher
+// roles - revoking a manager/admin invitation needs an admin, mirroring the
+// rule for editing those roles. The invitation's role is looked up first via
+// an id-targeted query so the check runs before anything is revoked.
 export async function revokeInvitation(actorClerkUserId: string, invitationId: string) {
+	const lookup = await clerkClient.invitations.getInvitationList({ query: invitationId, limit: 10 });
+	const target = lookup.data.find((invitation) => invitation.id === invitationId);
+	if (target) {
+		const actor = await clerkClient.users.getUser(actorClerkUserId);
+		const invitedRole = target.publicMetadata?.role;
+		if (
+			getStaffRole(actor) !== "admin" &&
+			typeof invitedRole === "string" &&
+			(adminOnlyRoles as readonly string[]).includes(invitedRole)
+		) {
+			throw new StaffActionError("Only an admin can revoke a Manager or Admin invitation.", 403);
+		}
+	}
+
 	let revoked: Awaited<ReturnType<typeof clerkClient.invitations.revokeInvitation>>;
 	try {
 		revoked = await clerkClient.invitations.revokeInvitation(invitationId);
@@ -152,13 +171,79 @@ export async function revokeInvitation(actorClerkUserId: string, invitationId: s
 	return { id: revoked.id, emailAddress: revoked.emailAddress, status: revoked.status };
 }
 
-export async function inviteStaffMember(emailAddress: string, role: StaffRole) {
-	return clerkClient.invitations.createInvitation({
+// Permission gate for sending invitations. Mirrors assertCanManageTarget's
+// admin-only rule: a manager may invite staff/veterinarian/dispatcher, but
+// only an admin may invite a manager or admin. Without this, any manager
+// could escalate themselves a peer admin account purely by invitation.
+async function assertCanInvite(actorClerkUserId: string, role: StaffRole) {
+	const actor = await clerkClient.users.getUser(actorClerkUserId);
+	if (getStaffRole(actor) !== "admin" && adminOnlyRoles.includes(role)) {
+		throw new StaffActionError("Only an admin can invite a Manager or Admin.", 403);
+	}
+}
+
+export async function inviteStaffMember(actorClerkUserId: string, emailAddress: string, role: StaffRole) {
+	await assertCanInvite(actorClerkUserId, role);
+
+	const invitation = await clerkClient.invitations.createInvitation({
 		emailAddress,
 		notify: true,
 		publicMetadata: { role },
 		redirectUrl: process.env.CLIENT_ORIGIN ?? "http://localhost:5173",
 	});
+
+	// The invite email is already sent at this point, so an audit failure
+	// must not turn the response into a 500 (the admin would retry into a
+	// duplicate_record 409 for an invitation that already exists).
+	try {
+		await logAuditEntry({
+			actorClerkUserId,
+			action: "staff.invitation.created",
+			entityType: "invitation",
+			entityId: invitation.id,
+			metadata: { emailAddress: invitation.emailAddress, role },
+		});
+	} catch (error) {
+		console.error("[INVITATION_AUDIT_FAILED]", error instanceof Error ? error.message : error);
+	}
+
+	return invitation;
+}
+
+// Fallback for the invitation -> user role handoff when the Clerk webhook
+// doesn't arrive (local dev has no public URL for Clerk to POST to) or the
+// invitee's account existed before the invitation was accepted (only
+// user.updated fires, which older webhook deployments may miss). Any
+// signed-in user may call it for THEIR OWN account only: if they have no
+// staff role yet but a pending/accepted invitation exists for their email,
+// the invitation's role is stamped now. Never overwrites an existing role.
+export async function reconcileOwnRoleFromInvitation(userId: string) {
+	const user = await getUserOrThrow(userId);
+
+	const existingRole = normalizeRole(user.publicMetadata?.role);
+	if (existingRole !== undefined) {
+		return { role: existingRole, stamped: false as const };
+	}
+
+	const email = user.primaryEmailAddress?.emailAddress;
+	if (!email) {
+		return { role: null, stamped: false as const };
+	}
+
+	const role = await findInvitationRole(email);
+	if (!role) {
+		return { role: null, stamped: false as const };
+	}
+
+	await stampInvitationRole({
+		userId,
+		role,
+		emailAddress: email,
+		auditActor: userId,
+		source: "self-reconcile",
+	});
+
+	return { role, stamped: true as const };
 }
 
 export async function listStaffAccess() {
