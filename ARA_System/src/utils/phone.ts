@@ -68,6 +68,15 @@ export function expectedLengthLabel(code: string = DEFAULT_DIAL_CODE): string {
     : `${band.minLength}–${band.maxLength} digits`;
 }
 
+// Live-typing guard for the national number input. Desktop keyboards,
+// autofill and paste can all insert letters despite inputMode="numeric", so
+// the input strips anything that isn't a digit or a common phone separator
+// on every keystroke. Mirrors the charset isValidPhoneNational accepts, so
+// anything reaching state is submittable (length is still checked on submit).
+export function sanitizePhoneNational(value: string): string {
+	return value.replace(/[^0-9\s+\-()]/g, "");
+}
+
 // Digit count of the typed national part (for the live counter).
 export function countPhoneDigits(national: string): number {
   return national.replace(/\D/g, "").length;

@@ -8,6 +8,7 @@ import {
   expectedLengthLabel,
   formatPhone,
   isValidPhoneNational,
+  sanitizePhoneNational,
 } from "./phone.js";
 
 describe("phone helpers", () => {
@@ -53,6 +54,14 @@ describe("phone helpers", () => {
   it("counts digits for the live counter", () => {
     assert.equal(countPhoneDigits("990 000"), 6);
     assert.equal(countPhoneDigits(""), 0);
+  });
+
+  it("strips letters and symbols while typing, keeping digits and separators", () => {
+    assert.equal(sanitizePhoneNational("99abc0000"), "990000");
+    assert.equal(sanitizePhoneNational("call 9900000 now!"), " 9900000 ");
+    assert.equal(sanitizePhoneNational("+679 (990) 000-0"), "+679 (990) 000-0");
+    assert.equal(sanitizePhoneNational("9900000"), "9900000");
+    assert.equal(sanitizePhoneNational(""), "");
   });
 
   it("ships a curated country set with bands and examples", () => {

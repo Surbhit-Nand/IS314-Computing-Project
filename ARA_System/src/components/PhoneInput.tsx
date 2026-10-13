@@ -1,5 +1,10 @@
 import type { ReactNode } from "react";
-import { countPhoneDigits, dialCodeByCode, expectedLengthLabel } from "../utils/phone";
+import {
+  countPhoneDigits,
+  dialCodeByCode,
+  expectedLengthLabel,
+  sanitizePhoneNational,
+} from "../utils/phone";
 import { CountryPicker } from "./CountryPicker";
 
 type PhoneInputProps = {
@@ -46,7 +51,7 @@ export function PhoneInput({
           placeholder={placeholder ?? `e.g. ${band.example} (${expectedLengthLabel(code)})`}
           value={number}
           maxLength={band.maxLength + Math.ceil(band.maxLength / 3)}
-          onChange={(event) => onNumberChange(event.target.value)}
+          onChange={(event) => onNumberChange(sanitizePhoneNational(event.target.value))}
           required={required}
           aria-describedby={`${inputId}-hint`}
         />
