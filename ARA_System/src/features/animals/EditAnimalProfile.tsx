@@ -1,5 +1,5 @@
 import { SignInButton, useAuth, useUser } from "@clerk/react";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import spcaLogo from "../../assets/spca-logo.png";
 import { SiteHeader, type SiteHeaderView } from "../../components/SiteHeader";
 import { Breadcrumbs } from "../../components/Breadcrumbs";
@@ -14,6 +14,7 @@ import { validateAnimalForm } from "./validateAnimalForm";
 type EditAnimalProfileProps = {
   animalId: string;
   onNavigate: (view: SiteHeaderView | "manage-animals") => void;
+  onInvalidContext: () => void;
 };
 
 // Converts the API's Animal record (with nullable fields) into the plain
@@ -42,7 +43,7 @@ function toFormInput(animal: Animal): AnimalFormInput {
 
 // Staff-only page: loads one animal's profile and lets staff update it
 // through the same field set used for registration.
-export function EditAnimalProfile({ animalId, onNavigate }: EditAnimalProfileProps) {
+export function EditAnimalProfile({ animalId, onNavigate, onInvalidContext }: EditAnimalProfileProps) {
   const { getToken, isLoaded, isSignedIn } = useAuth();
   const { user } = useUser();
   const role = user?.publicMetadata.role;
@@ -60,30 +61,45 @@ export function EditAnimalProfile({ animalId, onNavigate }: EditAnimalProfilePro
   // existing error-handling path (alert + inline .invite-feedback.error
   // message), which is untouched.
   const [successToastMessage, setSuccessToastMessage] = useState("");
+  const navigationVersion = useRef(0);
+  const returnTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => {
+    navigationVersion.current += 1;
+    window.clearTimeout(returnTimer.current);
+  }, [animalId]);
 
   // Fetches the animal to edit once staff access is confirmed.
   useEffect(() => {
     if (!isLoaded || !isSignedIn || !hasStaffAccess) return;
+    let cancelled = false;
 
     void (async () => {
       try {
         const token = await getToken();
         if (!token) throw new Error("Your Clerk session has expired.");
         const animal = await fetchAnimalById(token, animalId);
+        if (cancelled) return;
         setForm(toFormInput(animal));
       } catch (error) {
+        if (cancelled) return;
+        if (error instanceof Error && /animal not found/i.test(error.message)) {
+          onInvalidContext();
+          return;
+        }
         setLoadError(error instanceof Error ? error.message : "Animal profile could not be loaded.");
       } finally {
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);
       }
     })();
-  }, [animalId, getToken, hasStaffAccess, isLoaded, isSignedIn]);
+    return () => { cancelled = true; };
+  }, [animalId, getToken, hasStaffAccess, isLoaded, isSignedIn, onInvalidContext]);
 
   // Validates the form, shows an alert and blocks submission if anything
   // required is missing/invalid, then saves the changes.
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!form) return;
+    const version = navigationVersion.current;
 
     const validationError = validateAnimalForm(form);
     if (validationError) {
@@ -99,6 +115,7 @@ export function EditAnimalProfile({ animalId, onNavigate }: EditAnimalProfilePro
       const token = await getToken();
       if (!token) throw new Error("Your Clerk session has expired. Please sign in again.");
       await updateAnimal(token, animalId, form);
+      if (version !== navigationVersion.current) return;
       setSaveMessage("Animal profile updated.");
       setSuccessToastMessage(`✓ ${form.name} updated successfully!`);
       // Give staff a moment to actually see the toast before the page
@@ -107,8 +124,9 @@ export function EditAnimalProfile({ animalId, onNavigate }: EditAnimalProfilePro
       // isSubmitting deliberately stays true here (not reset in a finally)
       // so "Save changes" stays disabled for this brief window rather than
       // becoming re-clickable right before navigating away.
-      window.setTimeout(() => onNavigate("manage-animals"), 1200);
+      returnTimer.current = window.setTimeout(() => onNavigate("manage-animals"), 1200);
     } catch (error) {
+      if (version !== navigationVersion.current) return;
       const message = error instanceof Error ? error.message : "The animal profile could not be updated.";
       window.alert(message);
       setSaveError(message);

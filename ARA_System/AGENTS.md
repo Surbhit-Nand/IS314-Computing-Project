@@ -42,9 +42,17 @@ into a single record. Three modules, plus cross-cutting donations:
   (staff), `/api/rescue`, `/api/adoptions`, `/api/donations`, `/api/reports`
   (manager/admin), `/api/veterinary` (veterinarian), `/api/webhooks` (Clerk
   webhook, mounted before the JSON body parser because it needs the raw body).
-- **No frontend router**: `src/App.tsx` switches on a `view` string in local
-  state and threads `onNavigate={setView}` into every page. To add a page:
-  extend the `View` union + add a branch in `App.tsx`. There are no URL params.
+- **Frontend navigation (history-state store, no URL router)**: `src/App.tsx`
+  renders the view from `useAraNavigation` (`src/navigation/`), which keeps a
+  zod-validated `NavigationDestination` (view + selected ids/snapshots) in
+  `history.state` so browser back/forward works. The URL path/query never
+  changes (Clerk's hash is preserved). Pages navigate via `navigate(view)` for
+  plain views or `navigateTo({...})` for detail contexts. To add a page:
+  extend the `views` list in `src/navigation/araNavigation.ts` (+ `canVisit`
+  gate + `resolveNavigation` context if it carries detail state) and add a
+  branch in `App.tsx`. Anonymous Adopt across sign-in resumes via the
+  `pendingAdoption` localStorage stash in `App.tsx`; invitees get their role
+  via the `invitations/reconcile` effect there.
 - **Auth middleware**: `requireClerkSession` (`server/src/middleware/auth.ts`)
   resolves the token into `request.clerkUserId`; `requireStaffOrAbove` /
   `requireRescueQueueAccess` / `requireDispatcher` / `requireManagerOrAdmin`
