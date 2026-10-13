@@ -113,7 +113,22 @@ staffRouter.post(
 				status: invitation.status,
 			});
 		} catch (error) {
-			console.error("[INVITATION_ERROR]", error instanceof Error ? error.message : error);
+			// Server-side only detail (status/code/trace id) - the client
+			// still gets the generic message below, never raw provider output.
+			const clerkErr = error as {
+				status?: unknown;
+				clerkTraceId?: unknown;
+				errors?: Array<{ code?: unknown }>;
+			};
+			console.error(
+				"[INVITATION_ERROR]",
+				error instanceof Error ? error.message : error,
+				JSON.stringify({
+					status: clerkErr?.status ?? null,
+					code: clerkErr?.errors?.[0]?.code ?? null,
+					traceId: clerkErr?.clerkTraceId ?? null,
+				}),
+			);
 
 			if (handleStaffActionError(error, response)) return;
 
