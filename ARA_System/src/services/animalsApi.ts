@@ -1,4 +1,4 @@
-import type { Animal, AnimalFormInput } from "../types/animal";
+import type { Animal, AnimalPayload } from "../types/animal";
 
 // Same base URL / dev-server-not-running guard pattern used in
 // ManagerDashboard.tsx - centralised here so every animals page shares one
@@ -89,7 +89,7 @@ export async function uploadAnimalPhoto(token: string, file: File): Promise<stri
 
 // Creates a new animal profile. The server generates the unique Animal ID
 // and returns it as part of the created record.
-export async function createAnimal(token: string, input: AnimalFormInput): Promise<Animal> {
+export async function createAnimal(token: string, input: AnimalPayload): Promise<Animal> {
   const response = await fetch(`${apiBaseUrl}/api/animals`, {
     method: "POST",
     headers: authHeaders(token, { "Content-Type": "application/json" }),
@@ -108,7 +108,7 @@ export async function createAnimal(token: string, input: AnimalFormInput): Promi
 export async function updateAnimal(
   token: string,
   id: string,
-  input: Partial<AnimalFormInput>,
+  input: Partial<AnimalPayload>,
 ): Promise<Animal> {
   const response = await fetch(`${apiBaseUrl}/api/animals/${id}`, {
     method: "PATCH",

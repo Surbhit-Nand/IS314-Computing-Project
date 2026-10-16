@@ -335,6 +335,11 @@ export function AnimalProfileFields({ value, onChange, getToken, breedOptions, s
             onChange={(event) => handleSpeciesChange(event.target.value as FormSpecies)}
             {...fieldProps("type")}
           >
+            {/* Placeholder only (Register): shown while nothing is chosen,
+                never one of the choices. */}
+            <option value="" disabled hidden>
+              Select species
+            </option>
             <option value="dog">Dog</option>
             <option value="cat">Cat</option>
             <option value="other">Other (type the animal)</option>
@@ -348,7 +353,15 @@ export function AnimalProfileFields({ value, onChange, getToken, breedOptions, s
           "Other", which turns it into a typed box; a species with no list
           (e.g. Snake) always types its breed. The typed box is one element
           for both cases, so a list arriving mid-typing never steals focus. */}
-      {showBreedTextBox ? (
+      {value.type === "" ? (
+        // No species chosen yet (Register): Breed waits for it.
+        <label>
+          <FieldLabel needsValue={false}>Breed</FieldLabel>
+          <select value="" disabled>
+            <option value="">Select species first</option>
+          </select>
+        </label>
+      ) : showBreedTextBox ? (
         <label>
           <FieldLabel needsValue={Boolean(errors.breed)}>Breed</FieldLabel>
           <input
@@ -418,18 +431,42 @@ export function AnimalProfileFields({ value, onChange, getToken, breedOptions, s
         inputProps={fieldProps("veterinaryPriority")}
       />
 
-      <label>
-        <FieldLabel needsValue={Boolean(errors.estimatedAge)}>Estimated age</FieldLabel>
-        <input
-          type="text"
-          placeholder="e.g. 2 years"
-          value={value.estimatedAge}
-          onChange={(event) => setField("estimatedAge", event.target.value)}
-          required
-          {...fieldProps("estimatedAge")}
-        />
-        <FieldError id="animal-estimatedAge-error" message={errorFor("estimatedAge")} />
-      </label>
+      {/* Estimated age: number + unit, saved as "2.5 Years" / "6 Months". */}
+      <div className="animal-age-field">
+        <span className="animal-age-label" id="animal-age-label">
+          <FieldLabel needsValue={Boolean(errors.ageValue)}>Estimated age</FieldLabel>
+        </span>
+        <div className="animal-age-inputs">
+          <input
+            type="number"
+            inputMode="decimal"
+            min="0"
+            step="0.1"
+            placeholder="e.g. 2"
+            aria-labelledby="animal-age-label"
+            value={value.ageValue}
+            onChange={(event) => setField("ageValue", event.target.value)}
+            required
+            {...fieldProps("ageValue")}
+          />
+          <select
+            aria-label="Age unit"
+            value={value.ageUnit}
+            onChange={(event) => setField("ageUnit", event.target.value as AnimalFormInput["ageUnit"])}
+            required
+            aria-invalid={errorFor("ageValue") && !value.ageUnit ? true : undefined}
+            onBlur={() => markTouched("ageValue")}
+          >
+            <option value="" disabled hidden>
+              Unit
+            </option>
+            <option value="weeks">Weeks</option>
+            <option value="months">Months</option>
+            <option value="years">Years</option>
+          </select>
+        </div>
+        <FieldError id="animal-ageValue-error" message={errorFor("ageValue")} />
+      </div>
 
       <label>
         <FieldLabel needsValue={Boolean(errors.gender)}>Gender</FieldLabel>
@@ -480,6 +517,9 @@ export function AnimalProfileFields({ value, onChange, getToken, breedOptions, s
           }
           {...fieldProps("vaccinationStatus")}
         >
+          <option value="" disabled hidden>
+            Select vaccination status
+          </option>
           <option value="not_vaccinated">Not yet vaccinated - open</option>
           <option value="vaccinated">Vaccinated</option>
         </select>

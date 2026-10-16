@@ -2162,6 +2162,20 @@
   color: var(--red);
 }
 
+/* Estimated age: number box + unit dropdown side by side, laid out like the
+   other fields' labels. */
+.animal-age-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.animal-age-inputs {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 8rem);
+  gap: 8px;
+}
+
 .animal-photo-list {
   display: flex;
   flex-wrap: wrap;
@@ -2225,6 +2239,60 @@
 .animal-search-input:focus {
   border-color: var(--teal);
   box-shadow: 0 0 0 3px rgba(21, 135, 195, 0.12);
+}
+
+/* Manage animal profiles: sort + filter bar under the search box. Wraps onto
+   extra lines on narrow screens; selects match .animal-search-input. */
+.manage-animals-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 14px;
+  margin-bottom: 18px;
+}
+
+.manage-animals-control {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 150px;
+  min-width: 0;
+  color: var(--slate);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.manage-animals-control select {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--navy);
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  outline: none;
+}
+
+.manage-animals-control select:focus {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px rgba(21, 135, 195, 0.12);
+}
+
+.manage-animals-count {
+  margin: 0 0 0 auto;
+  align-self: center;
+  color: var(--slate);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+@media (max-width: 620px) {
+  .manage-animals-count {
+    margin-left: 0;
+    flex-basis: 100%;
+  }
 }
 
 .animal-table {

@@ -14,7 +14,14 @@ import {
 	updateAnimalProfile,
 	uploadAnimalPhoto,
 } from "./animals.service.js";
-import { validateNarrativeText } from "./animalFieldRules.js";
+import {
+	formatAnimalName,
+	formatEstimatedAge,
+	parseEstimatedAge,
+	validateAnimalName,
+	validateEstimatedAgeText,
+	validateNarrativeText,
+} from "./animalFieldRules.js";
 import {
 	findBreedName,
 	findBreedNames,
@@ -48,7 +55,15 @@ const speciesSchema = z.enum(["dog", "cat", "other"], { error: "Species must be 
 // registration date (see registerAnimal in animals.service.ts), staff never
 // enter it and it's never part of an edit either.
 const animalSchema = z.object({
-	name: z.string().min(1),
+	// Letters (plus spaces, hyphens, apostrophes), 2-30 characters, no junk;
+	// saved with each word capitalised (validateAnimalName / formatAnimalName).
+	name: z
+		.string()
+		.superRefine((value, context) => {
+			const problem = validateAnimalName(value);
+			if (problem) context.addIssue({ code: "custom", message: problem });
+		})
+		.transform(formatAnimalName),
 	type: speciesSchema,
 	// Required when type is "other" (the typed species, e.g. "Rabbit");
 	// ignored and cleared for dogs and cats. Checked in resolveSpeciesAndBreed().
@@ -57,10 +72,20 @@ const animalSchema = z.object({
 	// dog/cat breed is stored in the table's spelling, anything else must pass
 	// the typed-breed rules.
 	breed: z.string().trim().min(1, "Breed is required."),
-	// Left optional here, matching its pre-existing behaviour - the lecturer
-	// confirmed Age validation already works correctly (blocked client-side
-	// in validateAnimalForm.ts), so this field is untouched per that feedback.
-	estimatedAge: z.string().optional(),
+	// The form's number + unit, stored as text in the existing format
+	// ("6 Months", "2.5 Years"). Checked with the same rules as the form
+	// (validateEstimatedAgeText) and re-formatted, so junk like "211345r6tyu8"
+	// can't be saved even by bypassing the form.
+	estimatedAge: z
+		.string()
+		.superRefine((value, context) => {
+			const problem = validateEstimatedAgeText(value);
+			if (problem) context.addIssue({ code: "custom", message: problem });
+		})
+		.transform((value) => {
+			const parsed = parseEstimatedAge(value);
+			return parsed ? formatEstimatedAge(parsed.value, parsed.unit) : value;
+		}),
 	gender: z.string().optional(),
 	colour: z.string().min(1),
 	description: narrativeText("Description"),
@@ -84,7 +109,9 @@ const animalSchema = z.object({
 		.optional(),
 });
 
-// Mirrors DEFAULT_VETERINARY_PRIORITY in src/types/animal.ts.
+// Safety net only: the Register form makes staff choose a priority, so this
+// applies just to API requests that send none. Moderate = "stable condition
+// that still requires veterinary assessment", true of any new intake.
 const DEFAULT_VETERINARY_PRIORITY = "moderate";
 
 // Same shape, but every field is optional since an edit can touch just one

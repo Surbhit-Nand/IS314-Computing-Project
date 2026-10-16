@@ -6,8 +6,8 @@ import { PRIORITY_OPTIONS, type VeterinaryPriority } from "../../types/animal";
 //
 // Kept self-contained ON PURPOSE - the group hasn't settled who owns priority
 // (staff vs vet). To remove it from the forms later: delete this file, its
-// one usage in AnimalProfileFields.tsx, `veterinaryPriority` +
-// DEFAULT_VETERINARY_PRIORITY in types/animal.ts, the check in
+// one usage in AnimalProfileFields.tsx, `veterinaryPriority` in
+// types/animal.ts, the check in
 // validateAnimalForm.ts, the two form pages, and the `veterinaryPriority`
 // field + default in animals.routes.ts.
 
@@ -29,7 +29,11 @@ export function VeterinaryPriorityField({ value, onChange, label, error, inputPr
         required
         {...inputProps}
       >
-        <option value="">Select priority</option>
+        {/* Placeholder only: shown in the closed box while nothing is chosen,
+            but hidden + disabled so it's never one of the choices. */}
+        <option value="" disabled hidden>
+          Select priority
+        </option>
         {PRIORITY_OPTIONS.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label} - {option.description}

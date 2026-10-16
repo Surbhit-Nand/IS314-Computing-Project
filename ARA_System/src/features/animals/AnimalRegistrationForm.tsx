@@ -3,40 +3,46 @@ import { useState, type FormEvent } from "react";
 import spcaLogo from "../../assets/spca-logo.png";
 import { SiteHeader, type SiteHeaderView } from "../../components/SiteHeader";
 import { Breadcrumbs } from "../../components/Breadcrumbs";
-import { SuccessToast } from "../../components/SuccessToast";
 import { createAnimal } from "../../services/animalsApi";
-import { DEFAULT_VETERINARY_PRIORITY, type AnimalFormInput } from "../../types/animal";
+import type { AnimalFormInput } from "../../types/animal";
 import { isDevBypassEnabled } from "../../utils/devBypass";
+import { setFlashToast } from "../../utils/flashToast";
 import { AnimalProfileFields } from "./AnimalProfileFields";
 import { useBreedOptions } from "./useBreedOptions";
-import { validateAnimalForm } from "./validateAnimalForm";
+import { toAnimalPayload, validateAnimalForm } from "./validateAnimalForm";
 
 type AnimalRegistrationFormProps = {
-  onNavigate: (view: SiteHeaderView | "staff-dashboard") => void;
+  onNavigate: (view: SiteHeaderView | "staff-dashboard" | "manage-animals") => void;
 };
 
+// Nothing pre-selected: Species, Veterinary priority and Vaccination status
+// start on their "Select ..." placeholders, so staff make each choice
+// deliberately (validateAnimalForm blocks saving until they do).
 const emptyForm: AnimalFormInput = {
   name: "",
-  type: "dog",
+  type: "",
   speciesName: "",
   breed: "",
-  estimatedAge: "",
+  ageValue: "",
+  ageUnit: "",
   gender: "",
   colour: "",
   description: "",
   behaviour: "",
   rescueHistory: "",
   photoUrls: [],
-  vaccinationStatus: "not_vaccinated",
+  vaccinationStatus: "",
   size: "",
-  // Pre-selected so a new animal never reaches the vet queue as "Not set";
-  // staff change it on the form if the animal is more or less urgent.
-  veterinaryPriority: DEFAULT_VETERINARY_PRIORITY,
+  veterinaryPriority: "",
 };
+
+// How long the "registered" toast stays on the Manage page - long enough to
+// read and note the new Animal ID.
+const REGISTERED_TOAST_MS = 8000;
 
 // Staff-only page: registers a brand-new animal profile. The unique Animal
 // ID is not entered here - the server generates it, and it's shown back to
-// staff once the profile is created successfully.
+// staff in the success toast on Manage animal profiles.
 export function AnimalRegistrationForm({ onNavigate }: AnimalRegistrationFormProps) {
   const { getToken, isLoaded, isSignedIn } = useAuth();
   const { user } = useUser();
@@ -48,17 +54,8 @@ export function AnimalRegistrationForm({ onNavigate }: AnimalRegistrationFormPro
   const breedOptions = useBreedOptions(form.type, form.speciesName);
   // Turned on by a blocked submit so every field's problem shows at once.
   const [showAllErrors, setShowAllErrors] = useState(false);
-  // Bumped after a successful registration so the fields remount fresh for
-  // the next animal (typed-breed mode, "touched" state and focus all reset).
-  const [fieldsKey, setFieldsKey] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-  const [createdPublicId, setCreatedPublicId] = useState("");
-  // Separate from errorMessage/createdPublicId on purpose: this only ever
-  // gets set in the success branch below, so it can't collide with or hide
-  // the existing error-handling path (alert + inline .invite-feedback.error
-  // message), which is untouched.
-  const [successToastMessage, setSuccessToastMessage] = useState("");
 
   // Validates the form, shows an alert and blocks submission if anything
   // required is missing/invalid, then sends the profile to the server.
@@ -79,17 +76,20 @@ export function AnimalRegistrationForm({ onNavigate }: AnimalRegistrationFormPro
       const token = await getToken();
       if (!token) throw new Error("Your Clerk session has expired. Please sign in again.");
 
-      const animal = await createAnimal(token, form);
-      setCreatedPublicId(animal.publicId);
-      setSuccessToastMessage(`✓ ${animal.name} registered successfully!`);
-      setForm(emptyForm);
-      setFieldsKey((key) => key + 1);
-      setShowAllErrors(false);
+      const animal = await createAnimal(token, toAnimalPayload(form));
+      // Straight to Manage animal profiles, which shows this toast once it
+      // mounts (utils/flashToast.ts) - the new Animal ID is in the toast
+      // since this page is gone after the redirect.
+      setFlashToast(
+        `✓ ${animal.name} registered successfully! Animal ID: ${animal.publicId}`,
+        REGISTERED_TOAST_MS,
+      );
+      onNavigate("manage-animals");
     } catch (error) {
+      // Failure: stay on the form with everything kept, and show the error.
       const message = error instanceof Error ? error.message : "The animal profile could not be created.";
       window.alert(message);
       setErrorMessage(message);
-    } finally {
       setIsSubmitting(false);
     }
   }
@@ -136,13 +136,6 @@ export function AnimalRegistrationForm({ onNavigate }: AnimalRegistrationFormPro
 
   return (
     <main className="dashboard-page">
-      {successToastMessage && (
-        <SuccessToast
-          message={successToastMessage}
-          onDismiss={() => setSuccessToastMessage("")}
-        />
-      )}
-
       <SiteHeader
         isLoaded={isLoaded}
         isSignedIn={isSignedIn}
@@ -158,16 +151,10 @@ export function AnimalRegistrationForm({ onNavigate }: AnimalRegistrationFormPro
       />
 
       <section className="dashboard-panel">
-        {createdPublicId && (
-          <p className="invite-feedback success">
-            Animal profile created. Animal ID: <strong>{createdPublicId}</strong>
-          </p>
-        )}
-        {errorMessage && !createdPublicId && <p className="invite-feedback error">{errorMessage}</p>}
+        {errorMessage && <p className="invite-feedback error">{errorMessage}</p>}
 
         <form className="animal-form" onSubmit={handleSubmit}>
           <AnimalProfileFields
-            key={fieldsKey}
             value={form}
             onChange={setForm}
             getToken={getToken}

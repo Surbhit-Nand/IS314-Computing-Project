@@ -17,12 +17,6 @@ export type AnimalSize = "small" | "medium" | "large" | "extra_large";
 // queue. Null only for animals registered while the field was missing.
 export type VeterinaryPriority = "critical" | "high" | "moderate" | "routine";
 
-// New animals start at Moderate ("stable condition that still requires
-// veterinary assessment") - every new intake needs a vet assessment, and
-// staff raise it to High/Critical for injured animals or lower it to Routine.
-// Mirrors DEFAULT_VETERINARY_PRIORITY in server/src/modules/animals/animals.routes.ts.
-export const DEFAULT_VETERINARY_PRIORITY: VeterinaryPriority = "moderate";
-
 // Priority meanings shown to staff under the form select, per the brief.
 export const PRIORITY_OPTIONS: { value: VeterinaryPriority; label: string; description: string }[] = [
   { value: "critical", label: "Critical", description: "Life-threatening condition or severe injury requiring immediate veterinary attention" },
@@ -104,15 +98,19 @@ export type Animal = {
 export type AnimalFormInput = {
   name: string;
   // Dog, Cat or Other only - "rabbit" is no longer offered (existing rabbits
-  // became other + "<breed> Rabbit" in migration 0015).
-  type: FormSpecies;
+  // became other + species "Rabbit" in migrations 0015/0016). "" until staff
+  // pick one on Register ("Select species").
+  type: FormSpecies | "";
   // Other only: the species staff type in place of the Species dropdown
   // (e.g. "Rabbit"). Ignored (and cleared by the API) for dogs and cats.
   speciesName: string;
   // Dog/Cat: a breed from the breeds table. Other: free text, e.g.
   // "Holland Lop", "Unknown" or "Mixed breed".
   breed: string;
-  estimatedAge: string;
+  // Estimated age as a number box + unit dropdown. Saved as text in the
+  // existing format ("6 Months", "2.5 Years") by toAnimalPayload().
+  ageValue: string;
+  ageUnit: AgeUnit | "";
   gender: string;
   colour: string;
   description: string;
@@ -123,16 +121,28 @@ export type AnimalFormInput = {
   behaviour: string;
   rescueHistory: string;
   photoUrls: string[];
-  vaccinationStatus: VaccinationStatus;
+  // "" until staff pick one on Register ("Select vaccination status").
+  vaccinationStatus: VaccinationStatus | "";
   // "" until staff actively pick one - same required-select pattern as
   // `gender` - validated in validateAnimalForm.ts before submission.
   size: AnimalSize | "";
-  // Required. Register starts at DEFAULT_VETERINARY_PRIORITY; Edit starts at
-  // the saved value ("" for legacy animals with none, so staff must pick).
+  // Required. "" on Register until staff pick one ("Select priority"); Edit
+  // starts at the saved value ("" for legacy animals with none). The API
+  // still defaults a missing priority to Moderate (animals.routes.ts).
   veterinaryPriority: VeterinaryPriority | "";
 };
 
 export type FormSpecies = "dog" | "cat" | "other";
+
+export type AgeUnit = "weeks" | "months" | "years";
+
+// What the API receives on create/edit: the form with the age combined into
+// the stored text ("2.5 Years") and every select filled in.
+export type AnimalPayload = Omit<AnimalFormInput, "ageValue" | "ageUnit" | "type" | "vaccinationStatus"> & {
+  type: FormSpecies;
+  estimatedAge: string;
+  vaccinationStatus: VaccinationStatus;
+};
 
 // Turns "Available for Adoption" / "Adopted" into the simple two-value label
 // the brief asks for, derived from the richer lifecycle `status` enum rather

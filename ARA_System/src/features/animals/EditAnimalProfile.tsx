@@ -8,9 +8,11 @@ import { SuccessToast } from "../../components/SuccessToast";
 import { fetchAnimalById, updateAnimal } from "../../services/animalsApi";
 import type { Animal, AnimalFormInput } from "../../types/animal";
 import { isDevBypassEnabled } from "../../utils/devBypass";
+import { setFlashToast } from "../../utils/flashToast";
+import { parseEstimatedAge } from "./animalFieldRules";
 import { AnimalProfileFields } from "./AnimalProfileFields";
 import { useBreedOptions } from "./useBreedOptions";
-import { validateAnimalForm } from "./validateAnimalForm";
+import { toAnimalPayload, validateAnimalForm } from "./validateAnimalForm";
 
 type EditAnimalProfileProps = {
   animalId: string;
@@ -24,12 +26,16 @@ function toFormInput(animal: Animal): AnimalFormInput {
   // rabbits other + species "Rabbit". If one is ever still typed "rabbit"
   // (e.g. on a database without those migrations) it opens the same way.
   const isLegacyRabbit = animal.type === "rabbit";
+  // "2.5 Years" -> 2.5 + years. An age that can't be understood (e.g. "2"
+  // with no unit, or junk) opens empty, so staff must re-enter it.
+  const age = parseEstimatedAge(animal.estimatedAge);
   return {
     name: animal.name,
     type: animal.type === "rabbit" ? "other" : animal.type,
     speciesName: isLegacyRabbit ? "Rabbit" : (animal.speciesName ?? ""),
     breed: animal.breed?.trim() ?? "",
-    estimatedAge: animal.estimatedAge ?? "",
+    ageValue: age?.value ?? "",
+    ageUnit: age?.unit ?? "",
     gender: animal.gender ?? "",
     colour: animal.colour ?? "",
     description: animal.description ?? "",
@@ -110,16 +116,23 @@ export function EditAnimalProfile({ animalId, onNavigate }: EditAnimalProfilePro
     try {
       const token = await getToken();
       if (!token) throw new Error("Your Clerk session has expired. Please sign in again.");
-      await updateAnimal(token, animalId, form);
+      const payload = toAnimalPayload(form);
+      await updateAnimal(token, animalId, payload);
+      const toastMessage = `✓ ${payload.name} updated successfully!`;
       setSaveMessage("Animal profile updated.");
-      setSuccessToastMessage(`✓ ${form.name} updated successfully!`);
+      setSuccessToastMessage(toastMessage);
       // Give staff a moment to actually see the toast before the page
       // changes out from under it - navigating immediately would unmount
       // this component (and the toast with it) before it ever painted.
+      // The same message is handed to Manage animal profiles
+      // (utils/flashToast.ts), so it carries on there after the redirect.
       // isSubmitting deliberately stays true here (not reset in a finally)
       // so "Save changes" stays disabled for this brief window rather than
       // becoming re-clickable right before navigating away.
-      window.setTimeout(() => onNavigate("manage-animals"), 1200);
+      window.setTimeout(() => {
+        setFlashToast(toastMessage);
+        onNavigate("manage-animals");
+      }, 1200);
     } catch (error) {
       const message = error instanceof Error ? error.message : "The animal profile could not be updated.";
       window.alert(message);

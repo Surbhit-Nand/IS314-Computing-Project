@@ -1,5 +1,13 @@
-import type { AnimalFormInput } from "../../types/animal";
-import { validateNarrativeText, validateSpeciesName, validateTypedBreedName } from "./animalFieldRules";
+import type { AnimalFormInput, AnimalPayload } from "../../types/animal";
+import {
+  formatAnimalName,
+  formatEstimatedAge,
+  validateAnimalName,
+  validateEstimatedAge,
+  validateNarrativeText,
+  validateSpeciesName,
+  validateTypedBreedName,
+} from "./animalFieldRules";
 import { findListedBreed } from "./breedChoice";
 
 export type AnimalFormField = keyof AnimalFormInput;
@@ -7,21 +15,22 @@ export type AnimalFormErrors = Partial<Record<AnimalFormField, string>>;
 
 // Every problem on the registration/edit form, keyed by field, so each error
 // can be shown under its own input (and decides each field's red asterisk).
-// The text rules (Description, Behaviour, Rescue history, the typed species
-// and a typed breed) come from animalFieldRules.ts and are enforced again by
-// the API. `knownBreeds` is the current species' list from the breeds table
-// (dog, cat, or a typed species like Rabbit; empty when it has none, e.g.
-// Snake): a listed breed is always fine; any other breed - typed via the
-// dropdown's "Other" option, a legacy value like "Russian Blue Mix", or a
-// breed of a species with no list - must pass the typed-breed rules (so a
-// legacy "cat" has to be fixed, "Husky" doesn't).
+// The text rules (name, age, Description, Behaviour, Rescue history, the
+// typed species and a typed breed) come from animalFieldRules.ts and are
+// enforced again by the API. `knownBreeds` is the current species' list from
+// the breeds table (dog, cat, or a typed species like Rabbit; empty when it
+// has none, e.g. Snake): a listed breed is always fine; any other breed -
+// typed via the dropdown's "Other" option, a legacy value like "Russian Blue
+// Mix", or a breed of a species with no list - must pass the typed-breed
+// rules (so a legacy "cat" has to be fixed, "Husky" doesn't).
 export function getAnimalFormErrors(input: AnimalFormInput, knownBreeds?: string[]): AnimalFormErrors {
   const errors: AnimalFormErrors = {};
 
-  if (!input.name.trim()) errors.name = "Please enter the animal's name.";
+  const nameProblem = validateAnimalName(input.name);
+  if (nameProblem) errors.name = nameProblem;
 
   if (input.type !== "dog" && input.type !== "cat" && input.type !== "other") {
-    errors.type = "Please choose Dog, Cat or Other.";
+    errors.type = "Please select a species.";
   }
 
   if (input.type === "other") {
@@ -31,13 +40,16 @@ export function getAnimalFormErrors(input: AnimalFormInput, knownBreeds?: string
 
   // Breed, for every species: a listed breed is always fine; anything else
   // must pass the typed-breed rules. An empty breed gets the dropdown wording
-  // when the species has a list, the typed-box wording when it doesn't.
+  // when the species has a list, the typed-box wording when it doesn't. Not
+  // checked until a species is chosen (Breed is disabled until then).
   const hasBreedList = knownBreeds !== undefined && knownBreeds.length > 0;
-  if (!input.breed.trim() && hasBreedList) {
-    errors.breed = "Please select the animal's breed, or choose Other and type it.";
-  } else if (!findListedBreed(input.breed, knownBreeds)) {
-    const breedProblem = validateTypedBreedName(input.breed);
-    if (breedProblem) errors.breed = breedProblem;
+  if (input.type !== "") {
+    if (!input.breed.trim() && hasBreedList) {
+      errors.breed = "Please select the animal's breed, or choose Other and type it.";
+    } else if (!findListedBreed(input.breed, knownBreeds)) {
+      const breedProblem = validateTypedBreedName(input.breed);
+      if (breedProblem) errors.breed = breedProblem;
+    }
   }
 
   // Veterinary priority (see VeterinaryPriorityField.tsx).
@@ -45,7 +57,10 @@ export function getAnimalFormErrors(input: AnimalFormInput, knownBreeds?: string
     errors.veterinaryPriority = "Please select the animal's veterinary priority.";
   }
 
-  if (!input.estimatedAge.trim()) errors.estimatedAge = "Please enter the animal's estimated age.";
+  // Number + unit; one message for the pair, shown under the age inputs.
+  const ageProblem = validateEstimatedAge(input.ageValue, input.ageUnit);
+  if (ageProblem) errors.ageValue = ageProblem;
+
   if (!input.gender.trim()) errors.gender = "Please select the animal's gender.";
   if (!input.colour.trim()) errors.colour = "Please select the animal's colour.";
   if (!input.size) errors.size = "Please select the animal's size.";
@@ -64,7 +79,7 @@ export function getAnimalFormErrors(input: AnimalFormInput, knownBreeds?: string
   }
 
   if (input.vaccinationStatus !== "not_vaccinated" && input.vaccinationStatus !== "vaccinated") {
-    errors.vaccinationStatus = "Please select a vaccination status.";
+    errors.vaccinationStatus = "Please select the vaccination status.";
   }
 
   return errors;
@@ -78,7 +93,7 @@ const FIELD_ORDER: AnimalFormField[] = [
   "speciesName",
   "breed",
   "veterinaryPriority",
-  "estimatedAge",
+  "ageValue",
   "gender",
   "colour",
   "size",
@@ -99,4 +114,20 @@ export function validateAnimalForm(input: AnimalFormInput, knownBreeds?: string[
     if (errors[field]) return errors[field];
   }
   return null;
+}
+
+// What's sent to the API for a form that passed validateAnimalForm: the age
+// combined into the stored text ("2.5 Years") and the name capitalised.
+export function toAnimalPayload(input: AnimalFormInput): AnimalPayload {
+  const { ageValue, ageUnit, type, vaccinationStatus, ...rest } = input;
+  if (type === "" || vaccinationStatus === "" || ageUnit === "") {
+    throw new Error("toAnimalPayload: the form must be validated first.");
+  }
+  return {
+    ...rest,
+    type,
+    vaccinationStatus,
+    name: formatAnimalName(input.name),
+    estimatedAge: formatEstimatedAge(ageValue, ageUnit),
+  };
 }

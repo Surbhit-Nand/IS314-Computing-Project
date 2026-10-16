@@ -22,7 +22,7 @@ type LoadedList = { options: string[]; listedSpeciesName: string | undefined };
 const cache = new Map<string, LoadedList>();
 
 // Typed species are matched trimmed, case-insensitive, spaces collapsed.
-function cacheKey(species: FormSpecies | undefined, speciesName: string): string | null {
+function cacheKey(species: FormSpecies | "" | undefined, speciesName: string): string | null {
   if (species === "dog" || species === "cat") return species;
   if (species !== "other") return null;
   const typed = speciesName.trim().replace(/\s+/g, " ").toLowerCase();
@@ -36,7 +36,8 @@ const OTHER_SPECIES_DELAY_MS = 400;
 // The Breed dropdown's options for the current species, loaded from the
 // breeds table via GET /api/animals/breeds/:species (dog/cat) or
 // /breeds/other/:speciesName (typed species).
-export function useBreedOptions(species: FormSpecies | undefined, speciesName = ""): BreedOptions {
+// No species chosen yet ("") means no list - Breed stays disabled until then.
+export function useBreedOptions(species: FormSpecies | "" | undefined, speciesName = ""): BreedOptions {
   const [loaded, setLoaded] = useState<Record<string, LoadedList>>({});
   const [failed, setFailed] = useState<Record<string, string>>({});
 
