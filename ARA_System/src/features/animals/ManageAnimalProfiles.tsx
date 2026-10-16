@@ -14,6 +14,7 @@ import {
   ALL_FILTERS,
   SORT_OPTIONS,
   manageView,
+  speciesOptions,
   statusOptions,
   type ManageFilters,
   type ManageSort,
@@ -105,6 +106,8 @@ export function ManageAnimalProfiles({ onNavigate, onSelectAnimal }: ManageAnima
   );
   // Status filter options: only statuses that actually exist right now.
   const statuses = useMemo(() => statusOptions(animals), [animals]);
+  // Species filter: Dog, Cat, then every species registered under Other.
+  const otherSpecies = useMemo(() => speciesOptions(animals), [animals]);
   const filtersActive =
     filters.species !== "all" || filters.status !== "all" || filters.vaccination !== "all";
 
@@ -209,12 +212,17 @@ export function ManageAnimalProfiles({ onNavigate, onSelectAnimal }: ManageAnima
             <span>Species</span>
             <select
               value={filters.species}
-              onChange={(event) => setFilter("species", event.target.value as ManageFilters["species"])}
+              onChange={(event) => setFilter("species", event.target.value)}
             >
               <option value="all">All</option>
               <option value="dog">Dog</option>
               <option value="cat">Cat</option>
-              <option value="other">Other</option>
+              {/* Each species registered under Other, by name (Rabbit, Hamster...). */}
+              {otherSpecies.map((species) => (
+                <option key={species} value={species}>
+                  {species}
+                </option>
+              ))}
             </select>
           </label>
           <label className="manage-animals-control">

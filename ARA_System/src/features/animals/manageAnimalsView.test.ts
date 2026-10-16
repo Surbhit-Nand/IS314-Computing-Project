@@ -1,7 +1,15 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { Animal } from "../../types/animal";
-import { ALL_FILTERS, filterAnimals, manageView, searchAnimals, sortAnimals, statusOptions } from "./manageAnimalsView.js";
+import {
+  ALL_FILTERS,
+  filterAnimals,
+  manageView,
+  searchAnimals,
+  sortAnimals,
+  speciesOptions,
+  statusOptions,
+} from "./manageAnimalsView.js";
 
 // Run: npm test. The Manage animal profiles page's search -> filter -> sort.
 function animal(overrides: Partial<Animal>): Animal {
@@ -37,6 +45,11 @@ const ANIMALS = [
   animal({ name: "Clover", type: "other", speciesName: "Rabbit", createdAt: "2026-09-02T00:00:00Z", veterinaryPriority: "critical" }),
   animal({ name: "Duke", status: "adopted", createdAt: "2026-09-02T00:00:00Z", veterinaryPriority: "critical" }),
 ];
+const ANIMALS_WITH_HAMSTER = [
+  ...ANIMALS,
+  animal({ name: "Nugget", type: "other", speciesName: "Hamster" }),
+  animal({ name: "Misty", type: "other", speciesName: "Rabbit" }),
+];
 const names = (list: Animal[]) => list.map((entry) => entry.name);
 
 describe("sortAnimals", () => {
@@ -62,11 +75,19 @@ describe("sortAnimals", () => {
 
 describe("filterAnimals / statusOptions / search", () => {
   it("filters by species (Other = typed species), status and vaccination", () => {
-    assert.deepEqual(names(filterAnimals(ANIMALS, { ...ALL_FILTERS, species: "other" })), ["Clover"]);
+    assert.deepEqual(names(filterAnimals(ANIMALS, { ...ALL_FILTERS, species: "Rabbit" })), ["Clover"]);
+    assert.deepEqual(names(filterAnimals(ANIMALS_WITH_HAMSTER, { ...ALL_FILTERS, species: "Hamster" })), ["Nugget"]);
+    // No catch-all "Other" any more.
+    assert.deepEqual(filterAnimals(ANIMALS, { ...ALL_FILTERS, species: "other" }), []);
     assert.deepEqual(names(filterAnimals(ANIMALS, { ...ALL_FILTERS, status: "Adopted" })), ["Duke"]);
     assert.deepEqual(names(filterAnimals(ANIMALS, { ...ALL_FILTERS, vaccination: "not_vaccinated" })), ["Abby"]);
     assert.deepEqual(names(filterAnimals(ANIMALS, { species: "dog", status: "Adopted", vaccination: "all" })), ["Duke"]);
     assert.deepEqual(filterAnimals(ANIMALS, { species: "cat", status: "Adopted", vaccination: "all" }), []);
+  });
+
+  it("lists every species registered under Other, A-Z, once each (no dogs, cats or 'Other')", () => {
+    assert.deepEqual(speciesOptions(ANIMALS_WITH_HAMSTER), ["Hamster", "Rabbit"]);
+    assert.deepEqual(speciesOptions([ANIMALS[0], ANIMALS[1]]), []);
   });
 
   it("offers only statuses that exist", () => {

@@ -16,7 +16,9 @@ export const SORT_OPTIONS: { value: ManageSort; label: string }[] = [
 ];
 
 export type ManageFilters = {
-  species: "all" | "dog" | "cat" | "other";
+  // "all", "dog", "cat", or a typed species exactly as speciesOptions() lists
+  // it ("Rabbit", "Guinea Pig") - no catch-all "Other".
+  species: string;
   // An adoptionStatusLabel ("Available for Adoption", "Adopted") or "all".
   status: string;
   vaccination: "all" | "vaccinated" | "not_vaccinated";
@@ -50,8 +52,9 @@ export function searchAnimals(animals: Animal[], searchTerm: string): Animal[] {
 export function filterAnimals(animals: Animal[], filters: ManageFilters): Animal[] {
   return animals.filter((animal) => {
     if (filters.species !== "all") {
-      // "Other" covers every typed species (and any legacy "rabbit" row).
-      const species = animal.type === "dog" || animal.type === "cat" ? animal.type : "other";
+      // Dogs/cats by type; anything registered as Other by the species staff
+      // typed for it (speciesLabel: "Rabbit", "Guinea Pig"...).
+      const species = animal.type === "dog" || animal.type === "cat" ? animal.type : speciesLabel(animal);
       if (species !== filters.species) return false;
     }
     if (filters.status !== "all" && adoptionStatusLabel(animal.status) !== filters.status) return false;
@@ -71,6 +74,16 @@ export function sortAnimals(animals: Animal[], sort: ManageSort): Animal[] {
     priority: (first, second) => priorityRank(first) - priorityRank(second) || byName(first, second),
   };
   return [...animals].sort(comparators[sort]);
+}
+
+// The Species filter's options after Dog and Cat: every species staff
+// registered under Other that's in the list right now, A-Z ("Guinea Pig",
+// "Hamster", "Rabbit"). Grows on its own as new species are registered.
+export function speciesOptions(animals: Animal[]): string[] {
+  const typed = animals
+    .filter((animal) => animal.type !== "dog" && animal.type !== "cat")
+    .map((animal) => speciesLabel(animal));
+  return [...new Set(typed)].sort((first, second) => first.localeCompare(second));
 }
 
 // The Status filter's options: only statuses that actually exist in the list.
