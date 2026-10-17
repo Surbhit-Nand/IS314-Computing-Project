@@ -9,6 +9,7 @@ import { adoptionsRouter } from "./modules/adoptions/adoptions.routes.js";
 import { notificationsRouter } from "./modules/notifications/notifications.routes.js";
 import { reportsRouter } from "./modules/reports/reports.routes.js";
 import { veterinaryRouter } from "./modules/veterinary/veterinary.routes.js";
+import { myAnimalsRouter } from "./modules/myAnimals/myAnimals.routes.js";
 import { webhooksRouter } from "./webhooks/webhooks.routes.js";
 
 export const app = express();
