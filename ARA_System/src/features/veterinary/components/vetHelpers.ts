@@ -1,4 +1,4 @@
-import type { MedicalRecord } from "../../../types/veterinary";
+import type { MedicalQueueAnimal, MedicalRecord } from "../../../types/veterinary";
 import type { VeterinaryPriority } from "../../../types/animal";
 
 export type Tone = "blue" | "green" | "amber" | "red" | "slate" | "outline" | "pink";
@@ -98,6 +98,52 @@ export function priorityRank(priority: VeterinaryPriority | null | undefined): n
     default:
       return 4;
   }
+}
+
+export type CriticalTriageCategory =
+  | "immediate_intervention"
+  | "needs_rapid_triage"
+  | "triage_status_unavailable"
+  | "urgent_evaluation"
+  | "stabilized_monitoring"
+  | null;
+
+export function criticalTriageCategory(animal: MedicalQueueAnimal): CriticalTriageCategory {
+  if (animal.veterinaryPriority !== "critical") return null;
+  if (animal.triageStatusUnavailable) return "triage_status_unavailable";
+  if (!animal.latestTriageAssessment) return "needs_rapid_triage";
+  switch (animal.latestTriageAssessment.interventionUrgency) {
+    case "immediate_intervention":
+      return "immediate_intervention";
+    case "urgent_evaluation":
+      return "urgent_evaluation";
+    case "stabilized_monitoring":
+      return "stabilized_monitoring";
+  }
+  return null;
+}
+
+const CRITICAL_TRIAGE_RANK: Record<Exclude<CriticalTriageCategory, null>, number> = {
+  immediate_intervention: 0,
+  needs_rapid_triage: 1,
+  triage_status_unavailable: 1,
+  urgent_evaluation: 2,
+  stabilized_monitoring: 3,
+};
+
+export function organizeCriticalTriageQueue(queue: MedicalQueueAnimal[]): MedicalQueueAnimal[] {
+  const critical = queue
+    .map((animal, index) => ({ animal, index }))
+    .filter(({ animal }) => animal.veterinaryPriority === "critical")
+    .sort((left, right) => {
+      const leftCategory = criticalTriageCategory(left.animal);
+      const rightCategory = criticalTriageCategory(right.animal);
+      const leftRank = leftCategory ? CRITICAL_TRIAGE_RANK[leftCategory] : 1;
+      const rightRank = rightCategory ? CRITICAL_TRIAGE_RANK[rightCategory] : 1;
+      return leftRank - rightRank || left.index - right.index;
+    })
+    .map(({ animal }) => animal);
+  return [...critical, ...queue.filter((animal) => animal.veterinaryPriority !== "critical")];
 }
 
 // Maps an animal's veterinary lifecycle to a status badge.

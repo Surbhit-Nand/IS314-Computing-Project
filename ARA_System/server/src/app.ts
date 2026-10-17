@@ -35,6 +35,7 @@ app.use("/api/adoptions", adoptionsRouter);
 app.use("/api/notifications", notificationsRouter);
 app.use("/api/reports", reportsRouter);
 app.use("/api/veterinary", veterinaryRouter);
+app.use("/api/my-animals", myAnimalsRouter);
 
 app.use((error: unknown, _request: express.Request, response: express.Response, next: express.NextFunction) => {
 	void next;

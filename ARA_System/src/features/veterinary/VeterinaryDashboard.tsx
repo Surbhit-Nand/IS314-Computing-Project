@@ -2,9 +2,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { VeterinaryNavbar } from "./components/VeterinaryNavbar";
 import type { Animal } from "../../types/animal";
-import type { MedicalQueueAnimal, MedicalRecord, VeterinaryAppointment, VeterinaryDashboard as DashboardStats } from "../../types/veterinary";
+import type { MedicalQueueAnimal, MedicalRecord, RapidTriageAssessment, VeterinaryAppointment, VeterinaryDashboard as DashboardStats } from "../../types/veterinary";
 import { isDevBypassEnabled } from "../../utils/devBypass";
-import { fetchMedicalQueue, fetchMedicalRecord, fetchVeterinaryAppointments, fetchVeterinaryDashboard } from "../../services/veterinaryApi";
+import { fetchLatestRapidTriageAssessment, fetchMedicalQueue, fetchMedicalRecord, fetchVeterinaryAppointments, fetchVeterinaryDashboard } from "../../services/veterinaryApi";
 import type { VeterinaryView } from "./vetTypes";
 import { VeterinaryDashboardPage } from "./pages/VeterinaryDashboardPage";
 import { VeterinaryCarePage } from "./pages/VeterinaryCarePage";
@@ -42,7 +42,15 @@ export function VeterinaryDashboard({ currentView, onNavigate, selectedAnimalId,
         fetchVeterinaryAppointments(token),
       ]);
       setStats(nextStats);
-      setQueue(nextQueue);
+      const queueWithTriage = await Promise.all(nextQueue.map(async (animal) => {
+        try {
+          const latestTriageAssessment = await fetchLatestRapidTriageAssessment(token, animal.id);
+          return { ...animal, latestTriageAssessment, triageStatusUnavailable: false };
+        } catch {
+          return { ...animal, latestTriageAssessment: null, triageStatusUnavailable: true };
+        }
+      }));
+      setQueue(queueWithTriage);
       setAppointments(nextAppointments);
       if (selectedAnimalId) setRecord(await fetchMedicalRecord(token, selectedAnimalId));
     } finally {
@@ -96,6 +104,12 @@ export function VeterinaryDashboard({ currentView, onNavigate, selectedAnimalId,
           }}
           onSelectAppointment={onSelectAppointment}
             onBookAppointment={() => onNavigate("vet-booking")}
+          getToken={getToken}
+          onAssessmentSaved={(assessment: RapidTriageAssessment) => {
+            setQueue((current) => current.map((animal) => animal.id === assessment.animalId
+              ? { ...animal, latestTriageAssessment: assessment, triageStatusUnavailable: false }
+              : animal));
+          }}
           />
       </div>
     </main>

@@ -29,6 +29,9 @@ export type SiteHeaderView =
   | "my-reports"
   | "adoption-apply"
   | "my-applications"
+  | "my-animals"
+  | "my-animal-record"
+  | "my-animal-booking"
   | "my-profile"
   | "manage-adoption-applications"
   | "register-animal"
@@ -354,6 +357,21 @@ export function SiteHeader({
                 }}
               >
                 Adopt
+              </button>
+            )}
+            {isSignedIn && !isStaff && !isAdmin && (
+              <button
+                type="button"
+                className={
+                  currentPage === "my-animals" ||
+                  currentPage === "my-animal-record" ||
+                  currentPage === "my-animal-booking"
+                    ? "nav-link active"
+                    : "nav-link"
+                }
+                onClick={() => navigate("my-animals")}
+              >
+                My Animals
               </button>
             )}
             {!isStaff && !isAdmin && (

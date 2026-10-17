@@ -69,7 +69,7 @@ export function VeterinaryUpcomingAppointments({ currentView, onNavigate }: Prop
           <div>
             <p className="vm-eyebrow">Appointments</p>
             <h1>Upcoming appointments</h1>
-            <p className="vm-subtitle">Follow-up visits already booked for animals in care, nearest first.</p>
+            <p className="vm-subtitle">Upcoming follow-up visits and owner-booked appointments, nearest first.</p>
           </div>
           <div className="vm-page-head-actions">
             <button type="button" className="teal-button" onClick={() => onNavigate("vet-booking")}><IconCalendarPlus size={15} /> Book follow-up</button>
@@ -85,7 +85,7 @@ export function VeterinaryUpcomingAppointments({ currentView, onNavigate }: Prop
             <EmptyState
               icon={<IconCalendar size={20} />}
               title="No upcoming appointments"
-              detail="There are no follow-up visits booked right now. Book one to keep each animal on track."
+              detail="There are no upcoming follow-ups or owner bookings on the clinic schedule."
               action={<button type="button" className="teal-button compact-primary" onClick={() => onNavigate("vet-booking")}>Book follow-up</button>}
             />
           ) : (
@@ -97,7 +97,7 @@ export function VeterinaryUpcomingAppointments({ currentView, onNavigate }: Prop
                   <span className="vm-th">When</span>
                   <span className="vm-th">Action</span>
                 </div>
-                {appointments.map(({ appointment, animal }) => (
+                {appointments.map(({ appointment, animal, adopterName }) => (
                   <div className="vm-table-row" key={appointment.id}>
                     <div className="vm-td vm-animal-cell">
                       <AnimalThumb photoUrl={animal.photoUrls?.[0]} name={animal.name} />
@@ -108,7 +108,14 @@ export function VeterinaryUpcomingAppointments({ currentView, onNavigate }: Prop
                     </div>
                     <div className="vm-td">
                       <strong>{appointment.purpose}</strong>
-                      <small><IconNotes size={11} /> {appointment.notes?.replace(/^Booked by\s*/i, "") ?? "Follow-up visit"}</small>
+                      {appointment.source === "owner_booked" ? (
+                        <small><IconUser size={11} /> Owner booking · {adopterName ?? "Adopter"}</small>
+                      ) : (
+                        <small><IconNotes size={11} /> {appointment.notes?.replace(/^Booked by\s*/i, "") ?? "Follow-up visit"}</small>
+                      )}
+                      {appointment.notes && appointment.source === "owner_booked" ? (
+                        <small><IconNotes size={11} /> {appointment.notes}</small>
+                      ) : null}
                       <Badge tone={appointment.status === "completed" ? "green" : "blue"}>{label(appointment.status)}</Badge>
                     </div>
                     <div className="vm-td">
@@ -116,7 +123,7 @@ export function VeterinaryUpcomingAppointments({ currentView, onNavigate }: Prop
                       <small><IconUser size={11} /> {fmtTime(appointment.appointmentDate)}</small>
                     </div>
                     <div className="vm-td vm-td-actions">
-                      <button type="button" className="vm-queue-action is-primary" onClick={() => setSelected({ appointment, animal })}>View</button>
+                      <button type="button" className="vm-queue-action is-primary" onClick={() => setSelected({ appointment, animal, adopterName })}>View</button>
                     </div>
                   </div>
                 ))}

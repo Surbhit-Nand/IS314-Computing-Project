@@ -221,8 +221,8 @@ function uploadIdDocumentToCloudinary(fileBuffer: Buffer): Promise<string> {
 	});
 }
 
-// Staff action: move an application through its lifecycle and, when reaching
-// "completed", take the animal off the public listings in the same call.
+// Staff action: move an application through its lifecycle and, when approved,
+// assign the animal to the adopter and take it off the public listings.
 export async function transitionAdoptionApplication(
 	id: string,
 	input: { status: AdoptionStatus; reviewNotes?: string },
@@ -266,12 +266,13 @@ export async function transitionAdoptionApplication(
 				: input.reviewNotes ?? undefined,
 	});
 
-	// A completed application means the animal has gone to its new home - take
-	// it off the public listings (findPublicAnimals filters status != "adopted").
+	// Approval transfers ownership to the adopter, so take the animal off the
+	// public listings immediately (findPublicAnimals filters status != "adopted").
 	// Two separate statements (no transaction on neon-http): the application is
 	// moved first so the unique-active index already blocks other approvals,
-	// then the animal is marked adopted.
-	if (input.status === "completed") {
+	// then the animal is marked adopted. Keep completion idempotent for
+	// applications approved before this ownership rule was introduced.
+	if (input.status === "approved" || input.status === "completed") {
 		await updateAnimalProfile(application.animalId, { status: "adopted" });
 	}
 

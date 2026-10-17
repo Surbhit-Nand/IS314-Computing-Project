@@ -91,6 +91,9 @@ const VeterinaryUpcomingAppointments = lazy(() =>
     default: m.VeterinaryUpcomingAppointments,
   })),
 );
+const MyAnimals = lazy(() =>
+  import("./features/veterinary/MyAnimals").then((m) => ({ default: m.MyAnimals })),
+);
 import type { VeterinaryAppointment } from "./types/veterinary";
 import type { Animal } from "./types/animal";
 import { isDispatcherRole } from "./utils/roles";
@@ -120,6 +123,9 @@ export type View =
   | "manage-rescue-reports"
   | "adoption-apply"
   | "my-applications"
+  | "my-animals"
+  | "my-animal-record"
+  | "my-animal-booking"
   | "my-profile"
   | "manage-adoption-applications"
   | "reports"
@@ -489,6 +495,23 @@ function App() {
           isLoaded={isLoaded}
           isSignedIn={isSignedIn}
           onNavigate={navigate}
+        />
+      </Suspense>
+    );
+  }
+
+  if (
+    activeView === "my-animals" ||
+    activeView === "my-animal-record" ||
+    activeView === "my-animal-booking"
+  ) {
+    return (
+      <Suspense fallback={<PageLoadingFallback />}>
+        <MyAnimals
+          currentView={activeView}
+          animalId={selectedAnimalId}
+          onNavigate={navigate}
+          onSelectAnimal={setSelectedAnimalId}
         />
       </Suspense>
     );

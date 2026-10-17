@@ -1,4 +1,4 @@
-import type { MedicalQueueAnimal, MedicalRecord, VeterinaryAppointment, VeterinaryDashboard } from "../types/veterinary";
+import type { MedicalQueueAnimal, MedicalRecord, RapidTriageAssessment, RapidTriageAssessmentInput, VeterinaryAppointment, VeterinaryDashboard } from "../types/veterinary";
 
 const apiBaseUrl = import.meta.env.VITE_API_URL ?? "http://localhost:8787";
 
@@ -18,6 +18,10 @@ export const fetchMedicalRecords = (token: string) => request<MedicalQueueAnimal
 export const fetchAppointmentAnimals = (token: string) => request<MedicalQueueAnimal[]>("/booking-animals", token);
 export const fetchMedicalRecord = (token: string, animalId: string) => request<MedicalRecord>(`/animals/${animalId}`, token);
 export const fetchVeterinaryAppointments = (token: string) => request<VeterinaryAppointment[]>("/appointments", token);
+export const fetchLatestRapidTriageAssessment = (token: string, animalId: string) =>
+  request<RapidTriageAssessment | null>(`/animals/${animalId}/triage/latest`, token);
+export const createRapidTriageAssessment = (token: string, animalId: string, input: RapidTriageAssessmentInput) =>
+  request<RapidTriageAssessment>(`/animals/${animalId}/triage`, token, { method: "POST", body: JSON.stringify(input) });
 
 export function createExamination(token: string, animalId: string, input: Record<string, unknown>) {
   return request(`/animals/${animalId}/examination`, token, { method: "POST", body: JSON.stringify(input) });

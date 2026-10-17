@@ -1,10 +1,12 @@
 import { and, asc, desc, eq, exists, gte, inArray, isNull, ne, sql } from "drizzle-orm";
 import { db } from "../../db/client.js";
 import {
+	adoptionApplications,
 	animals,
 	vetAppointments,
 	veterinaryCarePlans,
 	veterinaryExaminations,
+	veterinaryTriageAssessments,
 	veterinaryTreatmentHistory,
 } from "../../db/schema.js";
 
@@ -103,6 +105,34 @@ export async function findMedicalRecord(animalId: string) {
 	return animal ? { animal, examinations, carePlan, treatments, appointments } : null;
 }
 
+export async function findAnimalForTriage(animalId: string): Promise<{ id: string } | undefined> {
+	const [animal] = await db.select({ id: animals.id }).from(animals).where(eq(animals.id, animalId));
+	return animal;
+}
+
+export async function createTriageAssessment(input: typeof veterinaryTriageAssessments.$inferInsert) {
+	const [assessment] = await db.insert(veterinaryTriageAssessments).values(input).returning();
+	return assessment;
+}
+
+export async function findLatestTriageAssessment(animalId: string) {
+	const [assessment] = await db
+		.select()
+		.from(veterinaryTriageAssessments)
+		.where(eq(veterinaryTriageAssessments.animalId, animalId))
+		.orderBy(desc(veterinaryTriageAssessments.assessedAt), desc(veterinaryTriageAssessments.id))
+		.limit(1);
+	return assessment;
+}
+
+export async function listTriageAssessments(animalId: string) {
+	return db
+		.select()
+		.from(veterinaryTriageAssessments)
+		.where(eq(veterinaryTriageAssessments.animalId, animalId))
+		.orderBy(asc(veterinaryTriageAssessments.assessedAt), asc(veterinaryTriageAssessments.id));
+}
+
 export async function listAppointmentAnimals() {
 	return db
 		.select({ id: animals.id, publicId: animals.publicId, name: animals.name, type: animals.type, breed: animals.breed, rescueDate: animals.rescueDate, status: animals.status, medicallyCleared: animals.medicallyCleared })
@@ -198,9 +228,21 @@ export async function createTreatment(input: typeof veterinaryTreatmentHistory.$
 
 export async function listAppointments() {
 	return db
-		.select({ appointment: vetAppointments, animal: animals })
+		.select({
+			appointment: vetAppointments,
+			animal: animals,
+			adopterName: adoptionApplications.fullName,
+		})
 		.from(vetAppointments)
 		.innerJoin(animals, eq(vetAppointments.animalId, animals.id))
+		.leftJoin(
+			adoptionApplications,
+			and(
+				eq(adoptionApplications.animalId, animals.id),
+				eq(adoptionApplications.applicantClerkUserId, vetAppointments.bookedByClerkUserId),
+				inArray(adoptionApplications.status, ["approved", "completed"]),
+			),
+		)
 		.where(and(eq(vetAppointments.status, "booked"), gte(vetAppointments.appointmentDate, new Date())))
 		.orderBy(asc(vetAppointments.appointmentDate));
 }

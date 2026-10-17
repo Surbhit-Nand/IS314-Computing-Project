@@ -5,20 +5,25 @@ import {
 	createCarePlanRequirements,
 	createExamination,
 	createTreatment,
+	createTriageAssessment,
 	findAppointment,
+	findAnimalForTriage,
 	findCarePlan,
 	findCarePlanTreatment,
 	findExamination,
+	findLatestTriageAssessment,
 	findMedicalRecord,
 	listAppointmentAnimals,
 	listDashboard,
 	listMedicalQueue,
 	listMedicalRecords,
+	listTriageAssessments,
 	updateAnimalVeterinaryStatus,
 	updateAppointment,
 	updateCarePlan,
 	updateExamination as persistExaminationUpdate,
 } from "./veterinary.repository.js";
+import type { RapidTriageAssessmentInput } from "./veterinary.validation.js";
 
 export const CARE_REQUIREMENTS = [
 	"Initial Examination", "Core Vaccination", "Booster", "Deworming", "Flea/Tick Treatment",
@@ -35,6 +40,41 @@ export async function getQueue() { return listMedicalQueue(); }
 export async function getAppointmentAnimals() { return listAppointmentAnimals(); }
 export async function getRecords() { return listMedicalRecords(); }
 export async function getRecord(animalId: string) { return findMedicalRecord(animalId); }
+
+const triageDependencies = {
+	findAnimal: findAnimalForTriage,
+	createAssessment: createTriageAssessment,
+	findLatestAssessment: findLatestTriageAssessment,
+	listAssessments: listTriageAssessments,
+};
+
+export async function recordRapidTriageAssessment(
+	animalId: string,
+	input: RapidTriageAssessmentInput,
+	clerkUserId: string,
+	dependencies = triageDependencies,
+) {
+	if (!(await dependencies.findAnimal(animalId))) throw new Error("Animal not found");
+	return dependencies.createAssessment({
+		animalId,
+		clinicalStability: input.clinicalStability,
+		interventionUrgency: input.interventionUrgency,
+		conditionTrend: input.conditionTrend,
+		emergencyFindings: input.emergencyFindings,
+		notes: input.notes,
+		performedByClerkUserId: clerkUserId,
+	});
+}
+
+export async function getLatestRapidTriageAssessment(animalId: string, dependencies = triageDependencies) {
+	if (!(await dependencies.findAnimal(animalId))) throw new Error("Animal not found");
+	return dependencies.findLatestAssessment(animalId);
+}
+
+export async function getRapidTriageHistory(animalId: string, dependencies = triageDependencies) {
+	if (!(await dependencies.findAnimal(animalId))) throw new Error("Animal not found");
+	return dependencies.listAssessments(animalId);
+}
 
 export async function recordInitialExamination(animalId: string, input: Omit<Parameters<typeof createExamination>[0], "animalId" | "performedByClerkUserId">, clerkUserId: string) {
 	const record = await findMedicalRecord(animalId);
