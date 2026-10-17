@@ -2,6 +2,7 @@ import {
 	boolean,
 	date,
 	doublePrecision,
+	index,
 	integer,
 	jsonb,
 	pgEnum,
@@ -349,7 +350,11 @@ export const vetAppointments = pgTable("vet_appointments", {
 	source: text("source").notNull().default("online"),
 	status: text("status").notNull().default("booked"),
 	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-}, (table) => [uniqueIndex("vet_appointment_slot_unique").on(table.appointmentDate)]);
+}, (table) => [
+	uniqueIndex("vet_appointment_slot_unique")
+		.on(table.appointmentDate)
+		.where(sql`${table.status} = 'booked'`),
+]);
 
 export const veterinaryExaminations = pgTable("veterinary_examinations", {
 	id: uuid("id").defaultRandom().primaryKey(),
@@ -392,6 +397,61 @@ export const veterinaryTreatmentHistory = pgTable("veterinary_treatment_history"
 	performedByClerkUserId: text("performed_by_clerk_user_id").notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// Rapid Triage: a veterinarian's quick, point-in-time read of an animal's
+// current condition, used to rank animals that share the same staff-assigned
+// veterinary priority (e.g. two animals both "critical"). Each row is one
+// assessment; an animal can have many over time so reassessment history is
+// preserved. This is deliberately separate from veterinary_examinations - it
+// never edits or replaces an examination - and it never auto-derives urgency
+// (no AI): the vet picks every value. The three single-choice vocabularies are
+// enums so invalid values are rejected by the database; emergency findings are
+// a multi-select enum array (possibly empty). The (animal_id, assessed_at)
+// index supports "latest assessment per animal" lookups.
+export const triageClinicalStability = pgEnum("triage_clinical_stability", [
+	"unstable",
+	"currently_stable",
+	"not_yet_assessed",
+]);
+
+export const triageInterventionUrgency = pgEnum("triage_intervention_urgency", [
+	"immediate_intervention",
+	"urgent_evaluation",
+	"stabilized_monitoring",
+]);
+
+export const triageConditionTrend = pgEnum("triage_condition_trend", [
+	"deteriorating",
+	"unchanged",
+	"improving",
+	"unknown",
+]);
+
+export const triageEmergencyFinding = pgEnum("triage_emergency_finding", [
+	"severe_bleeding",
+	"breathing_difficulty",
+	"circulatory_compromise",
+	"altered_consciousness",
+	"other_emergency_concern",
+]);
+
+export const veterinaryTriageAssessments = pgTable(
+	"veterinary_triage_assessments",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		animalId: uuid("animal_id").notNull().references(() => animals.id),
+		clinicalStability: triageClinicalStability("clinical_stability").notNull(),
+		interventionUrgency: triageInterventionUrgency("intervention_urgency").notNull(),
+		conditionTrend: triageConditionTrend("condition_trend").notNull(),
+		emergencyFindings: triageEmergencyFinding("emergency_findings").array().notNull().default([]),
+		notes: text("notes"),
+		performedByClerkUserId: text("performed_by_clerk_user_id").notNull(),
+		assessedAt: timestamp("assessed_at", { withTimezone: true }).notNull().defaultNow(),
+	},
+	(table) => [
+		index("veterinary_triage_assessments_animal_assessed_idx").on(table.animalId, table.assessedAt.desc()),
+	],
+);
 
 export const auditLogs = pgTable("audit_logs", {
 	id: uuid("id").defaultRandom().primaryKey(),

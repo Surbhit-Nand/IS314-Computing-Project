@@ -26,6 +26,34 @@ export type MedicalQueueAnimal = {
   // medical queue. Null only for animals registered before this field
   // existed (they sort after prioritised animals).
   veterinaryPriority?: VeterinaryPriority | null;
+  latestTriageAssessment?: RapidTriageAssessment | null;
+  triageStatusUnavailable?: boolean;
+};
+
+export type RapidTriageClinicalStability = "unstable" | "currently_stable" | "not_yet_assessed";
+export type RapidTriageInterventionUrgency = "immediate_intervention" | "urgent_evaluation" | "stabilized_monitoring";
+export type RapidTriageConditionTrend = "deteriorating" | "unchanged" | "improving" | "unknown";
+export type RapidTriageEmergencyFinding =
+  | "severe_bleeding"
+  | "breathing_difficulty"
+  | "circulatory_compromise"
+  | "altered_consciousness"
+  | "other_emergency_concern";
+
+export type RapidTriageAssessmentInput = {
+  clinicalStability: RapidTriageClinicalStability;
+  interventionUrgency: RapidTriageInterventionUrgency;
+  conditionTrend: RapidTriageConditionTrend;
+  emergencyFindings: RapidTriageEmergencyFinding[];
+  notes?: string;
+};
+
+export type RapidTriageAssessment = Omit<RapidTriageAssessmentInput, "notes"> & {
+  id: string;
+  animalId: string;
+  notes: string | null;
+  performedByClerkUserId: string;
+  assessedAt: string;
 };
 
 // A veterinary examination (initial or follow-up) recorded on an animal's
@@ -110,6 +138,7 @@ export type MedicalRecord = {
 };
 
 export type VeterinaryAppointment = {
-  appointment: { id: string; appointmentDate: string; purpose: string; status: string; notes: string | null; visitDetails: string | null; treatmentPerformed: string | null; bookedByClerkUserId: string };
+  appointment: { id: string; appointmentDate: string; purpose: string; status: string; notes: string | null; visitDetails: string | null; treatmentPerformed: string | null; bookedByClerkUserId: string; source: string };
   animal: MedicalQueueAnimal;
+  adopterName?: string | null;
 };

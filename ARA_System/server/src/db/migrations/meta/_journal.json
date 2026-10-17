@@ -113,6 +113,20 @@
       "when": 1791361940927,
       "tag": "0017_adoption_next_of_kin",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1791707400000,
+      "tag": "0018_owner_veterinary_bookings",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1792207367112,
+      "tag": "0019_rapid_triage",
+      "breakpoints": true
     }
   ]
 }

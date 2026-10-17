@@ -91,6 +91,9 @@ const VeterinaryUpcomingAppointments = lazy(() =>
     default: m.VeterinaryUpcomingAppointments,
   })),
 );
+const MyAnimals = lazy(() =>
+  import("./features/veterinary/MyAnimals").then((m) => ({ default: m.MyAnimals })),
+);
 import type { VeterinaryAppointment } from "./types/veterinary";
 import type { Animal } from "./types/animal";
 import { clearPendingAdoption, readPendingAdoption } from "./utils/pendingAdoption";
@@ -130,6 +133,7 @@ function App() {
     devBypass: isDevBypassEnabled,
   });
   const { view: activeView, selectedAnimalId, viewedAnimal } = navigation;
+  const selectedMyAnimalId = useRef<string | null>(selectedAnimalId ?? null);
   const veterinaryParent = navigation.veterinaryParent ?? "veterinary-dashboard";
   const invalidVeterinaryContext = useCallback(() => {
     navigateTo({ view: veterinaryParent }, true);
@@ -218,7 +222,14 @@ function App() {
     // Profile <-> application carries this entry's animal, never a global last selection.
     navigateTo(nextView === "animal-profile" || nextView === "adoption-apply"
       ? { view: nextView, viewedAnimal }
+      : nextView === "my-animal-record" || nextView === "my-animal-booking"
+        ? { view: nextView, selectedAnimalId: selectedAnimalId ?? selectedMyAnimalId.current ?? undefined }
       : { view: nextView });
+  }
+
+  function selectMyAnimal(animalId: string) {
+    selectedMyAnimalId.current = animalId;
+    navigateTo({ view: "my-animal-record", selectedAnimalId: animalId });
   }
 
   function handleViewAnimal(animal: Animal) {
@@ -484,6 +495,23 @@ function App() {
           isLoaded={isLoaded}
           isSignedIn={isSignedIn}
           onNavigate={navigate}
+        />
+      </Suspense>
+    );
+  }
+
+  if (
+    activeView === "my-animals" ||
+    activeView === "my-animal-record" ||
+    activeView === "my-animal-booking"
+  ) {
+    return (
+      <Suspense fallback={<PageLoadingFallback />}>
+        <MyAnimals
+          currentView={activeView}
+          animalId={selectedAnimalId ?? null}
+          onNavigate={navigate}
+          onSelectAnimal={selectMyAnimal}
         />
       </Suspense>
     );

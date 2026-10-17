@@ -10,6 +10,15 @@ restrict public candidates, while Gemini embeddings and pgvector rank those
 candidates semantically. Existing cards, sidebar filters, no-match handling, and
 reset behavior are preserved.
 
+Adopters with approved or completed applications can use **My Animals** to view
+their animal's veterinary history and manage owner-booked appointments.
+Ownership is checked against the adoption application on each API request;
+approval transfers ownership and removes the animal from public listings.
+Owner appointments use the same `vet_appointments` schedule as veterinary
+follow-ups; slots are offered in Fiji time, Monday-Friday 08:00-17:00 and
+Saturday 08:00-13:00, in 30-minute increments. Apply the database change with
+`npm run db:migrate`.
+
 See [backend setup and AI search](server/README.md) for configuration, visibility,
 embedding retries/backfill, development reload instructions, and known test
 limitations. See [architecture](ARCHITECTURE.md) for system layers.

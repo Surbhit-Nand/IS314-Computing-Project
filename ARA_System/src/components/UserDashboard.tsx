@@ -147,6 +147,14 @@ export function UserDashboard({ onNavigate }: UserDashboardProps) {
           <button
             type="button"
             className="user-action-button"
+            onClick={() => onNavigate("my-animals")}
+          >
+            <strong>View My Animals</strong>
+            <span>See your adopted animals, veterinary records and appointments.</span>
+          </button>
+          <button
+            type="button"
+            className="user-action-button"
             onClick={() => onNavigate("animal-listings")}
           >
             <strong>Apply to adopt an animal</strong>

@@ -2,9 +2,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { VeterinaryNavbar } from "./components/VeterinaryNavbar";
 import type { Animal } from "../../types/animal";
-import type { MedicalQueueAnimal, MedicalRecord, VeterinaryAppointment, VeterinaryDashboard as DashboardStats } from "../../types/veterinary";
+import type { MedicalQueueAnimal, MedicalRecord, RapidTriageAssessment, VeterinaryAppointment, VeterinaryDashboard as DashboardStats } from "../../types/veterinary";
 import { isDevBypassEnabled } from "../../utils/devBypass";
-import { fetchMedicalQueue, fetchMedicalRecord, fetchVeterinaryAppointments, fetchVeterinaryDashboard } from "../../services/veterinaryApi";
+import { fetchLatestRapidTriageAssessment, fetchMedicalQueue, fetchMedicalRecord, fetchVeterinaryAppointments, fetchVeterinaryDashboard } from "../../services/veterinaryApi";
 import type { VeterinaryView } from "./vetTypes";
 import { VeterinaryDashboardPage } from "./pages/VeterinaryDashboardPage";
 import { VeterinaryCarePage } from "./pages/VeterinaryCarePage";
@@ -49,7 +49,16 @@ export function VeterinaryDashboard({ currentView, onNavigate, selectedAnimalId,
       ]);
       if (version !== requestVersion.current) return;
       setStats(nextStats);
-      setQueue(nextQueue);
+      const queueWithTriage = await Promise.all(nextQueue.map(async (animal) => {
+        try {
+          const latestTriageAssessment = await fetchLatestRapidTriageAssessment(token, animal.id);
+          return { ...animal, latestTriageAssessment, triageStatusUnavailable: false };
+        } catch {
+          return { ...animal, latestTriageAssessment: null, triageStatusUnavailable: true };
+        }
+      }));
+      if (version !== requestVersion.current) return;
+      setQueue(queueWithTriage);
       setAppointments(nextAppointments);
       if (currentView === "vet-appointment-details" && !nextAppointments.some((entry) => entry.appointment.id === selectedAppointmentId)) {
         onInvalidContext();
@@ -83,7 +92,7 @@ export function VeterinaryDashboard({ currentView, onNavigate, selectedAnimalId,
 
   const selectedAppointment = appointments.find((entry) => entry.appointment.id === selectedAppointmentId);
   if (currentView === "vet-appointment-details" && selectedAppointment) {
-    return <FollowUpAppointmentPage key={selectedAppointment.appointment.id} appointment={selectedAppointment} getToken={getToken} onNavigate={onNavigate} onRefresh={refresh} />;
+    return <FollowUpAppointmentPage key={selectedAppointment.appointment.id} appointment={selectedAppointment} parentView="veterinary-dashboard" getToken={getToken} onNavigate={onNavigate} onRefresh={refresh} />;
   }
 
   if (currentView === "veterinary-record" && record && record.animal.id === selectedAnimalId) {
@@ -124,6 +133,12 @@ export function VeterinaryDashboard({ currentView, onNavigate, selectedAnimalId,
           onSelectAnimal={onSelectAnimal}
           onSelectAppointment={onSelectAppointment}
           onBookAppointment={() => onNavigate("vet-booking")}
+          getToken={getToken}
+          onAssessmentSaved={(assessment: RapidTriageAssessment) => {
+            setQueue((current) => current.map((animal) => animal.id === assessment.animalId
+              ? { ...animal, latestTriageAssessment: assessment, triageStatusUnavailable: false }
+              : animal));
+          }}
         />
       </div>
     </main>

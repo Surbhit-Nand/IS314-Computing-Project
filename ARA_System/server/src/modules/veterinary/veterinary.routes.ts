@@ -1,8 +1,9 @@
-import { Router } from "express";
+import { Router, type RequestHandler } from "express";
 import { z } from "zod";
 import { requireClerkSession } from "../../middleware/auth.js";
 import { requireVeterinaryAccess } from "../../middleware/rbac.js";
-import { CARE_STATUSES, addTreatment, bookAppointment, changeCarePlan, completeAppointment, createCarePlan, getAppointmentAnimals, getDashboard, getQueue, getRecord, getRecords, medicallyClear, recordFollowUpExamination, recordInitialExamination, updateExamination } from "./veterinary.service.js";
+import { CARE_STATUSES, addTreatment, bookAppointment, changeCarePlan, completeAppointment, createCarePlan, getAppointmentAnimals, getDashboard, getLatestRapidTriageAssessment, getQueue, getRapidTriageHistory, getRecord, getRecords, medicallyClear, recordFollowUpExamination, recordInitialExamination, recordRapidTriageAssessment, updateExamination } from "./veterinary.service.js";
+import { rapidTriageAssessmentSchema } from "./veterinary.validation.js";
 
 const idParam = (value: string | string[]) => Array.isArray(value) ? value[0] : value;
 const examinationSchema = z.object({ examinationDate: z.string().datetime(), weightKg: z.number().positive().optional(), temperatureC: z.number().optional(), generalCondition: z.string().min(1), injuries: z.string().optional(), observations: z.string().optional(), diagnosis: z.string().optional(), notes: z.string().optional() });
@@ -19,6 +20,88 @@ function statusFor(error: unknown) {
 }
 
 export const veterinaryRouter = Router();
+
+type RapidTriageRouterDependencies = {
+	authenticate?: RequestHandler;
+	authorizeVeterinarian?: RequestHandler;
+	submitAssessment?: typeof recordRapidTriageAssessment;
+	getLatestAssessment?: typeof getLatestRapidTriageAssessment;
+	getAssessmentHistory?: typeof getRapidTriageHistory;
+};
+
+export function createRapidTriageRouter(dependencies: RapidTriageRouterDependencies = {}) {
+	const router = Router({ mergeParams: true });
+	const authenticate = dependencies.authenticate ?? requireClerkSession;
+	const authorizeVeterinarian = dependencies.authorizeVeterinarian ?? requireVeterinaryAccess;
+	const submitAssessment = dependencies.submitAssessment ?? recordRapidTriageAssessment;
+	const getLatestAssessment = dependencies.getLatestAssessment ?? getLatestRapidTriageAssessment;
+	const getAssessmentHistory = dependencies.getAssessmentHistory ?? getRapidTriageHistory;
+
+	router.post("/", authenticate, authorizeVeterinarian, async (request, response, next) => {
+		const parsedAnimalId = z.string().uuid().safeParse(idParam(request.params.animalId));
+		if (!parsedAnimalId.success) {
+			response.status(400).json({ error: "Invalid animal ID" });
+			return;
+		}
+		const parsed = rapidTriageAssessmentSchema.safeParse(request.body);
+		if (!parsed.success) {
+			response.status(400).json({ error: "Invalid triage assessment" });
+			return;
+		}
+		if (!request.clerkUserId) {
+			response.status(401).json({ error: "Authentication is required" });
+			return;
+		}
+
+		try {
+			response.status(201).json(await submitAssessment(parsedAnimalId.data, parsed.data, request.clerkUserId));
+		} catch (error) {
+			if (error instanceof Error && error.message === "Animal not found") {
+				response.status(404).json({ error: error.message });
+				return;
+			}
+			next(error);
+		}
+	});
+
+	router.get("/latest", authenticate, authorizeVeterinarian, async (request, response, next) => {
+		const parsedAnimalId = z.string().uuid().safeParse(idParam(request.params.animalId));
+		if (!parsedAnimalId.success) {
+			response.status(400).json({ error: "Invalid animal ID" });
+			return;
+		}
+		try {
+			response.json((await getLatestAssessment(parsedAnimalId.data)) ?? null);
+		} catch (error) {
+			if (error instanceof Error && error.message === "Animal not found") {
+				response.status(404).json({ error: error.message });
+				return;
+			}
+			next(error);
+		}
+	});
+
+	router.get("/history", authenticate, authorizeVeterinarian, async (request, response, next) => {
+		const parsedAnimalId = z.string().uuid().safeParse(idParam(request.params.animalId));
+		if (!parsedAnimalId.success) {
+			response.status(400).json({ error: "Invalid animal ID" });
+			return;
+		}
+		try {
+			response.json(await getAssessmentHistory(parsedAnimalId.data));
+		} catch (error) {
+			if (error instanceof Error && error.message === "Animal not found") {
+				response.status(404).json({ error: error.message });
+				return;
+			}
+			next(error);
+		}
+	});
+
+	return router;
+}
+
+veterinaryRouter.use("/animals/:animalId/triage", createRapidTriageRouter());
 
 veterinaryRouter.get("/dashboard", requireClerkSession, requireVeterinaryAccess, async (_request, response, next) => { try { response.json(await getDashboard()); } catch (error) { next(error); } });
 veterinaryRouter.get("/queue", requireClerkSession, requireVeterinaryAccess, async (_request, response, next) => { try { response.json(await getQueue()); } catch (error) { next(error); } });

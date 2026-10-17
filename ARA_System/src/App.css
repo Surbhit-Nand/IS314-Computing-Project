@@ -2075,6 +2075,701 @@
   color: var(--teal-dark);
 }
 
+.my-animals-page {
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--navy);
+}
+
+.my-animals-shell {
+  padding-top: 32px;
+  padding-bottom: 64px;
+}
+
+.my-animals-intro {
+  margin: 0 auto 24px;
+  max-width: 1200px;
+}
+
+.my-animals-intro h1,
+.my-animal-booking-main > h1 {
+  margin: 4px 0 8px;
+  color: var(--teal-dark);
+  font-size: clamp(1.9rem, 3vw, 2.5rem);
+  letter-spacing: -0.035em;
+}
+
+.my-animals-intro > p:last-child {
+  margin: 0;
+  color: var(--slate);
+}
+
+.my-animals-loading {
+  padding: 28px 0;
+  color: var(--slate);
+  text-align: center;
+}
+
+.my-animals-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.my-animal-card {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(26, 58, 75, 0.06);
+}
+
+.my-animal-card-photo {
+  display: grid;
+  width: 100%;
+  height: 210px;
+  object-fit: cover;
+  background: #e9f3f2;
+  color: var(--teal-dark);
+  place-items: center;
+}
+
+.my-animal-photo-placeholder {
+  display: grid;
+  place-items: center;
+}
+
+.my-animal-card-body {
+  padding: 18px;
+}
+
+.my-animal-card-title,
+.my-animal-panel-title,
+.my-animal-appointment-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.my-animal-card-title .eyebrow {
+  margin: 0 0 4px;
+  font-size: 0.7rem;
+}
+
+.my-animal-card-title h2 {
+  margin: 0;
+  color: var(--teal-dark);
+  font-size: 1.35rem;
+}
+
+.my-animal-paw {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: rgba(21, 135, 195, 0.1);
+  color: var(--teal-dark);
+  place-items: center;
+}
+
+.my-animal-card-meta {
+  margin: 7px 0 12px;
+  color: var(--slate);
+  font-size: 0.84rem;
+}
+
+.my-animal-facts,
+.my-animal-overview-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 18px;
+  margin: 0 0 16px;
+}
+
+.my-animal-facts > div,
+.my-animal-overview-facts > div {
+  min-width: 0;
+}
+
+.my-animal-facts dt,
+.my-animal-overview-facts dt,
+.my-animal-review dt,
+.my-animal-booking-success dt {
+  color: var(--slate);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.my-animal-facts dd,
+.my-animal-overview-facts dd,
+.my-animal-review dd,
+.my-animal-booking-success dd {
+  margin: 3px 0 0;
+  color: var(--navy);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.my-animal-card-body > .teal-button {
+  width: 100%;
+  justify-content: center;
+}
+
+.my-animals-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 660px;
+  margin: 36px auto;
+  padding: 36px 24px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #fff;
+  text-align: center;
+}
+
+.my-animals-empty > span {
+  display: grid;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: rgba(21, 135, 195, 0.1);
+  color: var(--teal-dark);
+  place-items: center;
+}
+
+.my-animals-empty h2 {
+  margin: 14px 0 6px;
+  font-size: 1.25rem;
+}
+
+.my-animals-empty p {
+  max-width: 460px;
+  margin: 0 0 16px;
+  color: var(--slate);
+  line-height: 1.5;
+}
+
+.my-animal-record,
+.my-animal-booking {
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.my-animal-back {
+  margin: 0 0 14px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--teal-dark);
+  font: inherit;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.my-animal-record-header {
+  display: grid;
+  grid-template-columns: 230px minmax(0, 1fr);
+  align-items: center;
+  gap: 24px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #fff;
+}
+
+.my-animal-record-photo {
+  display: grid;
+  width: 100%;
+  height: 180px;
+  border-radius: 12px;
+  object-fit: cover;
+  background: #e9f3f2;
+  color: var(--teal-dark);
+  place-items: center;
+}
+
+.my-animal-record-header .eyebrow {
+  margin: 0 0 4px;
+}
+
+.my-animal-record-header h2 {
+  margin: 0;
+  color: var(--teal-dark);
+  font-size: 1.8rem;
+}
+
+.my-animal-record-header p:not(.eyebrow) {
+  margin: 6px 0 14px;
+  color: var(--slate);
+}
+
+.my-animal-tabs {
+  display: flex;
+  gap: 6px;
+  margin: 18px 0 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.my-animal-tabs button {
+  padding: 11px 15px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  color: var(--slate);
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.my-animal-tabs button.active {
+  border-color: var(--teal);
+  color: var(--teal-dark);
+}
+
+.my-animal-record-panel {
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #fff;
+}
+
+.my-animal-record-panel > h2,
+.my-animal-panel-title h2 {
+  margin: 0;
+  color: var(--navy);
+  font-size: 1.2rem;
+}
+
+.my-animal-description {
+  color: var(--slate);
+  line-height: 1.6;
+}
+
+.my-animal-overview-facts {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 18px 0 0;
+}
+
+.my-animal-overview-facts > div {
+  padding: 12px;
+  border-radius: 10px;
+  background: #f5f9fa;
+}
+
+.my-animal-medical-timeline,
+.my-animal-appointment-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.my-animal-medical-card,
+.my-animal-appointment-card {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fbfdfd;
+}
+
+.my-animal-medical-card .eyebrow {
+  margin: 0 0 5px;
+}
+
+.my-animal-medical-card h3 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+}
+
+.my-animal-medical-card p:not(.eyebrow) {
+  margin: 5px 0 0;
+  color: var(--slate);
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.my-animal-record-empty {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 16px 0 0;
+  color: var(--slate);
+}
+
+.my-animal-panel-title {
+  align-items: center;
+  color: var(--teal-dark);
+}
+
+.my-animal-subheading {
+  margin: 22px 0 0;
+  font-size: 0.95rem;
+}
+
+.my-animal-subheading + .my-animal-appointment-list {
+  margin-top: 10px;
+}
+
+.my-animal-appointment-card {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+}
+
+.my-animal-appointment-icon {
+  display: grid;
+  flex: 0 0 38px;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: rgba(21, 135, 195, 0.1);
+  color: var(--teal-dark);
+  place-items: center;
+}
+
+.my-animal-appointment-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.my-animal-appointment-copy p {
+  margin: 4px 0 0;
+  color: var(--slate);
+  font-size: 0.82rem;
+}
+
+.my-animal-appointment-copy small {
+  display: block;
+  margin-top: 4px;
+  color: var(--slate);
+}
+
+.my-animal-status {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #e9f3f2;
+  color: var(--teal-dark);
+  font-size: 0.68rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.my-animal-status.cancelled {
+  background: #f2f3f4;
+  color: #65727a;
+}
+
+.my-animal-booking-layout {
+  display: grid;
+  grid-template-columns: 250px minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.my-animal-booking-profile,
+.my-animal-booking-main {
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #fff;
+}
+
+.my-animal-booking-photo {
+  display: grid;
+  width: 100%;
+  height: 190px;
+  margin-bottom: 14px;
+  border-radius: 12px;
+  object-fit: cover;
+  background: #e9f3f2;
+  color: var(--teal-dark);
+  place-items: center;
+}
+
+.my-animal-booking-profile .eyebrow {
+  margin: 0 0 4px;
+}
+
+.my-animal-booking-profile h2 {
+  margin: 0;
+  color: var(--teal-dark);
+  font-size: 1.35rem;
+}
+
+.my-animal-booking-profile p:last-child {
+  margin: 5px 0 0;
+  color: var(--slate);
+  font-size: 0.84rem;
+}
+
+.my-animal-booking-main > .eyebrow {
+  margin: 0;
+}
+
+.my-animal-booking-steps {
+  display: flex;
+  gap: 0;
+  margin: 18px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.my-animal-booking-steps li {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+  color: var(--slate);
+  font-size: 0.75rem;
+}
+
+.my-animal-booking-steps li span {
+  display: grid;
+  width: 25px;
+  height: 25px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: #fff;
+  place-items: center;
+}
+
+.my-animal-booking-steps li.active,
+.my-animal-booking-steps li.complete {
+  color: var(--teal-dark);
+  font-weight: 750;
+}
+
+.my-animal-booking-steps li.active span,
+.my-animal-booking-steps li.complete span {
+  border-color: var(--teal);
+  background: var(--teal);
+  color: #fff;
+}
+
+.my-animal-booking-step h2 {
+  margin: 0 0 14px;
+  font-size: 1.05rem;
+}
+
+.my-animal-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+  color: var(--navy);
+  font-size: 0.83rem;
+  font-weight: 750;
+}
+
+.my-animal-field > span {
+  display: inline;
+  color: var(--slate);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.my-animal-field input,
+.my-animal-field select,
+.my-animal-field textarea {
+  width: 100%;
+  min-height: 42px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #fff;
+  color: var(--navy);
+  font: inherit;
+  font-weight: 500;
+}
+
+.my-animal-field textarea {
+  resize: vertical;
+}
+
+.my-animal-hint {
+  margin: 8px 0 14px;
+  color: var(--slate);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.my-animal-slots {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+  margin: 12px 0 18px;
+}
+
+.my-animal-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 10px 11px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--navy);
+  text-align: left;
+  cursor: pointer;
+}
+
+.my-animal-slot:hover:not(:disabled),
+.my-animal-slot.selected {
+  border-color: var(--teal);
+  background: #edf8f7;
+}
+
+.my-animal-slot small {
+  color: var(--teal-dark);
+  font-size: 0.7rem;
+}
+
+.my-animal-slot.unavailable {
+  background: #f1f3f4;
+  color: #869198;
+  cursor: not-allowed;
+}
+
+.my-animal-slot.unavailable small {
+  color: #707b81;
+}
+
+.my-animal-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-top: 14px;
+}
+
+.my-animal-review,
+.my-animal-booking-success dl {
+  display: grid;
+  gap: 10px;
+  margin: 14px 0;
+}
+
+.my-animal-review > div,
+.my-animal-booking-success dl > div {
+  padding: 10px 12px;
+  border-radius: 9px;
+  background: #f5f9fa;
+}
+
+.my-animal-booking-success {
+  text-align: left;
+}
+
+.my-animal-success-mark {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #e4f5ec;
+  color: var(--green);
+  font-size: 1.35rem;
+  font-weight: 800;
+  place-items: center;
+}
+
+.my-animal-booking-success .eyebrow {
+  margin: 14px 0 3px;
+}
+
+.my-animal-booking-success h2 {
+  margin: 0;
+  color: var(--teal-dark);
+}
+
+.my-animal-cancel-dialog {
+  max-width: 490px;
+}
+
+.my-animal-cancel-dialog > p {
+  color: var(--slate);
+  line-height: 1.5;
+}
+
+@media (max-width: 760px) {
+  .my-animals-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .my-animal-booking-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .my-animal-booking-profile {
+    display: grid;
+    grid-template-columns: 100px minmax(0, 1fr);
+    align-items: center;
+    column-gap: 14px;
+  }
+
+  .my-animal-booking-photo {
+    grid-row: span 3;
+    height: 90px;
+    margin: 0;
+  }
+}
+
+@media (max-width: 520px) {
+  .my-animals-shell {
+    padding-top: 20px;
+    padding-bottom: 40px;
+  }
+
+  .my-animals-grid,
+  .my-animal-overview-facts {
+    grid-template-columns: 1fr;
+  }
+
+  .my-animal-record-header {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .my-animal-record-photo {
+    height: 220px;
+  }
+
+  .my-animal-tabs {
+    justify-content: space-between;
+  }
+
+  .my-animal-tabs button {
+    padding: 10px 7px;
+    font-size: 0.77rem;
+  }
+
+  .my-animal-record-panel {
+    padding: 16px;
+  }
+
+  .my-animal-appointment-card {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .my-animal-appointment-card > .ghost-button {
+    margin-left: 50px;
+  }
+
+  .my-animal-slots {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .my-animal-booking-steps li {
+    flex-direction: column;
+    align-items: flex-start;
+    font-size: 0.67rem;
+  }
+}
+
 /* animal profile management */
 
 .animal-form {
@@ -8743,6 +9438,301 @@
    content (z-index 60) but below modals (100) and toasts (1000). */
 .notification-bell-wrap {
   position: relative;
+}
+
+.rapid-triage-queue-actions {
+  align-items: flex-start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.rapid-triage-backdrop {
+  align-items: center;
+  background: rgba(14, 31, 43, 0.58);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  overflow-y: auto;
+  padding: 20px;
+  position: fixed;
+  z-index: 120;
+}
+
+.rapid-triage-dialog {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: 0 24px 70px rgba(10, 28, 39, 0.28);
+  color: var(--navy);
+  margin: auto;
+  max-height: calc(100vh - 40px);
+  max-width: 760px;
+  overflow-y: auto;
+  padding: 22px;
+  width: 100%;
+}
+
+.rapid-triage-header,
+.rapid-triage-section-heading,
+.rapid-triage-actions {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.rapid-triage-header {
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 14px;
+}
+
+.rapid-triage-header h2,
+.rapid-triage-header p,
+.rapid-triage-section-heading h3,
+.rapid-triage-form-heading h3,
+.rapid-triage-form-heading p {
+  margin: 0;
+}
+
+.rapid-triage-header h2 {
+  font-size: 1.35rem;
+}
+
+.rapid-triage-close {
+  align-items: center;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--slate);
+  cursor: pointer;
+  display: inline-flex;
+  height: 36px;
+  justify-content: center;
+  width: 36px;
+}
+
+.rapid-triage-close:hover { border-color: var(--teal); color: var(--teal-dark); }
+
+.rapid-triage-animal {
+  align-items: center;
+  background: #f4f9fb;
+  border: 1px solid #e2edf2;
+  border-radius: 11px;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  margin: 14px 0;
+  padding: 12px 14px;
+}
+
+.rapid-triage-animal > div:first-child,
+.rapid-triage-priority {
+  display: grid;
+  gap: 4px;
+}
+
+.rapid-triage-animal-name {
+  color: var(--navy);
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.rapid-triage-animal-detail,
+.rapid-triage-priority > span,
+.rapid-triage-muted {
+  color: var(--slate);
+  font-size: 0.78rem;
+}
+
+.rapid-triage-priority { justify-items: end; }
+
+.rapid-triage-latest {
+  background: #fbfcfd;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  margin-bottom: 16px;
+  padding: 13px 14px;
+}
+
+.rapid-triage-section-heading {
+  margin-bottom: 10px;
+}
+
+.rapid-triage-section-heading h3,
+.rapid-triage-form-heading h3 {
+  font-size: 0.94rem;
+}
+
+.rapid-triage-section-heading time {
+  color: var(--slate);
+  font-size: 0.72rem;
+}
+
+.rapid-triage-latest-values {
+  display: grid;
+  gap: 9px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.rapid-triage-latest-values > div {
+  align-content: start;
+  display: grid;
+  gap: 6px;
+}
+
+.rapid-triage-latest-values > div > span,
+.rapid-triage-latest-values strong {
+  color: var(--slate);
+  font-size: 0.72rem;
+}
+
+.rapid-triage-latest-values .vm-badge { justify-self: start; }
+
+.rapid-triage-form {
+  display: grid;
+  gap: 13px;
+}
+
+.rapid-triage-form-heading {
+  display: grid;
+  gap: 4px;
+}
+
+.rapid-triage-form-heading p {
+  color: var(--slate);
+  font-size: 0.76rem;
+}
+
+.rapid-triage-select-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.rapid-triage-select-grid select,
+.rapid-triage-form textarea {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--navy);
+  font: inherit;
+  font-size: 0.82rem;
+  min-height: 42px;
+  padding: 9px 10px;
+  width: 100%;
+}
+
+.rapid-triage-select-grid select:focus,
+.rapid-triage-form textarea:focus {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px rgba(21, 135, 195, 0.12);
+  outline: none;
+}
+
+.rapid-triage-select-grid select[aria-invalid="true"] {
+  border-color: #b42318;
+}
+
+.rapid-triage-emergency {
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  display: grid;
+  gap: 9px;
+  margin: 0;
+  padding: 10px 12px 12px;
+}
+
+.rapid-triage-emergency legend {
+  color: var(--navy);
+  font-size: 0.78rem;
+  font-weight: 800;
+  padding: 0 5px;
+}
+
+.rapid-triage-emergency legend span {
+  color: var(--slate);
+  font-size: 0.72rem;
+  font-weight: 400;
+}
+
+.rapid-triage-check-grid {
+  display: grid;
+  gap: 8px 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.rapid-triage-check {
+  align-items: center;
+  color: var(--navy);
+  cursor: pointer;
+  display: flex;
+  font-size: 0.78rem;
+  gap: 8px;
+  min-height: 30px;
+}
+
+.rapid-triage-check input {
+  accent-color: var(--teal);
+  height: 16px;
+  width: 16px;
+}
+
+.rapid-triage-form textarea {
+  min-height: 84px;
+  resize: vertical;
+}
+
+.rapid-triage-inline-error,
+.rapid-triage-success {
+  align-items: center;
+  border-radius: 8px;
+  display: flex;
+  font-size: 0.78rem;
+  gap: 7px;
+  line-height: 1.4;
+  margin: 0;
+  padding: 9px 11px;
+}
+
+.rapid-triage-inline-error {
+  background: #fff4f2;
+  border: 1px solid #f4c7c1;
+  color: #9c2d22;
+}
+
+.rapid-triage-success {
+  background: #eff9f2;
+  border: 1px solid #c7e8d0;
+  color: #19733d;
+}
+
+.rapid-triage-actions {
+  border-top: 1px solid var(--line);
+  justify-content: flex-end;
+  padding-top: 12px;
+}
+
+.rapid-triage-actions button:disabled,
+.rapid-triage-close:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+@media (max-width: 640px) {
+  .rapid-triage-backdrop { align-items: flex-start; padding: 10px; }
+  .rapid-triage-dialog { max-height: calc(100vh - 20px); padding: 16px; }
+  .rapid-triage-select-grid,
+  .rapid-triage-latest-values { grid-template-columns: 1fr; }
+  .rapid-triage-latest-values > div { align-items: center; grid-template-columns: minmax(0, 1fr) auto; }
+}
+
+@media (max-width: 420px) {
+  .rapid-triage-animal { align-items: flex-start; flex-direction: column; }
+  .rapid-triage-priority { align-items: start; justify-items: start; }
+  .rapid-triage-check-grid { grid-template-columns: 1fr; }
+  .rapid-triage-section-heading { align-items: flex-start; flex-direction: column; gap: 4px; }
+  .rapid-triage-queue-actions { flex-direction: column; }
 }
 
 .notification-bell {
