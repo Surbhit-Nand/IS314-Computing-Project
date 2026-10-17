@@ -34,12 +34,9 @@ function currentImpl(name: string) {
 	return fn;
 }
 
-// node:test's mock.module takes an options object. The installed @types/node
-// still types it with the older `namedExports` key, but the runtime prefers
-// `exports` (passing `namedExports` prints a deprecation warning on every
-// run), so the options are cast through unknown to use the current shape.
-function moduleMock(specifier: string | URL, exports: Record<string, unknown>) {
-	mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
+// node:test's mock.module exposes ESM named exports through `namedExports`.
+function moduleMock(specifier: string | URL, namedExports: Record<string, unknown>) {
+	mock.module(specifier, { namedExports });
 }
 
 moduleMock("./adoptions.repository.js", {
