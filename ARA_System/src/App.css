@@ -13533,7 +13533,7 @@
 
 /* Sign in/register already have a split layout. Harmonize imagery + blue. */
 .auth-view { background: linear-gradient(90deg,rgba(5,20,34,.84),rgba(7,29,48,.42)),url('./assets/spca-hero.webp') center/cover; }
-.auth-view .auth-spotlight { background: linear-gradient(90deg,rgba(4,28,48,.73),rgba(5,30,47,.24)),url('./assets/rescue-journey.webp') center/cover; }
+.auth-view .auth-spotlight { background: linear-gradient(90deg,rgba(4,28,48,.73),rgba(5,30,47,.24)),url('./assets/about-animals.webp') center/cover; }
 .auth-view .auth-shell { border-radius: 15px; box-shadow: 0 25px 65px rgba(2,19,33,.24); }
 .auth-view .auth-panel { color: #19384f; background: #fff; }
 
