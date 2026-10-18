@@ -1,7 +1,7 @@
 # Adoption module - manual test runbook
 
 Companion to the **Adoption Application** cases in `TestCases_Gr7.md`
-(ADOPT-01 .. ADOPT-10). The automated suite already covers the business rules;
+(ADOPT-01 .. ADOPT-12). The automated suite already covers the business rules;
 this runbook is for the parts that need a browser, a live database and signed-in
 Clerk sessions.
 
@@ -50,7 +50,7 @@ await window.Clerk.session.getToken();
 Copy the token and use it as `TOKEN` below. Tokens expire after about a minute,
 so re-fetch between checks. Never paste a token into the repository.
 
-## 3. UI walkthrough (ADOPT-01 .. 05)
+## 3. UI walkthrough (ADOPT-01 .. 07)
 
 ### ADOPT-01 - valid adult application
 
@@ -68,55 +68,64 @@ On About you choose **Under 18**. Confirm a **Parent or guardian** page appears,
 that all four answers are required, and that the staff queue shows the
 **Minor - guardian consent on file** badge.
 
-### ADOPT-03 - tracking and withdrawal
+### ADOPT-03 - tracking from My Applications
 
 Open the rows on **My Applications**. Confirm the stepper, the answers and the
 timestamped progress history render, and that a **rejected** (or **withdrawn**)
 application stops the stepper on the furthest stage reached rather than
-painting **Submitted**. Then open a live application and click **Withdraw
-application**: confirm the status becomes **Withdrawn by you**, that a new
-history entry appears, and that the row moves to the staff History tab.
-Re-check that you cannot withdraw an already-decided application, nor one
-belonging to another account.
+painting **Submitted**, with the staff note shown.
 
-### ADOPT-04 - staff queue, lifecycle and rejection
+### ADOPT-04 - withdrawal
+
+As the applicant, open a live application and click **Withdraw application**.
+Confirm the prompt, then that the status becomes **Withdrawn by you** with a new
+history entry, and that it moves to the staff History tab. Re-check that you
+cannot withdraw an already-decided application, nor one belonging to another
+account.
+
+### ADOPT-05 - staff queue
 
 On the Staff Dashboard confirm the adoption metric shows the real count of
 `submitted + under_review` applications (no invented numbers). Open the queue
 and exercise the Active/History tabs, search (animal name, animal ID, applicant
-name, applicant email) and the status filter. Move one application
-**Under Review -> Approved -> Completed**, saving a note on the first move.
-Confirm each success message, that the applicant receives an in-app
-notification and an email, and that the animal disappears from the public
-listings after completion. Attempt a rejection with an empty review note (must
-be blocked), then supply the note and confirm the applicant sees the
-**Not this time** panel. A rejected application's ID document is removed from
+name, applicant email) and the status filter. A withdrawn application must
+appear in History.
+
+### ADOPT-06 - lifecycle and rejection
+
+Move one application **Under Review -> Approved -> Completed**, saving a note on
+the first move. Confirm each success message, that the applicant receives an
+in-app notification and an email, and that the animal disappears from the
+public listings after completion. Check the completed application stays
+readable in History. Then attempt to reject another application with an empty
+review note (must be blocked), supply the note, and confirm the applicant sees
+the **Not this time** panel. Rejecting removes the uploaded ID document from
 Cloudinary - check the asset is gone.
 
-### ADOPT-05 - anonymous Adopt resumes after sign-in
+### ADOPT-07 - anonymous Adopt resumes after sign-in
 
 Signed out, click **Adopt**, sign in when prompted and confirm the wizard opens
 for the same animal. After submitting, confirm the intent does not resurface on
 the next sign-in. Also confirm a signed-in visitor is taken straight to the
 form (no stale stash).
 
-## 4. HTTP checks (ADOPT-06 .. 09)
+## 4. HTTP checks (ADOPT-08 .. 11)
 
 Set `TOKEN` and, for the staff checks, a staff `TOKEN`. Replace ids as needed.
 
 ```sh
-# ADOPT-06/07 - validation (each returns 400 with the first field message)
+# ADOPT-08/09 - validation (each returns 400 with the first field message)
 curl -s -X POST http://localhost:8787/api/adoptions \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"animalId":"not-a-uuid"}'
 
-# ADOPT-08 - the ID document URL must be https and a real image
+# ADOPT-10 - the ID document URL must be https and a real image
 curl -s -X POST http://localhost:8787/api/adoptions/id-document \
   -H "Authorization: Bearer $TOKEN" -F "document=@notes.pdf"
 # -> 400 "Upload a photo of your identification document (JPG or PNG)."
 # (The bytes are checked, so renaming a PDF to .jpg is still refused.)
 
-# ADOPT-09 - unavailable animal -> 400 "This animal is no longer available..."
+# ADOPT-11 - unavailable animal -> 400 "This animal is no longer available..."
 #            duplicate application -> 400 "You have already applied to adopt..."
 #            not cleared -> 400; second approval -> 409; invalid move -> 400
 curl -s -X PATCH http://localhost:8787/api/adoptions/$ID \
@@ -128,7 +137,7 @@ Also confirm, as the **non-staff** user, that `GET /api/adoptions`,
 `GET /api/adoptions/:id` and `PATCH /api/adoptions/:id` all return 403, and
 that the queue page shows "Access restricted". With no session they return 401.
 
-## 5. Concurrency (ADOPT-10)
+## 5. Concurrency (ADOPT-12)
 
 With two Under Review applications for the same medically cleared animal,
 issue both approvals as close together as possible (two shells, or the two
