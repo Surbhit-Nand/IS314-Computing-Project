@@ -274,8 +274,8 @@ Valid:
 | **Purpose:** | This tests that a signed-in registered user can successfully submit an adoption application for a medically cleared, listed animal using valid details. |
 | **Preconditions:** | The animal is publicly listed (not adopted, not deleted, medically cleared) and the user is signed in. A JPG/PNG photo of an identification document is ready to upload. |
 | **Test Data:** | Animal: a listed dog (e.g. Bella). Full name: Mere Koro. Contact number: +679 9900000. Email: mere@example.com. Age: Adult (18+). ID document: Voter ID card plus a JPG/PNG document photo. Pet allergies: No. Respiratory condition: No. Owned pets before: No. Current pets: No. Vet cost plan: Savings and family support. Next of kin: Jone Koro, +679 9900001. Adoption for: Myself. |
-| **Test Steps:** | Sign in. Open the animal's profile from the listings and click "Adopt". Complete each wizard page (About you, Identification, Your home, Pet experience, Care plan, Review & submit), pressing Next. Upload the document photo on the Identification page. On Review & submit select "Myself" and click "Submit adoption application". |
-| **Expected Results:** | The application is saved with the status "Submitted - awaiting review" and the success screen reads "Thank you for applying to adopt <name>." The application appears on My Applications and in the staff Adoption applications queue (Active tab), with the first status-history entry recorded. The applicant is notified in-app and by email, and the submission is written to the audit trail. |
+| **Test Steps:** | Sign in. Open the animal's profile from the listings and click "Adopt". Complete each wizard page (About you, Identification, Your home, Pet experience, Care plan, Review & submit), pressing Next. Upload the document photo on the Identification page. On Review & submit check the answer summary, select "Myself" and click "Submit adoption application". |
+| **Expected Results:** | The application is saved with the status "Submitted - awaiting review" and the success screen reads "Thank you for applying to adopt <name>." The photo is stored and shown to staff as an "ID photo - Open document photo" link. The application appears on My Applications and in the staff Adoption applications queue (Active tab), with the first status-history entry recorded, an in-app and email notification to the applicant, and a submission entry in the audit trail. |
 | **Actual Results:** | Confirmed by the automated suite: the create, the first history entry and the submission audit entry are covered by adoptions.service.test.ts, and the full payload by adoptions.validation.test.ts. The browser wizard was not observed. |
 | **Pass/Fail:** | Pass |
 | **Notes and Questions:** | The wizard and the API accept the same payload, so this case also stands in for the equivalent direct API submission. |
@@ -291,73 +291,29 @@ Valid:
 | **Pass/Fail:** | Pass |
 | **Notes and Questions:** |   |
 
-| ADOPT-03: Apply to adopt a cat (no respiratory condition) |  |
+| ADOPT-03: Track applications from My Applications and withdraw a live one |  |
 | :---- | :---- |
-| **Purpose:** | This tests that an applicant without asthma or a respiratory condition can apply to adopt a cat, while the cat-specific health note is still shown. |
-| **Preconditions:** | The user is signed in and a cat is publicly listed. |
-| **Test Data:** | Animal: a listed cat. Respiratory condition: No. Remaining answers as for ADOPT-01. |
-| **Test Steps:** | Start an application for the cat. On Your home answer the allergy and respiratory questions with "No", then complete the remaining pages and submit. |
-| **Expected Results:** | The cat note ("applicants with asthma or a respiratory condition cannot adopt cats...") is shown for information, but "No" is accepted and the application is submitted with status "Submitted". |
-| **Actual Results:** | Confirmed by the automated suite: the species-specific behaviour of the health gate is covered by adoptions.validation.test.ts ("accepts a dog application declaring a respiratory condition") and the blocked cat path by adoptions.service.test.ts. The wizard was not observed. |
-| **Pass/Fail:** | Pass |
-| **Notes and Questions:** | The complementary blocked case is ADOPT-11. |
-
-| ADOPT-04: Track a submitted application from My Applications |  |
-| :---- | :---- |
-| **Purpose:** | This tests that a signed-in applicant can view their applications, see the current stage and read the full progress history. |
-| **Preconditions:** | The user is signed in and has previously submitted at least one application. |
-| **Test Data:** | Applications associated with the user's account, at least one of them rejected. |
-| **Test Steps:** | Sign in and navigate to My Applications. Click a row and review the detail modal (stepper, answers, progress history), then open the rejected application. Close the modal. |
-| **Expected Results:** | Each row shows the animal photo, name, public ID, date submitted and a status badge. The modal shows the four-stage stepper at the current stage, the answers grouped into sections 1-5, and a timestamped progress history. A rejected (or withdrawn) application stops the stepper on the furthest stage its history records instead of showing "Submitted" as the current stage, and shows the staff review note. |
-| **Actual Results:** | Confirmed by the automated suite: the applicant query and the history attachment are covered by adoptions.service.test.ts. The modal rendering and stepper were not observed. |
-| **Pass/Fail:** | Pass |
-| **Notes and Questions:** | The applicant's own list now carries each application's history, so this page no longer calls the staff-only detail endpoint. |
-
-| ADOPT-05: Review the adoption queue from the staff dashboard |  |
-| :---- | :---- |
-| **Purpose:** | This tests that a staff member can open the adoption review queue and locate applications using the tabs, search and status filter. |
-| **Preconditions:** | The user is signed in with a staff, veterinarian, manager or admin role. |
-| **Test Data:** | At least one active and one finished application; a known animal name or public ID and a known applicant name. |
-| **Test Steps:** | Open the Staff Dashboard, check the adoption metrics and click into the Adoption applications queue. Switch between the Active and History tabs, type an animal or applicant name in the search box, and change the status filter. |
-| **Expected Results:** | The dashboard shows the real count of applications awaiting a decision (submitted plus under review) and navigates to the queue. The Active and History tabs split live work from finished applications, search narrows by animal name, animal ID, applicant name or email, the status filter shows only that status, and each row shows the animal, applicant, date and status badge. A withdrawn application appears in History. |
-| **Actual Results:** | Confirmed by the automated suite: the Active/History split and terminal-status rule are covered by src/features/adoptions/adoptionQueue.test.ts. The search, filtering, row rendering and dashboard metrics were not observed. |
-| **Pass/Fail:** | Pass |
-| **Notes and Questions:** |   |
-
-| ADOPT-06: Move an application through the full lifecycle (Under Review, Approved, Completed) |  |
-| :---- | :---- |
-| **Purpose:** | This tests that a staff member can advance a new application through review, approval and completion, and that completing the adoption removes the animal from the public listings. |
-| **Preconditions:** | A staff member is signed in. A "Submitted" application exists for a medically cleared animal, and no other application for that animal is already approved or completed. |
-| **Test Data:** | Move to: Under Review (note: "Checking your home details - we'll be in touch."), then Approved, then Completed. |
-| **Test Steps:** | Expand the Submitted application. Set "Move to" to "Under Review", enter the note and click "Save review". Confirm the "Medical clearance" row reads "Cleared by the veterinary team - eligible for approval", then move to "Approved" and save. Finally move to "Completed (removes the animal from public listings)" and save. Open the public listings and search for the animal. |
-| **Expected Results:** | Each move succeeds and shows "Application for <name> moved to <status>." Every move writes a timestamped history entry (actor plus note), an audit entry with action "adoption.application.status_changed", and notifies the applicant in-app and by email. On completion the animal is marked adopted and no longer appears in the public listings, while the application and its history remain readable in the History tab. |
-| **Actual Results:** | Confirmed by the automated suite: the under_review, approved and completed transitions (including marking the animal adopted) and the notify/audit calls are covered by adoptions.service.test.ts. The queue UI was not observed. |
-| **Pass/Fail:** | Pass |
-| **Notes and Questions:** | If the animal update fails on completion the previous status is restored, so a "Completed" application never leaves its animal still listed. |
-
-| ADOPT-07: Reject an application with a review note |  |
-| :---- | :---- |
-| **Purpose:** | This tests that a staff member can reject an application and that the applicant sees the reason, and that a rejection is refused without a note. |
-| **Preconditions:** | A staff member is signed in and a Submitted or Under Review application exists. |
-| **Test Data:** | Move to: Rejected. Reject reason: "Home visit found no fenced yard." |
-| **Test Steps:** | Expand the application, set "Move to" to "Rejected" and leave the review note empty, then click "Save review". Enter the reason and save again. Then sign in as the applicant and open the same application from My Applications. |
-| **Expected Results:** | The empty-note attempt is blocked with "Add a review note explaining the rejection so the applicant knows why." (and the API returns 400 with the same message). With the note supplied the status becomes "Rejected", the note is stored against the status-history entry, and the applicant's detail modal shows the "Not this time" panel containing the staff note. |
-| **Actual Results:** | Confirmed by the automated suite: the required-note rule and the note-preserving rejection are covered by adoptions.service.test.ts, and the 400 mapping by adoptions.validation.test.ts. The applicant-facing UI was not observed. |
-| **Pass/Fail:** | Pass |
-| **Notes and Questions:** | Rejecting closes the application, so the uploaded identification document is removed from Cloudinary (best-effort). |
-
-| ADOPT-08: Withdraw an application as the applicant |  |
-| :---- | :---- |
-| **Purpose:** | This tests that an applicant can withdraw their own application while it is still being decided, and cannot do so once it has been decided. |
-| **Preconditions:** | The user is signed in and has an application in the "Submitted" or "Under Review" state. |
-| **Test Data:** | The applicant's own application; a second account that does not own it; an already-decided application. |
-| **Test Steps:** | Open the application from My Applications and click "Withdraw application", confirming the prompt. Then attempt to withdraw the same application again, an application belonging to another account, and an application that is already approved, rejected or completed. |
-| **Expected Results:** | The applicant's own live application moves to "Withdrawn" and the modal shows "Withdrawn by you" with a new progress-history entry and an audit entry (action "adoption.application.withdrawn"). The application leaves the staff Active tab and appears in History. The other attempts are refused (403 for someone else's application, 400 for an already-decided one) and nothing changes. The uploaded identification document is removed from Cloudinary (best-effort). |
-| **Actual Results:** | Confirmed by the automated suite: the withdraw, ownership and terminal-state rules are covered by adoptions.service.test.ts, and the reviewer status set (withdrawal is applicant-only) by adoptions.validation.test.ts. The button and modal were not observed. |
+| **Purpose:** | This tests that an applicant can view their applications and their progress, and withdraw one while it is still being decided. |
+| **Preconditions:** | The user is signed in with at least one live application (Submitted or Under Review) and one already-decided application. |
+| **Test Data:** | The applicant's own applications; a second account that does not own one of them. |
+| **Test Steps:** | Sign in and open My Applications, then click a row and review the stepper, answers and progress history. Open the rejected application. Then open a live application and click "Withdraw application", confirming the prompt. Attempt to withdraw the same application again and an application belonging to another account. |
+| **Expected Results:** | Each row shows the animal photo, name, public ID, date submitted and a status badge. The modal shows the four-stage stepper at the current stage, the answers grouped into sections 1-5, and a timestamped progress history. A rejected (or withdrawn) application stops the stepper on the furthest stage its history records instead of showing "Submitted" as the current stage, and shows the staff review note. Withdrawing moves the live application to "Withdrawn" ("Withdrawn by you") with a new history entry and an audit entry (action "adoption.application.withdrawn"), removes it from the staff Active tab and shows it in History. The repeat and other-account attempts are refused (400 and 403) with nothing changed. The uploaded identification document is removed from Cloudinary (best-effort). |
+| **Actual Results:** | Confirmed by the automated suite: the applicant query and the history attachment, and the withdraw, ownership and terminal-state rules, are covered by adoptions.service.test.ts, and the reviewer status set (withdrawal is applicant-only) by adoptions.validation.test.ts. The modal, stepper and button were not observed. |
 | **Pass/Fail:** | Pass |
 | **Notes and Questions:** | Only the applicant can withdraw, so withdrawal is deliberately not one of the staff "Move to" options. |
 
-| ADOPT-09: Anonymous visitor resumes an adoption after signing in |  |
+| ADOPT-04: Review and decide an application from the staff queue |  |
+| :---- | :---- |
+| **Purpose:** | This tests that a staff member can open the adoption queue, locate applications, and carry one through Under Review, Approved and Completed (or reject it with a note), and that completing the adoption removes the animal from the public listings. |
+| **Preconditions:** | The user is signed in with a staff, veterinarian, manager or admin role. A Submitted application exists for a medically cleared animal with no competing approved application, and at least one finished application exists. |
+| **Test Data:** | Search by a known animal name, animal ID and applicant name. Move to: Under Review (note: "Checking your home details - we'll be in touch."), then Approved, then Completed. A second application is moved to Rejected with reason "Home visit found no fenced yard." |
+| **Test Steps:** | Open the Staff Dashboard, check the adoption metric, then click into the Adoption applications queue. Switch between the Active and History tabs, search by animal and applicant, and change the status filter. Expand the Submitted application, move it to Under Review with the note, then to Approved and finally to Completed. Expand another application, attempt a rejection with an empty review note, then supply the reason and save. Finally open the public listings and search for the completed animal. |
+| **Expected Results:** | The dashboard shows the real count of applications awaiting a decision (submitted plus under review) and navigates to the queue. The Active and History tabs split live work from finished applications (a withdrawn application appears in History), search narrows by animal name, animal ID, applicant name or email, and the status filter shows only that status. Each successful move shows "Application for <name> moved to <status>." and writes a timestamped history entry (actor plus note), an audit entry (action "adoption.application.status_changed") and an in-app and email notification to the applicant. The empty-note rejection is blocked with "Add a review note explaining the rejection so the applicant knows why."; with the note the status becomes "Rejected" and the applicant's detail modal shows the "Not this time" panel containing the note. On completion the animal is marked adopted and no longer appears in the public listings, while the application and its history remain readable in the History tab. |
+| **Actual Results:** | Confirmed by the automated suite: the under_review, approved, completed and rejected transitions, the required-note rule, the notify/audit calls and marking the animal adopted are covered by adoptions.service.test.ts, the 400 mapping by adoptions.validation.test.ts, and the Active/History split by src/features/adoptions/adoptionQueue.test.ts. The queue UI, search, filtering and dashboard metrics were not observed. |
+| **Pass/Fail:** | Pass |
+| **Notes and Questions:** | If the animal update fails on completion the previous status is restored, so a "Completed" application never leaves its animal still listed. |
+
+| ADOPT-05: Anonymous visitor resumes an adoption after signing in |  |
 | :---- | :---- |
 | **Purpose:** | This tests that when a signed-out visitor clicks Adopt, the intended animal is remembered and the application flow resumes after they sign in. |
 | **Preconditions:** | The visitor is signed out and a listed animal is available. |
@@ -370,7 +326,7 @@ Valid:
 
 Invalid:
 
-| ADOPT-10: Submit with missing or malformed details |  |
+| ADOPT-06: Submit with missing or malformed details |  |
 | :---- | :---- |
 | **Purpose:** | This tests that structurally invalid or incomplete payloads are rejected before any business logic runs, with a specific field message. |
 | **Preconditions:** | A signed-in user on the apply-to-adopt wizard, with a way to send a crafted request. |
@@ -381,7 +337,7 @@ Invalid:
 | **Pass/Fail:** | Pass |
 | **Notes and Questions:** |   |
 
-| ADOPT-11: Conditional answers that contradict the rest of the application |  |
+| ADOPT-07: Answers that contradict the rest of the application |  |
 | :---- | :---- |
 | **Purpose:** | This tests that the answers an applicant gives must agree with each other - guardian details only for minors, an outcome for past pets, details for current pets, and no cat adoption with a respiratory condition. |
 | **Preconditions:** | The user is signed in on the apply-to-adopt wizard, for a listed cat. |
@@ -390,44 +346,33 @@ Invalid:
 | **Expected Results:** | Each case is blocked with its own message - "Choose their relationship to you." or "Your parent or guardian must consent to this adoption.", "Guardian details are only needed for applicants under 18", "Tell us what happened to your previous pet(s).", "Tell us about your current pets.", and "Applicants with asthma or a respiratory condition cannot adopt cats, for health and safety. Our team can suggest a dog, rabbit or other pet instead." A whitespace-only previous-pet outcome is treated as missing. No application is created. |
 | **Actual Results:** | Confirmed by the automated suite: every rule and message is covered by adoptions.validation.test.ts, and the cat health gate by adoptions.service.test.ts. The wizard was not observed. |
 | **Pass/Fail:** | Pass |
-| **Notes and Questions:** | The cat gate is species-specific, so the same "Yes" answer is accepted for a dog (ADOPT-03). |
+| **Notes and Questions:** | The cat gate is species-specific, so the same "Yes" answer is accepted for a dog (the respiratory question is shown for information in that case). |
 
-| ADOPT-12: Identification document missing or not an image |  |
+| ADOPT-08: Identification document missing or not an image |  |
 | :---- | :---- |
 | **Purpose:** | This tests that the application requires a valid image identification document and refuses a non-image upload. |
 | **Preconditions:** | The user is signed in on the Identification page. |
 | **Test Data:** | Case A: no document uploaded. Case B: a PDF or text file selected (including one renamed with a .jpg extension). Case C: an application submitted with no idDocumentUrl. |
 | **Test Steps:** | Case A: choose a document type, upload nothing and click Next. Case B: select a non-image file and attempt the upload. Case C: send an application to the API without an idDocumentUrl. |
 | **Expected Results:** | Case A: the wizard blocks with "Upload a photo of your identification document." Case B: the upload is rejected with "Upload a photo of your identification document (JPG or PNG)." - the file's actual bytes are checked, so a renamed non-image is refused. Case C: the API returns 400 with "Upload your identification document photo". |
-| **Actual Results:** | Confirmed by the automated suite for Case C, which is covered by adoptions.validation.test.ts, and the upload helper is covered by adoptions.service.test.ts. The magic-byte check, the multer file filter and the wizard upload step were not observed end to end. |
+| **Actual Results:** | Confirmed by the automated suite for Case C, which is covered by adoptions.validation.test.ts, and the upload helper by adoptions.service.test.ts. The magic-byte check, the multer file filter and the wizard upload step were not observed end to end. |
 | **Pass/Fail:** | Pass |
 | **Notes and Questions:** | The stored document URL must be https, so a javascript: or data: URL cannot be stored and rendered as a clickable staff link. |
 
-| ADOPT-13: Animal unavailable, or a duplicate application for the same animal |  |
+| ADOPT-09: Refused writes (unavailable animal, duplicate application, blocked approval, invalid move) |  |
 | :---- | :---- |
-| **Purpose:** | This tests that an application is refused for an animal that cannot be adopted and that one applicant cannot hold two live applications for the same animal. |
-| **Preconditions:** | The user is signed in, with the id of a soft-deleted, adopted or nonexistent animal, and an existing live application of their own. |
-| **Test Data:** | Case A: an id for a soft-deleted, adopted or nonexistent animal. Case B: the same animal id submitted twice by the same user; the second attempt repeated by double-clicking Submit. |
-| **Test Steps:** | Send an application referencing the unavailable animal id. Then submit an application for an animal and submit a second application for the same animal as the same user, including a rapid double-submit of the same form. |
-| **Expected Results:** | Case A returns 400 with "This animal is no longer available for adoption." and creates no row. Case B: the first submission succeeds and the second is blocked with 400 "You have already applied to adopt this animal."; while submitting, the button is disabled and reads "Submitting application...". At most one live application exists for the animal and user. |
-| **Actual Results:** | Confirmed by the automated suite: the availability rules and the active-application rule are covered by adoptions.service.test.ts. The button state and the racing request were not observed. |
+| **Purpose:** | This tests that the API refuses a submission or a move that breaks a business rule, and never creates or changes a record when it does. |
+| **Preconditions:** | The user is signed in, with the id of a soft-deleted, adopted or nonexistent animal, an existing live application of their own, an Under Review application for an animal that is not medically cleared, and two applications for one medically cleared animal where one is already approved. Applications in "Submitted", "Approved" and "Completed" states are also available. |
+| **Test Data:** | Case A: an unavailable animal id. Case B: the same animal id submitted twice, including a rapid double-submit of the form. Case C: approve the uncleared animal. Case D: approve a second application for the already-approved animal. Case E: move "Submitted" directly to "Approved"; move "Approved" to "Rejected"; move anything out of "Completed". |
+| **Test Steps:** | Send each request (or attempt it in the wizard / queue) and then re-check the application's status. |
+| **Expected Results:** | Case A returns 400 "This animal is no longer available for adoption." and creates no row. Case B: the first submission succeeds and the second is blocked with 400 "You have already applied to adopt this animal."; while submitting, the button is disabled and reads "Submitting application...". Case C returns 400 "This animal is not yet medically cleared for adoption." (the queue shows a "Not cleared" badge and disables the approval option). Case D returns 409 "Another applicant has already been approved for this animal." Case E returns 400 for each invalid move, e.g. 'Adoption application cannot move from "submitted" to "approved" - only under_review, rejected may come next.' A reviewer cannot approve their own application (403). Every refusal leaves the record unchanged. |
+| **Actual Results:** | Confirmed by the automated suite: each rule is covered by adoptions.service.test.ts and the 400/403/409 mapping by adoptions.validation.test.ts. The wizard, queue and submit-button states were not observed. |
 | **Pass/Fail:** | Pass |
-| **Notes and Questions:** |   |
-
-| ADOPT-14: Approval blocked (not cleared, already approved, invalid move) |  |
-| :---- | :---- |
-| **Purpose:** | This tests that approval is refused when the animal is not medically cleared or another application is already approved, and that the lifecycle cannot skip stages or move out of a terminal state. |
-| **Preconditions:** | A staff member is signed in, with an Under Review application for an animal that is not medically cleared, plus an application for an animal that already has an approved application. Applications in "Submitted", "Approved" and "Completed" states are also available. |
-| **Test Data:** | Case A: move to "Approved" for the uncleared animal. Case B: move a second application for the same animal to "Approved". Case C: move "Submitted" directly to "Approved"; move "Approved" to "Rejected"; move anything out of "Completed". |
-| **Test Steps:** | For each case, attempt the move in the queue and repeat the equivalent PATCH /api/adoptions/:id request. |
-| **Expected Results:** | Case A is refused with 400 "This animal is not yet medically cleared for adoption."; the queue shows a "Not cleared" badge and disables the approval option with its hint. Case B is refused with 409 "Another applicant has already been approved for this animal." Case C is refused with 400 for each invalid move, e.g. 'Adoption application cannot move from "submitted" to "approved" - only under_review, rejected may come next.' A reviewer cannot approve their own application (403). Every refused move leaves the status unchanged. |
-| **Actual Results:** | Confirmed by the automated suite: each blocked approval, the invalid-transition rules and the self-review guard are covered by adoptions.service.test.ts, and the 400/403/409 mapping by adoptions.validation.test.ts. The queue UI was not observed. |
-| **Pass/Fail:** | Pass |
-| **Notes and Questions:** | Case B is also the rule that keeps an animal from being adopted twice (see ADOPT-15 for the concurrent version). |
+| **Notes and Questions:** | Case D is the rule that keeps an animal from being adopted twice; the concurrent version is ADOPT-10. |
 
 Unknown: 
 
-| ADOPT-15: Two staff approve competing applications for the same animal at the same time |  |
+| ADOPT-10: Two staff approve competing applications for the same animal at the same time |  |
 | :---- | :---- |
 | **Purpose:** | This tests the race guard when two staff members approve competing applications for one animal concurrently. |
 | **Preconditions:** | Two Under Review applications for the same medically cleared animal, with two staff sessions or concurrent requests, against the running API and a live database. |
