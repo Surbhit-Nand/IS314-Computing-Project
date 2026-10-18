@@ -8,6 +8,8 @@ import { VeterinaryNavbar } from "./components/VeterinaryNavbar";
 import { AnimalThumb, Badge, Card, EmptyState } from "./components/VetUi";
 import { fmtDate, fmtTime, label } from "./components/vetHelpers";
 import { FollowUpAppointmentPage } from "./FollowUpAppointmentPage";
+import { useAccountRefresh } from "../../utils/useAccountRefresh";
+import { isUpcomingAppointment } from "../../utils/appointments";
 
 type Props = {
   currentView: VeterinaryView;
@@ -25,9 +27,9 @@ export function VeterinaryUpcomingAppointments({ currentView, onNavigate, select
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (background = false) => {
     const version = ++requestVersion.current;
-    setLoading(true);
+    if (!background) setLoading(true);
     try {
       const token = await getToken();
       if (!token || version !== requestVersion.current) return;
@@ -37,7 +39,7 @@ export function VeterinaryUpcomingAppointments({ currentView, onNavigate, select
         onInvalidContext();
         return;
       }
-      setAppointments(entries);
+      setAppointments(entries.filter((entry) => isUpcomingAppointment(entry.appointment)));
       setError("");
     } catch (value) {
       if (version !== requestVersion.current) return;
@@ -53,6 +55,9 @@ export function VeterinaryUpcomingAppointments({ currentView, onNavigate, select
     }, 0);
     return () => { window.clearTimeout(timer); requestVersion.current += 1; };
   }, [load]);
+
+  const backgroundRefresh = useCallback(() => { void load(true); }, [load]);
+  useAccountRefresh(Boolean(isLoaded && isSignedIn), backgroundRefresh);
 
   if (!isLoaded || !isSignedIn) {
     return (

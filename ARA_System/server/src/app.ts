@@ -10,6 +10,7 @@ import { notificationsRouter } from "./modules/notifications/notifications.route
 import { reportsRouter } from "./modules/reports/reports.routes.js";
 import { veterinaryRouter } from "./modules/veterinary/veterinary.routes.js";
 import { myAnimalsRouter } from "./modules/myAnimals/myAnimals.routes.js";
+import { veterinaryAlertChanges } from "./modules/notifications/veterinaryAlerts.middleware.js";
 import { webhooksRouter } from "./webhooks/webhooks.routes.js";
 
 export const app = express();
@@ -37,6 +38,7 @@ app.use(
 // via the signing secret, so this route must not sit behind requireClerkSession.
 app.use("/api/webhooks", webhooksRouter);
 app.use(express.json());
+app.use(veterinaryAlertChanges());
 app.get("/health", (_request, response) => response.json({ status: "ok" }));
 app.use("/api/animals", animalsRouter);
 app.use("/api/admin", staffRouter);

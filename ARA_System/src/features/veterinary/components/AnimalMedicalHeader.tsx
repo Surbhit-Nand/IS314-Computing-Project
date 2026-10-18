@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { IconArrowRight, IconCalendar, IconSyringe } from "../../../components/MedicalIcons";
+import { IconCalendar, IconSyringe } from "../../../components/MedicalIcons";
 import { fmtDate, label, veterinaryStatusFor } from "./vetHelpers";
 
 type AnimalHeaderProps = {
@@ -26,7 +26,7 @@ type AnimalHeaderProps = {
 };
 
 // ONE reusable animal header shown on every veterinary record page. Carries
-// identity, profile meta, status/care chips and the profile shortcut.
+// identity, profile meta and status/care chips.
 export function AnimalMedicalHeader({
   name,
   type,
@@ -43,8 +43,6 @@ export function AnimalMedicalHeader({
   careDone,
   careTotal,
   stageLabel,
-  onViewProfile,
-  viewingProfile,
   actions,
 }: AnimalHeaderProps) {
   const status = veterinaryStatusFor({ veterinaryStatus, medicallyCleared });
@@ -85,11 +83,6 @@ export function AnimalMedicalHeader({
       </div>
       <div className="vm-animal-actions">
         {stageLabel ? <span className="vm-chip c-blue">{stageLabel}</span> : null}
-        {onViewProfile ? (
-          <button type="button" className="ghost-button compact-action" onClick={onViewProfile} disabled={viewingProfile}>
-            {viewingProfile ? "Loading…" : <>View animal profile <IconArrowRight size={13} /></>}
-          </button>
-        ) : null}
         {actions}
       </div>
     </header>

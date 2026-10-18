@@ -5,11 +5,21 @@ import {
 	markAllNotificationsRead,
 	markNotificationRead,
 } from "./notifications.repository.js";
+import { clerkClient } from "../../services/clerkClient.js";
+import { normalizeRole } from "../../shared/types/roles.js";
 
-export async function listMyNotifications(clerkUserId: string) {
+async function hasVeterinaryAccess(userId: string) {
+	try { const user = await clerkClient.users.getUser(userId); return normalizeRole(user.publicMetadata.role) === "veterinarian" && !user.banned && !user.locked; }
+	catch { return false; } // Fail closed for emergency details; ordinary inbox remains available.
+}
+
+export async function listMyNotifications(clerkUserId: string, dependencies = {
+	access: hasVeterinaryAccess, find: findNotificationsByRecipient, count: countUnreadNotifications,
+}) {
+	const veterinaryAccess = await dependencies.access(clerkUserId);
 	const [items, unreadCount] = await Promise.all([
-		findNotificationsByRecipient(clerkUserId),
-		countUnreadNotifications(clerkUserId),
+		dependencies.find(clerkUserId, 30, veterinaryAccess),
+		dependencies.count(clerkUserId, veterinaryAccess),
 	]);
 	return { items, unreadCount };
 }
@@ -33,11 +43,11 @@ export async function createAdoptionStatusNotification(input: {
 }
 
 export async function markOneNotificationRead(id: string, clerkUserId: string) {
-	return markNotificationRead(id, clerkUserId);
+	return markNotificationRead(id, clerkUserId, await hasVeterinaryAccess(clerkUserId));
 }
 
 export async function markEveryNotificationRead(clerkUserId: string) {
-	await markAllNotificationsRead(clerkUserId);
+	await markAllNotificationsRead(clerkUserId, await hasVeterinaryAccess(clerkUserId));
 }
 
 // Staff-facing: a new adoption application needs review. One row per staff

@@ -3,6 +3,7 @@
 // Per-browser "saved animals" list. There is no backend favorites table (and
 // none of AGENTS.md's three modules call for one), so this is intentionally
 // client-only, persisted in localStorage.
+import { useEffect } from "react";
 const STORAGE_KEY = "ara-favorite-animal-ids";
 
 function readFavoriteIds(): Set<string> {
@@ -22,28 +23,34 @@ function writeFavoriteIds(ids: Set<string>) {
   }
 }
 
-// Gives any component a favorited-animal-ids set plus a toggle function.
-// Each caller reads its own copy from localStorage on mount; since this app
-// has no router and swaps whole pages via view state, every page remounts
-// on navigation anyway, so state naturally stays in sync without a shared
-// store or event bus.
+// Keep mounted components and other browser tabs in sync after a change.
 export function useFavoriteAnimals() {
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(() => readFavoriteIds());
 
+  useEffect(() => {
+    const sync = () => setFavoriteIds(readFavoriteIds());
+    window.addEventListener("storage", sync);
+    window.addEventListener("ara:favorites-changed", sync);
+    return () => {
+      window.removeEventListener("storage", sync);
+      window.removeEventListener("ara:favorites-changed", sync);
+    };
+  }, []);
+
   function toggle(animalId: string) {
-    setFavoriteIds((previous) => {
-      const next = new Set(previous);
-      if (next.has(animalId)) {
-        next.delete(animalId);
-      } else {
-        next.add(animalId);
-      }
-      writeFavoriteIds(next);
-      return next;
-    });
+    const next = readFavoriteIds();
+    if (next.has(animalId)) {
+      next.delete(animalId);
+    } else {
+      next.add(animalId);
+    }
+    writeFavoriteIds(next);
+    setFavoriteIds(next);
+    window.dispatchEvent(new Event("ara:favorites-changed"));
   }
 
   return {
+    favoriteCount: favoriteIds.size,
     isFavorite: (animalId: string) => favoriteIds.has(animalId),
     toggle,
   };

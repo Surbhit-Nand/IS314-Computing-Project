@@ -1,6 +1,7 @@
-import { SignInButton, UserButton, useAuth, useUser } from "@clerk/react";
+import { SignInButton, useAuth, useUser } from "@clerk/react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import spcaLogo from "../../assets/spca-logo.png";
+import { SiteHeader, type SiteHeaderView } from "../../components/SiteHeader";
 import {
   fetchAdoptionApplicationDetail,
   fetchAllAdoptionApplications,
@@ -36,7 +37,7 @@ import { formatDate } from "../../utils/format";
 import { Breadcrumbs } from "../../components/Breadcrumbs";
 
 type ManageAdoptionApplicationsProps = {
-  onNavigate: (view: "home" | "staff-dashboard" | "adoption-apply") => void;
+  onNavigate: (view: SiteHeaderView) => void;
 };
 
 const SHORT_STATUS_LABEL: Record<AdoptionStatus, string> = {
@@ -292,22 +293,8 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
 
   return (
     <main className="dashboard-page">
-      <header className="dashboard-header">
-        <div className="dashboard-brand">
-          <button type="button" className="brand-button" onClick={() => onNavigate("home")}>
-            <img src={spcaLogo} alt="SPCA Fiji logo" className="brand-logo" />
-          </button>
-          <div>
-            <p className="eyebrow">SPCA operations</p>
-            <h1>Adoption applications</h1>
-          </div>
-        </div>
-        <div className="dashboard-header-actions">
-          <div className="user-avatar-circle">
-            <UserButton />
-          </div>
-        </div>
-      </header>
+      <SiteHeader isLoaded={isLoaded} isSignedIn={isSignedIn} currentPage="manage-adoption-applications" onNavigate={onNavigate} />
+      <header className="workspace-section-head"><p className="eyebrow">SPCA operations</p><h1>Adoption applications</h1><p>Review applications and help each animal find the right home.</p></header>
 
       <Breadcrumbs
         trail={[

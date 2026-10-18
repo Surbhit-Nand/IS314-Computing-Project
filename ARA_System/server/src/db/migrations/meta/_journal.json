@@ -127,6 +127,20 @@
       "when": 1792207367112,
       "tag": "0019_rapid_triage",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1792328869000,
+      "tag": "0020_veterinary_emergency_responses",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1792336355002,
+      "tag": "0021_remove_rapid_triage",
+      "breakpoints": true
     }
   ]
 }

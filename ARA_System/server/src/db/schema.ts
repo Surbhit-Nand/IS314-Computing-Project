@@ -1,8 +1,8 @@
 import {
 	boolean,
+	check,
 	date,
 	doublePrecision,
-	index,
 	integer,
 	jsonb,
 	pgEnum,
@@ -398,58 +398,32 @@ export const veterinaryTreatmentHistory = pgTable("veterinary_treatment_history"
 	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-// Rapid Triage: a veterinarian's quick, point-in-time read of an animal's
-// current condition, used to rank animals that share the same staff-assigned
-// veterinary priority (e.g. two animals both "critical"). Each row is one
-// assessment; an animal can have many over time so reassessment history is
-// preserved. This is deliberately separate from veterinary_examinations - it
-// never edits or replaces an examination - and it never auto-derives urgency
-// (no AI): the vet picks every value. The three single-choice vocabularies are
-// enums so invalid values are rejected by the database; emergency findings are
-// a multi-select enum array (possibly empty). The (animal_id, assessed_at)
-// index supports "latest assessment per animal" lookups.
-export const triageClinicalStability = pgEnum("triage_clinical_stability", [
-	"unstable",
-	"currently_stable",
-	"not_yet_assessed",
-]);
-
-export const triageInterventionUrgency = pgEnum("triage_intervention_urgency", [
-	"immediate_intervention",
-	"urgent_evaluation",
-	"stabilized_monitoring",
-]);
-
-export const triageConditionTrend = pgEnum("triage_condition_trend", [
-	"deteriorating",
-	"unchanged",
-	"improving",
-	"unknown",
-]);
-
-export const triageEmergencyFinding = pgEnum("triage_emergency_finding", [
-	"severe_bleeding",
-	"breathing_difficulty",
-	"circulatory_compromise",
-	"altered_consciousness",
-	"other_emergency_concern",
-]);
-
-export const veterinaryTriageAssessments = pgTable(
-	"veterinary_triage_assessments",
+// One row per emergency episode. Closing retains the episode; a future
+// emergency starts a new row with no attending veterinarian. Ownership and
+// support changes are coordination events in audit_logs.
+// Writers must check/increment version atomically and stamp updatedAt and
+// updatedByClerkUserId. Clerk identities remain text, as in medical records.
+export const veterinaryEmergencyResponses = pgTable(
+	"veterinary_emergency_responses",
 	{
 		id: uuid("id").defaultRandom().primaryKey(),
 		animalId: uuid("animal_id").notNull().references(() => animals.id),
-		clinicalStability: triageClinicalStability("clinical_stability").notNull(),
-		interventionUrgency: triageInterventionUrgency("intervention_urgency").notNull(),
-		conditionTrend: triageConditionTrend("condition_trend").notNull(),
-		emergencyFindings: triageEmergencyFinding("emergency_findings").array().notNull().default([]),
-		notes: text("notes"),
-		performedByClerkUserId: text("performed_by_clerk_user_id").notNull(),
-		assessedAt: timestamp("assessed_at", { withTimezone: true }).notNull().defaultNow(),
+		attendingVeterinarianClerkUserId: text("attending_veterinarian_clerk_user_id"),
+		supportRequired: boolean("support_required").notNull().default(false),
+		coordinationNote: text("coordination_note"),
+		version: integer("version").notNull().default(1),
+		updatedByClerkUserId: text("updated_by_clerk_user_id").notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+		updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+		closedAt: timestamp("closed_at", { withTimezone: true }),
 	},
 	(table) => [
-		index("veterinary_triage_assessments_animal_assessed_idx").on(table.animalId, table.assessedAt.desc()),
+		uniqueIndex("veterinary_emergency_responses_active_animal_idx")
+			.on(table.animalId).where(sql`${table.closedAt} IS NULL`),
+		check("veterinary_emergency_responses_version_positive", sql`${table.version} > 0`),
+		check("veterinary_emergency_responses_updated_after_created", sql`${table.updatedAt} >= ${table.createdAt}`),
+		check("veterinary_emergency_responses_closed_after_created", sql`${table.closedAt} IS NULL OR ${table.closedAt} >= ${table.createdAt}`),
+		check("veterinary_emergency_responses_closed_unassigned", sql`${table.closedAt} IS NULL OR (${table.attendingVeterinarianClerkUserId} IS NULL AND ${table.supportRequired} = false)`),
 	],
 );
 

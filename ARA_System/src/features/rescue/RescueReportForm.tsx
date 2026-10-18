@@ -1,6 +1,5 @@
-import { UserButton, useAuth, useUser } from "@clerk/react";
+import { useAuth, useUser } from "@clerk/react";
 import { useEffect, useRef, useState, type ChangeEvent, type DragEvent, type FormEvent } from "react";
-import spcaLogo from "../../assets/spca-logo.png";
 import { submitRescueReport, uploadRescuePhoto } from "../../services/rescueApi";
 import { reverseGeocodePlace, searchPlaces, type PlaceLookup } from "../../services/geocoding";
 import { RescueLocationMap } from "./RescueLocationMap";
@@ -513,26 +512,8 @@ export function RescueReportForm({ variant, source, isLoaded, onNavigate, onShow
   if (variant === "staff") {
     return (
       <main className="dashboard-page">
-        <header className="dashboard-header">
-          <div className="dashboard-brand">
-            <button
-              type="button"
-              className="brand-button"
-              onClick={() => onNavigate("home")}
-            >
-              <img src={spcaLogo} alt="SPCA Fiji logo" className="brand-logo" />
-            </button>
-            <div>
-              <p className="eyebrow">SPCA operations</p>
-              <h1>Log a phone rescue alert</h1>
-            </div>
-          </div>
-          <div className="dashboard-header-actions">
-            <div className="user-avatar-circle">
-              <UserButton />
-            </div>
-          </div>
-        </header>
+        <SiteHeader isLoaded={isLoaded} isSignedIn={isSignedIn} currentPage="rescue-report-phone" onNavigate={onNavigate} />
+        <header className="workspace-section-head"><p className="eyebrow">Rescue operations</p><h1>Log a phone rescue alert</h1><p>Record the caller’s report and prepare the rescue team.</p></header>
 
         <Breadcrumbs
           trail={[
@@ -576,7 +557,7 @@ export function RescueReportForm({ variant, source, isLoaded, onNavigate, onShow
   }
 
   return (
-    <div className="home-page">
+    <div className="home-page rescue-public-page">
       <SiteHeader
         isLoaded={isLoaded}
         isSignedIn={isSignedIn}
@@ -594,18 +575,6 @@ export function RescueReportForm({ variant, source, isLoaded, onNavigate, onShow
             review the alert and assign a dispatcher.
           </p>
         </section>
-
-        {isSignedIn && !createdReference && (
-          <div className="rescue-form-toolbar">
-            <button
-              type="button"
-              className="teal-button"
-              onClick={() => onNavigate("my-reports")}
-            >
-              My Alerts
-            </button>
-          </div>
-        )}
 
         <section
           className={`rescue-form-panel${createdReference ? " rescue-form-panel-confirm" : ""}`}

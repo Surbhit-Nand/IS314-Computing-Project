@@ -12,7 +12,7 @@ import type {
 // Same base URL / dev-server-not-running guard pattern used in
 // animalsApi.ts and ManagerDashboard.tsx - one shared copy for every rescue
 // page.
-const apiBaseUrl = import.meta.env.VITE_API_URL ?? "http://localhost:8787";
+const apiBaseUrl = import.meta.env?.VITE_API_URL ?? "http://localhost:8787";
 
 export const rescueApiBaseUrl = apiBaseUrl;
 

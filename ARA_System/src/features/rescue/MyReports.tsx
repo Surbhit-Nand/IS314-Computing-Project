@@ -10,6 +10,7 @@ import { SiteFooter } from "../../components/SiteFooter";
 import { Breadcrumbs } from "../../components/Breadcrumbs";
 import { RescueProgressTimeline } from "./RescueProgressTimeline";
 import { SiteHeader, type SiteHeaderView } from "../../components/SiteHeader";
+import "./MyReports.css";
 
 type MyReportsProps = {
   isLoaded: boolean;
@@ -22,6 +23,7 @@ function formatDate(value: string): string {
     day: "numeric",
     month: "short",
     year: "numeric",
+    timeZone: "Pacific/Fiji",
   });
 }
 
@@ -197,6 +199,9 @@ export function MyReports({
   const [myReports, setMyReports] = useState<RescueReport[]>([]);
   const [myReportsLoading, setMyReportsLoading] = useState(false);
   const [myReportsError, setMyReportsError] = useState("");
+  const [filter, setFilter] = useState<"all" | "active" | "resolved">("all");
+  const activeCount = myReports.filter((report) => report.status !== "resolved").length;
+  const visibleReports = myReports.filter((report) => filter === "all" || (filter === "resolved" ? report.status === "resolved" : report.status !== "resolved"));
   // Report whose full details are shown in the pop-up dialog (null = closed).
   const [selectedReport, setSelectedReport] = useState<RescueReport | null>(null);
 
@@ -224,7 +229,7 @@ export function MyReports({
   }
 
   return (
-    <div className="home-page">
+    <div className="home-page my-alerts-page">
       <SiteHeader
         isLoaded={isLoaded}
         isSignedIn={isSignedIn}
@@ -235,18 +240,18 @@ export function MyReports({
       <main className="page-shell">
         <Breadcrumbs
           trail={[
-            { label: "Home", onClick: () => onNavigate("home") },
+            { label: "My dashboard", onClick: () => onNavigate("user-dashboard") },
             { label: "My Alerts" },
           ]}
         />
-        <section className="catalog-hero">
-          <p className="eyebrow">My Alerts</p>
-          <h1>Your rescue alerts</h1>
-          <p className="lead-copy">
-            Every rescue alert you have submitted, with live status updates
-            from the SPCA Fiji team.
-          </p>
-        </section>
+        <header className="my-alerts-header">
+          <div>
+            <h1>Your rescue alerts</h1>
+            <p>Track your reports and updates from the SPCA Fiji team.</p>
+            {isSignedIn && !myReportsLoading && !myReportsError && <p className="my-alerts-count">{myReports.length} submitted · {activeCount} awaiting completion</p>}
+          </div>
+          {isSignedIn && <button type="button" className="teal-button small-button" onClick={() => onNavigate("rescue-report")}>Submit another alert</button>}
+        </header>
 
         {!isLoaded ? (
           <p className="dashboard-data-state">Loading your rescue alerts...</p>
@@ -262,20 +267,17 @@ export function MyReports({
             </SignInButton>
           </div>
         ) : (
-          <section className="tracking-results">
-            <div className="catalog-results-head">
-              <div>
-                <p className="eyebrow">My Alerts</p>
-                <h2>Rescue alerts you have submitted</h2>
+          <section className="tracking-results" aria-label="Report history">
+            {!myReportsLoading && !myReportsError && myReports.length > 0 && (
+              <div className="my-alert-filters" role="group" aria-label="Filter rescue alerts">
+                {(["all", "active", "resolved"] as const).map((value) => (
+                  <button key={value} type="button" aria-pressed={filter === value} onClick={() => setFilter(value)}>
+                    {value === "all" ? "All alerts" : value === "active" ? "Active" : "Resolved"}
+                    <span>{value === "all" ? myReports.length : value === "active" ? activeCount : myReports.length - activeCount}</span>
+                  </button>
+                ))}
               </div>
-              <button
-                type="button"
-                className="teal-button small-button"
-                onClick={() => onNavigate("rescue-report")}
-              >
-                Submit another alert
-              </button>
-            </div>
+            )}
             {myReportsLoading && (
               <p className="dashboard-data-state">Loading your rescue alerts...</p>
             )}
@@ -289,7 +291,9 @@ export function MyReports({
             )}
             {!myReportsLoading && !myReportsError && (
               <div className="my-report-list">
-                {myReports.map((report) => (
+                {visibleReports.length > 0 && <div className="my-alert-column-head" aria-hidden="true"><span>Alert &amp; location</span><span>Submitted</span><span>Status</span><span /></div>}
+                {myReports.length > 0 && visibleReports.length === 0 && <p className="my-alert-filter-empty" role="status">No {filter} alerts.</p>}
+                {visibleReports.map((report) => (
                   <button
                     key={report.id}
                     type="button"
@@ -297,10 +301,15 @@ export function MyReports({
                     onClick={() => setSelectedReport(report)}
                     aria-label={`View details for alert ${report.reference}`}
                   >
-                    <span className="my-report-reference">{report.reference}</span>
+                    <span className="my-alert-row-copy">
+                      <span className="my-report-reference">{report.reference}</span>
+                      <span className="my-alert-row-location">{report.location}</span>
+                    </span>
+                    <span className="my-alert-row-date">{formatDate(report.createdAt)}</span>
                     <span className={`report-status ${rescueStatusClass(report.status)}`}>
                       {reportStatusShortLabel(report.status)}
                     </span>
+                    <span className="my-alert-row-arrow" aria-hidden="true">↗</span>
                   </button>
                 ))}
               </div>

@@ -1,0 +1,69 @@
+/* Final shared sizing and restraint for all three operational workspaces. */
+#root :is(.dashboard-page, .vm-page):has(.workspace-sidebar) {
+  --workspace-card-height: 136px;
+  --workspace-card-padding: 22px;
+  --workspace-card-radius: 10px;
+  background: var(--bg);
+}
+#root :is(.dashboard-page, .vm-page):has(.workspace-sidebar) :is(.vm-stats, .dashboard-metrics, .rescue-summary-cards) {
+  display: grid;
+  grid-template-columns: none;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 16px;
+  margin-block: 20px;
+  align-items: stretch;
+}
+#root :is(.dashboard-page, .vm-page):has(.workspace-sidebar) :is(.vm-stat, .dashboard-metrics > article, .rescue-stat-card) {
+  position: relative;
+  display: block;
+  min-width: 0;
+  min-height: var(--workspace-card-height);
+  padding: var(--workspace-card-padding);
+  border: 1px solid var(--line);
+  border-radius: var(--workspace-card-radius);
+  background: var(--white);
+  box-shadow: none;
+}
+#root :is(.dashboard-page, .vm-page):has(.workspace-sidebar) :is(.vm-stat-body, .rescue-stat-content) { display: flex; flex-direction: column; gap: 10px; }
+#root :is(.dashboard-page, .vm-page):has(.workspace-sidebar) :is(.vm-stat-label, .rescue-stat-label) { order: -1; color: var(--slate); font-size: 0.75rem; font-weight: 400; line-height: 1.5; padding-right: 24px; }
+#root :is(.dashboard-page, .vm-page):has(.workspace-sidebar) :is(.vm-stat-value, .rescue-stat-value, .dashboard-metrics > article > strong) { color: var(--navy); font-size: 2rem; font-weight: 400; line-height: 1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+#root :is(.dashboard-page, .vm-page):has(.workspace-sidebar) :is(.vm-stat-detail, .rescue-stat-hint, .dashboard-metrics > article > small) { color: var(--slate); font-size: 0.65rem; line-height: 1.5; }
+#root :is(.dashboard-page, .vm-page):has(.workspace-sidebar) :is(.vm-stat-icon, .rescue-stat-icon, .dashboard-metrics > article > .workspace-metric-icon) { position: absolute; display: grid; place-items: center; top: 16px; right: 16px; width: 30px; height: 30px; border: 0; border-radius: 9px; background: var(--teal-tint); color: var(--teal-dark); }
+#root :is(.dashboard-page, .vm-page):has(.workspace-sidebar) :is(.vm-stat, .rescue-stat-card) { border-top: 2px solid color-mix(in srgb, var(--teal) 30%, var(--line)); }
+#root :is(.dashboard-page, .vm-page):has(.workspace-sidebar) :is(.vm-stat, .rescue-stat-card).tone-amber { border-top-color: color-mix(in srgb, var(--amber) 45%, var(--line)); }
+#root :is(.dashboard-page, .vm-page):has(.workspace-sidebar) :is(.vm-stat, .rescue-stat-card).tone-red { border-top-color: color-mix(in srgb, var(--red) 45%, var(--line)); }
+#root :is(.dashboard-page, .vm-page):has(.workspace-sidebar) :is(.vm-stat, .rescue-stat-card).tone-green { border-top-color: color-mix(in srgb, var(--success) 45%, var(--line)); }
+#root .rescue-workspace:has(.workspace-sidebar) .rescue-stat-label { text-transform: none; letter-spacing: 0; padding-right: 30px; min-height: 32px; font-size: 0.7rem; }
+#root .rescue-workspace:has(.workspace-sidebar) .rescue-stat-value { color: var(--teal-dark); }
+#root .rescue-workspace:has(.workspace-sidebar) .rescue-stat-card.tone-amber .rescue-stat-icon { background: var(--amber-tint); color: var(--amber); }
+#root .rescue-workspace:has(.workspace-sidebar) .rescue-stat-card.tone-red .rescue-stat-icon { background: color-mix(in srgb, var(--red) 10%, var(--white)); color: var(--red); }
+#root .rescue-workspace:has(.workspace-sidebar) .rescue-stat-card.tone-green .rescue-stat-icon { background: var(--success-tint); color: var(--success); }
+#root :is(.dashboard-page, .vm-page):has(.workspace-sidebar) :is(.vm-card, .dashboard-panel, .rescue-main-panel, .rescue-side-panel) { border: 1px solid var(--line); border-radius: var(--workspace-card-radius); box-shadow: none; background: var(--white); }
+#root :is(.dashboard-page, .vm-page):has(.workspace-sidebar) :is(h1, h2, .vm-card-title, .staff-overview-header h1) { font-family: inherit; font-weight: 400; }
+#root :is(.dashboard-page, .vm-page):has(.workspace-sidebar) :is(.vm-page-head, .rescue-page-head, .workspace-section-head) { padding: 8px 0 24px; min-height: 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: none; box-shadow: none; }
+#root :is(.dashboard-page, .vm-page):has(.workspace-sidebar) :is(.vm-page-head h1, .rescue-page-head h1, .workspace-section-head h1, .staff-overview-header h1) { font-size: clamp(1.65rem, 2.5vw, 2.2rem); }
+#root .workspace-hero-art { display: none; }
+#root .vm-page:has(.workspace-sidebar) .vm-page-head::after { display: none; }
+#root .workspace-journey { background: transparent; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; padding: 0 0 16px; }
+#root .vm-page:has(.workspace-sidebar) :is(.vm-queue-action, .vm-page-head-actions .teal-button) { border-radius: 6px; box-shadow: none; }
+/* Rescue lists follow the same flat rows as medical records. Keep urgency
+   text and dots, without tinting entire cases or surrounding every row. */
+#root .rescue-workspace:has(.workspace-sidebar) .ops-case { margin: 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: var(--white); box-shadow: none; }
+#root .rescue-workspace:has(.workspace-sidebar) .ops-case:last-child { border-bottom: 0; }
+#root .rescue-workspace:has(.workspace-sidebar) .ops-case-list { gap: 0; }
+#root .rescue-workspace:has(.workspace-sidebar) .ops-case-row { padding: 18px 16px; font-weight: 400; }
+#root .rescue-workspace:has(.workspace-sidebar) .ops-case-columns { border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: var(--bg); color: var(--slate); padding: 14px 16px; font-size: 0.65rem; letter-spacing: 0.08em; }
+#root .rescue-workspace:has(.workspace-sidebar) .ops-case-columns span { color: var(--slate); font-size: inherit; }
+#root .rescue-workspace:has(.workspace-sidebar) .ops-case-ref { color: var(--navy); font-size: 0.85rem; font-weight: 400; }
+#root .rescue-workspace:has(.workspace-sidebar) .ops-view-details { color: var(--teal-dark); font-size: 0.75rem; font-weight: 400; }
+#root .rescue-workspace:has(.workspace-sidebar) .ops-chevron { background: transparent; }
+#root .rescue-workspace:has(.workspace-sidebar) .ops-urgency-badge { min-width: 0; border: 0; background: transparent; padding: 4px 0; font-weight: 400; font-size: 0.75rem; }
+#root .rescue-workspace:has(.workspace-sidebar) .ops-case-reassign-tag { width: fit-content; background: var(--bg); color: var(--slate); border: 0; border-radius: 4px; font-size: 0.6rem; font-weight: 400; }
+#root .rescue-workspace:has(.workspace-sidebar) .rescue-content-grid { align-items: stretch; }
+@media (max-width: 1180px) {
+  #root :is(.dashboard-page, .vm-page):has(.workspace-sidebar) :is(.vm-stats, .dashboard-metrics, .rescue-summary-cards) { grid-template-columns: none; grid-auto-columns: minmax(180px, 1fr); overflow-x: auto; padding-bottom: 8px; }
+}
+@media (max-width: 620px) {
+  #root :is(.dashboard-page, .vm-page):has(.workspace-sidebar) { --workspace-card-padding: 16px; }
+}

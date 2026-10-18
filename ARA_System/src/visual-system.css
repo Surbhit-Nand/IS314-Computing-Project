@@ -1,0 +1,170 @@
+/* Animal listings retains its original photographic design and is excluded
+   from this theme. Shared navigation and notification behavior still apply.
+   Shared visual foundation. Layouts, imagery and semantic status colors stay
+   with their features; surfaces and controls follow the account dashboard. */
+#root:not(:has(.animal-catalog-page)) {
+  --surface-radius: 10px;
+  --control-radius: 6px;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+#root:not(:has(.animal-catalog-page)) :is(.home-page, .ara2-home, .dashboard-page, .vm-page, .my-animals-page) {
+  font-family: inherit;
+  color: var(--navy);
+}
+
+#root:not(:has(.animal-catalog-page)) :is(h1, .catalog-hero h1, .dashboard-welcome h2, .vm-page h1) {
+  font-weight: 400;
+  letter-spacing: -0.04em;
+  line-height: 1.15;
+}
+
+#root:not(:has(.animal-catalog-page)) :is(h2, h3) { letter-spacing: -0.02em; }
+#root:not(:has(.animal-catalog-page)) button { font-family: inherit; }
+
+#root:not(:has(.animal-catalog-page)) :is(.teal-button, .ghost-button, .ara2-button, .vm-btn) {
+  border-radius: var(--control-radius);
+  box-shadow: none;
+  text-shadow: none;
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+
+#root:not(:has(.animal-catalog-page)) :is(.teal-button, .ara2-button-blue, .vm-btn-primary) {
+  background: var(--navy);
+  color: var(--white);
+  border-color: var(--navy);
+}
+
+#root:not(:has(.animal-catalog-page)) :is(.teal-button, .ara2-button-blue, .vm-btn-primary):hover {
+  background: var(--teal-dark);
+  border-color: var(--teal-dark);
+  transform: none;
+}
+
+#root:not(:has(.animal-catalog-page)) :is(.dashboard-panel, .user-stat-card, .search-card, .catalog-sidebar,
+  .rescue-form-panel, .my-report-row, .adoption-track-row, .my-animal-row,
+  .my-animal-record-panel, .about-team-card, .ara2-action, .pet-card,
+  .vm-card, .vm-panel, .vm-workspace, .vm-workspace-card) {
+  border: 1px solid var(--line);
+  border-radius: var(--surface-radius);
+  box-shadow: none;
+}
+
+#root:not(:has(.animal-catalog-page)) :is(.pet-card, .ara2-action, .my-animal-row, .about-team-card):hover {
+  transform: none;
+  box-shadow: none;
+  border-color: var(--slate-soft);
+}
+
+#root:not(:has(.animal-catalog-page)) :is(.eyebrow, .ara2-overline) {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+#root:not(:has(.animal-catalog-page)) :is(.dashboard-page, .vm-page) { background: var(--bg); }
+#root:not(:has(.animal-catalog-page)) :is(.vm-root, .vm-container, .vm-content, .vm-header) {
+  --vm-shadow: none;
+  --vm-shadow-sm: none;
+  --vm-border: var(--line);
+  --vm-ink: var(--navy);
+  --vm-muted: var(--slate);
+}
+
+/* A quiet welcome area for operational dashboards; color belongs to status. */
+#root:not(:has(.animal-catalog-page)) .dashboard-page .dashboard-welcome {
+  padding: 32px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--navy);
+}
+#root:not(:has(.animal-catalog-page)) .dashboard-page .dashboard-welcome :is(h1, h2, p) { color: var(--navy); }
+#root:not(:has(.animal-catalog-page)) .dashboard-page .dashboard-welcome h2 { font-size: clamp(1.8rem, 3vw, 2.5rem); }
+#root:not(:has(.animal-catalog-page)) .dashboard-page .dashboard-welcome p { color: var(--slate); }
+#root:not(:has(.animal-catalog-page)) .dashboard-metrics > article {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: var(--surface-radius);
+  box-shadow: none;
+}
+#root:not(:has(.animal-catalog-page)) .dashboard-page .role-pill.teal-pill {
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--teal-tint);
+  color: var(--teal-dark);
+  font-size: 0.7rem;
+  box-shadow: none;
+}
+#root:not(:has(.animal-catalog-page)) .vm-stepper {
+  background: var(--white);
+  border-radius: var(--surface-radius);
+  box-shadow: none;
+}
+
+/* Task-focused public pages get the same calm canvas as My dashboard.
+   Home, About and Rescue retain their purpose-built photographic stories. */
+#root:not(:has(.animal-catalog-page)) .home-page:not(.about-page):not(.rescue-public-page) { background: var(--bg); }
+#root:not(:has(.animal-catalog-page)) .home-page:not(.about-page):not(.rescue-public-page)::before { display: none; }
+#root:not(:has(.animal-catalog-page)) .home-page:not(.about-page):not(.rescue-public-page) > .site-header {
+  border-bottom: 1px solid var(--line);
+  --notification-ink: var(--navy);
+}
+#root:not(:has(.animal-catalog-page)) .home-page:not(.about-page):not(.rescue-public-page) > .site-header .nav-link {
+  color: var(--navy);
+  text-shadow: none;
+}
+#root:not(:has(.animal-catalog-page)) .home-page:not(.about-page):not(.rescue-public-page) > .site-header .nav-link:is(:hover, .active) {
+  color: var(--teal-dark);
+}
+#root:not(:has(.animal-catalog-page)) .home-page:not(.about-page):not(.rescue-public-page) > .site-header .nav-link::after {
+  background: var(--teal-dark);
+}
+#root:not(:has(.animal-catalog-page)) .home-page:not(.about-page):not(.rescue-public-page) > .site-header .ghost-button {
+  background: var(--white);
+  color: var(--navy);
+  border-color: var(--line);
+}
+#root:not(:has(.animal-catalog-page)) .home-page:not(.about-page):not(.rescue-public-page) .catalog-hero {
+  min-height: 0;
+  margin-bottom: 32px;
+  padding: 40px 0 24px;
+}
+#root:not(:has(.animal-catalog-page)) .home-page:not(.about-page):not(.rescue-public-page) .catalog-hero :is(h1, .eyebrow, .lead-copy) {
+  color: var(--navy);
+  text-shadow: none;
+}
+#root:not(:has(.animal-catalog-page)) .home-page:not(.about-page):not(.rescue-public-page) .catalog-hero h1 {
+  font-size: clamp(2rem, 4vw, 3rem);
+}
+#root:not(:has(.animal-catalog-page)) .home-page:not(.about-page):not(.rescue-public-page) .catalog-hero .lead-copy {
+  color: var(--slate);
+}
+#root:not(:has(.animal-catalog-page)) .home-page:not(.about-page):not(.rescue-public-page) .page-shell > :is(.breadcrumbs, .breadcrumb-nav),
+#root:not(:has(.animal-catalog-page)) .home-page:not(.about-page):not(.rescue-public-page) .page-shell > :is(.breadcrumbs, .breadcrumb-nav) :is(button, a, span) {
+  color: var(--slate);
+}
+#root:not(:has(.animal-catalog-page)) .home-page .profile-page .profile-name { color: var(--navy); text-shadow: none; }
+
+/* Photography supplies personality; surrounding UI stays light and flat. */
+#root:not(:has(.animal-catalog-page)) .ara2-gallery { background: var(--white); }
+#root:not(:has(.animal-catalog-page)) .ara2-gallery h2 { font-weight: 400; }
+#root:not(:has(.animal-catalog-page)) .ara2-action { background: var(--white); }
+#root:not(:has(.animal-catalog-page)) .ara2-action-icon { border-radius: 8px; background: var(--teal-tint); }
+#root:not(:has(.animal-catalog-page)) .ara2-action-body strong { color: var(--navy); }
+#root:not(:has(.animal-catalog-page)) .my-animals-banner { border-radius: var(--surface-radius); }
+#root:not(:has(.animal-catalog-page)) .my-animals-banner-copy { background: var(--teal-tint); color: var(--navy); }
+#root:not(:has(.animal-catalog-page)) .my-animals-banner-copy :is(h1, p) { color: var(--navy); }
+#root:not(:has(.animal-catalog-page)) .my-animals-banner-description { color: var(--slate); }
+#root:not(:has(.animal-catalog-page)) .site-header .nav-link { font-weight: 400; font-size: 0.87rem; }
+#root:not(:has(.animal-catalog-page)) .site-header .brand-logo { filter: none; }
+
+@media (max-width: 620px) {
+  #root:not(:has(.animal-catalog-page)) .home-page:not(.about-page):not(.rescue-public-page) .catalog-hero { padding-top: 28px; }
+  #root:not(:has(.animal-catalog-page)) .dashboard-page .dashboard-welcome { padding-block: 24px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #root:not(:has(.animal-catalog-page)) :is(.teal-button, .ghost-button, .ara2-button, .vm-btn) { transition: none; }
+}

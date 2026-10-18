@@ -26,35 +26,29 @@ export type MedicalQueueAnimal = {
   // medical queue. Null only for animals registered before this field
   // existed (they sort after prioritised animals).
   veterinaryPriority?: VeterinaryPriority | null;
-  latestTriageAssessment?: RapidTriageAssessment | null;
-  triageStatusUnavailable?: boolean;
 };
 
-export type RapidTriageClinicalStability = "unstable" | "currently_stable" | "not_yet_assessed";
-export type RapidTriageInterventionUrgency = "immediate_intervention" | "urgent_evaluation" | "stabilized_monitoring";
-export type RapidTriageConditionTrend = "deteriorating" | "unchanged" | "improving" | "unknown";
-export type RapidTriageEmergencyFinding =
-  | "severe_bleeding"
-  | "breathing_difficulty"
-  | "circulatory_compromise"
-  | "altered_consciousness"
-  | "other_emergency_concern";
-
-export type RapidTriageAssessmentInput = {
-  clinicalStability: RapidTriageClinicalStability;
-  interventionUrgency: RapidTriageInterventionUrgency;
-  conditionTrend: RapidTriageConditionTrend;
-  emergencyFindings: RapidTriageEmergencyFinding[];
-  notes?: string;
-};
-
-export type RapidTriageAssessment = Omit<RapidTriageAssessmentInput, "notes"> & {
+export type VeterinaryEmergencyResponse = {
+  assistanceAlert?: { status: "sent" | "no_other_vets" | "unavailable" | "not_needed"; recipientCount: number; waitingAnimalIds: string[] };
   id: string;
   animalId: string;
-  notes: string | null;
-  performedByClerkUserId: string;
-  assessedAt: string;
+  attendingVeterinarianClerkUserId: string | null;
+  attendingVeterinarianName: string | null;
+  supportRequired: boolean;
+  coordinationNote: string | null;
+  version: number;
+  updatedByClerkUserId: string;
+  createdAt: string;
+  updatedAt: string;
+  closedAt: string | null;
 };
+
+type EmergencyExpectation = { responseId: string | null; version: number | null };
+export type VeterinaryEmergencyAction = EmergencyExpectation & (
+  | { action: "attend" | "release" }
+  | { action: "take_over"; handoffConfirmed: true; note: string }
+  | { action: "support"; supportRequired: boolean; note: string }
+);
 
 // A veterinary examination (initial or follow-up) recorded on an animal's
 // medical record. Mirrors the `veterinary_examinations` table returned by the

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { IconArrowLeft, IconCalendar, IconCheck, IconClock, IconNotes, IconUser } from "../../components/MedicalIcons";
-import { SiteHeader } from "../../components/SiteHeader";
+import { VeterinaryNavbar } from "./components/VeterinaryNavbar";
 import { completeAppointment, fetchMedicalRecord } from "../../services/veterinaryApi";
 import type { MedicalRecord, VeterinaryAppointment } from "../../types/veterinary";
 import type { VeterinaryView } from "./vetTypes";
@@ -73,7 +73,7 @@ export function FollowUpAppointmentPage({ appointment: entry, getToken, onNaviga
 
   return (
     <main className="vm-page">
-      <SiteHeader isLoaded isSignedIn currentPage="user-dashboard" onNavigate={onNavigate} hideSiteNav />
+      <VeterinaryNavbar currentView="vet-appointment-details" onNavigate={onNavigate} />
       <div className="vm-container">
         <div className="vm-record-top" style={{ marginBottom: 14 }}>
           <button type="button" className="ghost-button compact-action" onClick={() => onNavigate(parentView)}><IconArrowLeft size={13} /> Back to {parentView === "vet-appointments" ? "appointments" : "dashboard"}</button>

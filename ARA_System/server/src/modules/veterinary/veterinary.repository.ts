@@ -1,3 +1,4 @@
+import { emergencyClosureStatement } from "./emergency.lifecycle.js";
 import { and, asc, desc, eq, exists, gte, inArray, isNull, ne, sql } from "drizzle-orm";
 import { db } from "../../db/client.js";
 import {
@@ -6,7 +7,6 @@ import {
 	vetAppointments,
 	veterinaryCarePlans,
 	veterinaryExaminations,
-	veterinaryTriageAssessments,
 	veterinaryTreatmentHistory,
 } from "../../db/schema.js";
 
@@ -74,7 +74,7 @@ export async function listMedicalQueue() {
 			careCompleted: careItemsDone,
 		})
 		.from(animals)
-		.where(and(isNull(animals.deletedAt), ne(animals.status, "adopted"), eq(animals.medicallyCleared, false)))
+		.where(and(isNull(animals.deletedAt), sql`${animals.status} not in ('adopted','closed')`, eq(animals.medicallyCleared, false)))
 		.orderBy(
 			// Most urgent priority first (critical -> routine, unset last)...
 			sql`case ${animals.veterinaryPriority}
@@ -103,34 +103,6 @@ export async function findMedicalRecord(animalId: string) {
 	const treatments = await db.select().from(veterinaryTreatmentHistory).where(eq(veterinaryTreatmentHistory.animalId, animalId)).orderBy(desc(veterinaryTreatmentHistory.treatmentDate));
 	const appointments = await db.select().from(vetAppointments).where(eq(vetAppointments.animalId, animalId)).orderBy(desc(vetAppointments.appointmentDate));
 	return animal ? { animal, examinations, carePlan, treatments, appointments } : null;
-}
-
-export async function findAnimalForTriage(animalId: string): Promise<{ id: string } | undefined> {
-	const [animal] = await db.select({ id: animals.id }).from(animals).where(eq(animals.id, animalId));
-	return animal;
-}
-
-export async function createTriageAssessment(input: typeof veterinaryTriageAssessments.$inferInsert) {
-	const [assessment] = await db.insert(veterinaryTriageAssessments).values(input).returning();
-	return assessment;
-}
-
-export async function findLatestTriageAssessment(animalId: string) {
-	const [assessment] = await db
-		.select()
-		.from(veterinaryTriageAssessments)
-		.where(eq(veterinaryTriageAssessments.animalId, animalId))
-		.orderBy(desc(veterinaryTriageAssessments.assessedAt), desc(veterinaryTriageAssessments.id))
-		.limit(1);
-	return assessment;
-}
-
-export async function listTriageAssessments(animalId: string) {
-	return db
-		.select()
-		.from(veterinaryTriageAssessments)
-		.where(eq(veterinaryTriageAssessments.animalId, animalId))
-		.orderBy(asc(veterinaryTriageAssessments.assessedAt), asc(veterinaryTriageAssessments.id));
 }
 
 export async function listAppointmentAnimals() {
@@ -264,6 +236,6 @@ export async function updateAppointment(id: string, input: Partial<typeof vetApp
 
 export async function clearAnimal(animalId: string, clerkUserId: string, notes?: string) {
 	const clearedAt = new Date();
-	const [animal] = await db.update(animals).set({ medicallyCleared: true, veterinaryStatus: "medically_cleared", medicalClearanceDate: clearedAt, medicalClearedByClerkUserId: clerkUserId, medicalClearanceNotes: notes, updatedAt: clearedAt }).where(eq(animals.id, animalId)).returning();
-	return { animal, clearedBy: clerkUserId, clearedAt };
+	const [updated] = await db.batch([db.update(animals).set({ medicallyCleared: true, veterinaryStatus: "medically_cleared", medicalClearanceDate: clearedAt, medicalClearedByClerkUserId: clerkUserId, medicalClearanceNotes: notes, updatedAt: clearedAt }).where(eq(animals.id, animalId)).returning(), db.execute(emergencyClosureStatement(animalId, clerkUserId))]);
+	return { animal: updated[0], clearedBy: clerkUserId, clearedAt };
 }

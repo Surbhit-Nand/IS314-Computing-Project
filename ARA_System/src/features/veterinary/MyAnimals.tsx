@@ -1,8 +1,13 @@
 import { SignInButton, useAuth } from "@clerk/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { IconCalendar, IconClock, IconPawPrint } from "../../components/MedicalIcons";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { IconPawPrint } from "../../components/MedicalIcons";
 import { SiteHeader, type SiteHeaderView } from "../../components/SiteHeader";
 import { SuccessToast } from "../../components/SuccessToast";
+import companionPhoto from "../../assets/spca-hero.webp";
+import "./my-animals-banner.css";
+import "./my-animal-records.css";
+import { DateTimePicker } from "./components/DateTimePicker";
+import { accountDataChanged, isUpcomingAppointment, notifyAccountDataChanged } from "../../utils/appointments";
 import {
   bookMyAnimalAppointment,
   cancelMyAnimalAppointment,
@@ -80,7 +85,6 @@ function AppointmentCard({
 }) {
   return (
     <article className="my-animal-appointment-card">
-      <div className="my-animal-appointment-icon"><IconCalendar size={18} /></div>
       <div className="my-animal-appointment-copy">
         <div className="my-animal-appointment-heading">
           <strong>{appointment.purpose}</strong>
@@ -122,27 +126,41 @@ export function MyAnimals({ currentView, animalId, onNavigate, onSelectAnimal }:
   const [cancelTarget, setCancelTarget] = useState<OwnerAppointment | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const [toast, setToast] = useState("");
+  const [animalAppointments, setAnimalAppointments] = useState<Record<string, OwnerAppointment[] | null>>({});
+  const animalsRequest = useRef(0);
+  const recordRequest = useRef(0);
+  const availabilityRequest = useRef(0);
 
-  const loadAnimals = useCallback(async () => {
-    setAnimalsLoading(true);
+  const loadAnimals = useCallback(async (background = false) => {
+    const version = ++animalsRequest.current;
+    if (!background) setAnimalsLoading(true);
     try {
       const token = await getToken();
       if (!token) {
         setAnimalsError("Sign in to view your adopted animals.");
         return;
       }
-      setAnimals(await fetchMyAnimals(token));
+      const owned = await fetchMyAnimals(token);
+      const records = await Promise.allSettled(owned.map((animal) => fetchMyAnimalRecord(token, animal.id)));
+      if (version !== animalsRequest.current) return;
+      setAnimals(owned);
+      setAnimalAppointments(Object.fromEntries(owned.map((animal, index) => {
+        const result = records[index];
+        return [animal.id, result.status === "fulfilled" ? result.value.appointments : null];
+      })));
       setAnimalsError("");
     } catch (error) {
+      if (version !== animalsRequest.current) return;
       setAnimalsError(error instanceof Error ? error.message : "Your adopted animals could not be loaded.");
     } finally {
-      setAnimalsLoading(false);
+      if (version === animalsRequest.current) setAnimalsLoading(false);
     }
   }, [getToken]);
 
-  const loadRecord = useCallback(async () => {
+  const loadRecord = useCallback(async (background = false) => {
     if (!animalId) return;
-    setRecordLoading(true);
+    const version = ++recordRequest.current;
+    if (!background) setRecordLoading(true);
     setRecordError("");
     try {
       const token = await getToken();
@@ -150,18 +168,22 @@ export function MyAnimals({ currentView, animalId, onNavigate, onSelectAnimal }:
         setRecordError("Sign in to view this animal's records.");
         return;
       }
-      setRecord(await fetchMyAnimalRecord(token, animalId));
+      const next = await fetchMyAnimalRecord(token, animalId);
+      if (version !== recordRequest.current) return;
+      setRecord(next);
       setRecordError("");
     } catch (error) {
+      if (version !== recordRequest.current) return;
       setRecord(null);
       setRecordError(error instanceof Error ? error.message : "Animal records could not be loaded.");
     } finally {
-      setRecordLoading(false);
+      if (version === recordRequest.current) setRecordLoading(false);
     }
   }, [animalId, getToken]);
 
   const loadAvailability = useCallback(async () => {
     if (!animalId || currentView !== "my-animal-booking" || !appointmentDate) return;
+    const version = ++availabilityRequest.current;
     setAvailabilityLoading(true);
     setAvailabilityError("");
     try {
@@ -170,20 +192,44 @@ export function MyAnimals({ currentView, animalId, onNavigate, onSelectAnimal }:
         setAvailabilityError("Sign in to check appointment availability.");
         return;
       }
-      setAvailability(await fetchMyAnimalAvailability(token, animalId, appointmentDate));
+      const next = await fetchMyAnimalAvailability(token, animalId, appointmentDate);
+      if (version !== availabilityRequest.current) return;
+      setAvailability(next);
     } catch (error) {
+      if (version !== availabilityRequest.current) return;
       setAvailability(null);
       setAvailabilityError(error instanceof Error ? error.message : "Available times could not be loaded.");
     } finally {
-      setAvailabilityLoading(false);
+      if (version === availabilityRequest.current) setAvailabilityLoading(false);
     }
   }, [animalId, appointmentDate, currentView, getToken]);
+
+  useEffect(() => () => {
+    recordRequest.current += 1;
+    availabilityRequest.current += 1;
+  }, [animalId, currentView]);
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn) return;
     const timer = window.setTimeout(() => void loadAnimals(), 0);
     return () => window.clearTimeout(timer);
   }, [isLoaded, isSignedIn, loadAnimals]);
+
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn || currentView !== "my-animals") return;
+    const refresh = () => { void loadAnimals(true); };
+    const interval = window.setInterval(refresh, 30000);
+    window.addEventListener("focus", refresh);
+    window.addEventListener(accountDataChanged, refresh);
+    const onStorage = (event: StorageEvent) => { if (event.key === accountDataChanged) refresh(); };
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener(accountDataChanged, refresh);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, [currentView, isLoaded, isSignedIn, loadAnimals]);
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn || !animalId || currentView === "my-animals") return;
@@ -197,10 +243,29 @@ export function MyAnimals({ currentView, animalId, onNavigate, onSelectAnimal }:
     return () => window.clearTimeout(timer);
   }, [currentView, isLoaded, isSignedIn, loadAvailability]);
 
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn || !animalId || currentView === "my-animals") return;
+    const refresh = () => {
+      void loadRecord(true);
+      if (currentView === "my-animal-booking") void loadAvailability();
+    };
+    const timer = window.setInterval(refresh, 30000);
+    window.addEventListener("focus", refresh);
+    window.addEventListener(accountDataChanged, refresh);
+    const onStorage = (event: StorageEvent) => { if (event.key === accountDataChanged) refresh(); };
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener(accountDataChanged, refresh);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, [animalId, currentView, isLoaded, isSignedIn, loadAvailability, loadRecord]);
+
   const upcomingAppointments = useMemo(
     () => (record?.appointments ?? []).filter(
-      (appointment) => appointment.status === "booked" && new Date(appointment.appointmentDate) > new Date(),
-    ),
+      (appointment) => isUpcomingAppointment(appointment),
+    ).sort((a, b) => Date.parse(a.appointmentDate) - Date.parse(b.appointmentDate)),
     [record],
   );
   const pastAppointments = useMemo(
@@ -230,6 +295,7 @@ export function MyAnimals({ currentView, animalId, onNavigate, onSelectAnimal }:
         return;
       }
       await cancelMyAnimalAppointment(token, animalId, cancelTarget.id);
+      notifyAccountDataChanged();
       setRecord((previous) => previous
         ? {
             ...previous,
@@ -265,6 +331,8 @@ export function MyAnimals({ currentView, animalId, onNavigate, onSelectAnimal }:
         notes: notes.trim() || undefined,
       });
       setBookedAppointment(appointment);
+      setRecord((previous) => previous ? { ...previous, appointments: [...previous.appointments, appointment] } : previous);
+      notifyAccountDataChanged();
       setBookingStep(4);
     } catch (error) {
       setBookingError(error instanceof Error ? error.message : "The appointment could not be booked.");
@@ -309,16 +377,22 @@ export function MyAnimals({ currentView, animalId, onNavigate, onSelectAnimal }:
         currentPage={currentView}
         onNavigate={onNavigate}
       />
-      <main className="page-shell my-animals-shell">
-        <header className="my-animals-intro">
-          <p className="eyebrow">Your SPCA family</p>
-          <h1>{pageTitle}</h1>
-          <p>
-            {currentView === "my-animals"
-              ? "View your adopted animals, medical records and veterinary appointments."
-              : "Your adopted animal's profile, veterinary history and care appointments."}
-          </p>
-        </header>
+      <main className={`page-shell my-animals-shell${currentView === "my-animals" ? "" : " my-animals-shell-detail"}`}>
+        {currentView === "my-animals" && (
+          <header className="my-animals-intro my-animals-banner">
+            <div className="my-animals-banner-copy">
+              <p className="my-animals-banner-eyebrow"><IconPawPrint size={18} /> Your SPCA family{!animalsLoading && !animalsError ? ` · ${animals.length} adopted` : ""}</p>
+              <h1>{pageTitle}</h1>
+              <p className="my-animals-banner-message">A little love. A lifetime of companionship.</p>
+              <p className="my-animals-banner-description">Keep their records close and their next care visit a little easier. Everything for your adopted companions, in one place.</p>
+              <span className="my-animals-banner-note">Together, beyond adoption</span>
+            </div>
+            <div className="my-animals-banner-photo" aria-hidden="true">
+              <img src={companionPhoto} alt="" fetchPriority="high" />
+              <span className="my-animals-banner-caption"><IconPawPrint size={18} /> A forever home starts with you.</span>
+            </div>
+          </header>
+        )}
 
         {currentView === "my-animals" ? (
           <>
@@ -330,36 +404,40 @@ export function MyAnimals({ currentView, animalId, onNavigate, onSelectAnimal }:
                 <span><IconPawPrint size={28} /></span>
                 <h2>You don&apos;t have any adopted animals yet.</h2>
                 <p>When an adoption is complete, your animal and their records will appear here.</p>
-                <button type="button" className="teal-button" onClick={() => onNavigate("animal-listings")}>Browse animals</button>
+                <button type="button" className="teal-button" onClick={() => onNavigate("animal-listings")}>Browse Animals</button>
               </section>
             ) : (
-              <section className="my-animals-grid" aria-label="Your adopted animals">
+              <section className="my-animals-list" aria-label="Your adopted animals">
                 {animals.map((animal) => (
-                  <article className="my-animal-card" key={animal.id}>
-                    {animalImage(animal, "my-animal-card-photo")}
-                    <div className="my-animal-card-body">
-                      <div className="my-animal-card-title">
-                        <div><h2>{animal.name}</h2></div>
-                        <span className="my-animal-paw"><IconPawPrint size={17} /></span>
-                      </div>
-                      <p className="my-animal-card-meta">{readable(animal.type)}{animal.breed ? ` · ${animal.breed}` : ""}</p>
-                      <dl className="my-animal-facts">
-                        <div><dt>Sex</dt><dd>{readable(animal.gender)}</dd></div>
-                        <div><dt>Age</dt><dd>{animal.estimatedAge || "Not recorded"}</dd></div>
-                      </dl>
-                      <button
-                        type="button"
-                        className="teal-button"
-                        onClick={() => {
-                          setActiveTab("overview");
-                          onSelectAnimal(animal.id);
-                          onNavigate("my-animal-record");
-                        }}
-                        aria-label={`View ${animal.name}'s records`}
-                      >
-                        View Records
-                      </button>
+                  <article className="my-animal-row" key={animal.id}>
+                    {animalImage(animal, "my-animal-row-photo")}
+                    <div className="my-animal-row-copy">
+                      <h2>{animal.name}</h2>
+                      <p className="my-animal-row-meta">{readable(animal.type)}{animal.breed ? ` · ${animal.breed}` : ""}</p>
+                      <p className="my-animal-row-facts">
+                        <span>{readable(animal.gender)}</span>
+                        <span aria-hidden="true">·</span>
+                        <span>{animal.estimatedAge || "Age not recorded"}</span>
+                      </p>
+                      <p className="my-animal-row-next">
+                        {animalAppointments[animal.id] == null ? "Appointment information unavailable" : (() => {
+                          const next = animalAppointments[animal.id]!.filter((appointment) => isUpcomingAppointment(appointment)).sort((a, b) => Date.parse(a.appointmentDate) - Date.parse(b.appointmentDate))[0];
+                          return next ? `Next visit · ${displayDate(next.appointmentDate)} at ${displayTime(next.appointmentDate)}` : "No upcoming appointments";
+                        })()}
+                      </p>
                     </div>
+                    <button
+                      type="button"
+                      className="teal-button my-animal-row-action"
+                      onClick={() => {
+                        setActiveTab("overview");
+                        onSelectAnimal(animal.id);
+                        onNavigate("my-animal-record");
+                      }}
+                      aria-label={`View ${animal.name}'s records`}
+                    >
+                      View Records
+                    </button>
                   </article>
                 ))}
               </section>
@@ -379,12 +457,17 @@ export function MyAnimals({ currentView, animalId, onNavigate, onSelectAnimal }:
             <section className="my-animal-booking">
               <button type="button" className="my-animal-back" onClick={() => onNavigate("my-animal-record")}>← Back to {record.animal.name}&apos;s records</button>
               {recordError && <p className="form-error" role="alert">{recordError}</p>}
-              <div className="my-animal-booking-layout">
+              <div className="my-animal-booking-layout companion-booking-layout">
                 <aside className="my-animal-booking-profile">
                   {animalImage(record.animal, "my-animal-booking-photo")}
                   <p className="eyebrow">Appointment for</p>
                   <h2>{record.animal.name}</h2>
                   <p>{readable(record.animal.type)}{record.animal.breed ? ` · ${record.animal.breed}` : ""}</p>
+                  {!bookedAppointment && <dl className="companion-booking-summary">
+                    <div><dt>Visit date</dt><dd>{displayDate(appointmentDate)}</dd></div>
+                    <div><dt>Time · Fiji</dt><dd>{selectedTime || "Choose a time"}</dd></div>
+                    {bookingStep >= 3 && <div><dt>Reason</dt><dd>{reason === "Other" ? otherReason || "Tell us more" : reason}</dd></div>}
+                  </dl>}
                 </aside>
                 <div className="my-animal-booking-main">
                   {bookedAppointment ? (
@@ -411,11 +494,14 @@ export function MyAnimals({ currentView, animalId, onNavigate, onSelectAnimal }:
                   ) : (
                     <>
                       <p className="eyebrow">Book veterinary care</p>
-                      <h1>Schedule an appointment</h1>
+                      <h1>Book a visit for {record.animal.name}</h1>
                       <ol className="my-animal-booking-steps" aria-label="Booking steps">
                         {["Date", "Time", "Details", "Review"].map((label, index) => (
-                          <li className={bookingStep === index + 1 ? "active" : bookingStep > index + 1 ? "complete" : ""} key={label}>
-                            <span>{index + 1}</span>{label}
+                          <li aria-current={bookingStep === index + 1 ? "step" : undefined} className={bookingStep === index + 1 ? "active" : bookingStep > index + 1 ? "complete" : ""} key={label}>
+                            <button type="button" disabled={index + 1 > bookingStep} onClick={() => setBookingStep(index + 1)} aria-label={`${label}${index + 1 === bookingStep ? ", current step" : ""}`}>
+                              <span>{bookingStep > index + 1 ? "✓" : index + 1}</span>
+                              <div>{label}<small>{["Pick a day", "Find a slot", "Tell us more", "Confirm visit"][index]}</small></div>
+                            </button>
                           </li>
                         ))}
                       </ol>
@@ -423,26 +509,29 @@ export function MyAnimals({ currentView, animalId, onNavigate, onSelectAnimal }:
                       {bookingStep === 1 && (
                         <section className="my-animal-booking-step">
                           <h2>Choose a date</h2>
-                          <label className="my-animal-field">
-                            Appointment date
-                            <input
-                              type="date"
-                              min={clinicToday()}
+                          <div className="my-animal-field">
+                            <span>Appointment date</span>
+                            <DateTimePicker
+                              dateOnly
+                              disablePast
+                              minDate={clinicToday()}
+                              required
                               value={appointmentDate}
-                              onChange={(event) => {
-                                setAppointmentDate(event.target.value);
+                              onChange={(date) => {
+                                availabilityRequest.current += 1;
+                                setAppointmentDate(date);
                                 setSelectedTime("");
                                 setAvailability(null);
                                 setAvailabilityError("");
                               }}
                             />
-                          </label>
+                          </div>
                           <p className="my-animal-hint">The clinic is open Monday–Friday 8:00 am–5:00 pm and Saturday 8:00 am–1:00 pm Fiji time.</p>
                           {availabilityError && <p className="form-error" role="alert">{availabilityError}</p>}
                           {availability && !availabilityLoading && !availability.slots.some((slot) => slot.available) && (
-                            <p className="my-animal-hint">No appointment times are available for this date. You can still view the schedule or choose another date.</p>
+                            <p className="my-animal-hint" role="status">No appointment times are available for this date. Please choose another date.</p>
                           )}
-                          <button type="button" className="teal-button" disabled={!availability || availabilityLoading} onClick={() => setBookingStep(2)}>
+                          <button type="button" className="teal-button" disabled={!availability?.slots.some((slot) => slot.available) || availabilityLoading} onClick={() => setBookingStep(2)}>
                             {availabilityLoading ? "Checking dates…" : "Continue to times"}
                           </button>
                         </section>
@@ -458,6 +547,7 @@ export function MyAnimals({ currentView, animalId, onNavigate, onSelectAnimal }:
                                 type="button"
                                 key={slot.time}
                                 disabled={!slot.available}
+                                aria-pressed={selectedTime === slot.time}
                                 className={`my-animal-slot${selectedTime === slot.time ? " selected" : ""}${slot.status !== "available" ? " unavailable" : ""}`}
                                 onClick={() => setSelectedTime(slot.time)}
                               >
@@ -468,7 +558,7 @@ export function MyAnimals({ currentView, animalId, onNavigate, onSelectAnimal }:
                           </div>
                           <div className="my-animal-action-row">
                             <button type="button" className="ghost-button" onClick={() => setBookingStep(1)}>Back</button>
-                            <button type="button" className="teal-button" disabled={!selectedTime} onClick={() => setBookingStep(3)}>Continue</button>
+                            <button type="button" className="teal-button" disabled={availabilityLoading || !availability?.slots.some((slot) => slot.time === selectedTime && slot.available)} onClick={() => setBookingStep(3)}>Continue</button>
                           </div>
                         </section>
                       )}
@@ -522,35 +612,59 @@ export function MyAnimals({ currentView, animalId, onNavigate, onSelectAnimal }:
             </section>
           ) : (
             <section className="my-animal-record">
-              <button type="button" className="my-animal-back" onClick={() => onNavigate("my-animals")}>← My Animals</button>
+              <button type="button" className="my-animal-back" onClick={() => onNavigate("my-animals")}>← Back to My Animals</button>
               {recordError && <p className="form-error" role="alert">{recordError}</p>}
-              <header className="my-animal-record-header">
-                {animalImage(record.animal, "my-animal-record-photo")}
-                <div>
-                  <h2>{record.animal.name}</h2>
-                  <p>{readable(record.animal.type)}{record.animal.breed ? ` · ${record.animal.breed}` : ""}</p>
-                  <div className="my-animal-action-row">
-                    <button type="button" className="teal-button" onClick={() => {
-                      setBookingStep(1);
-                      setSelectedTime("");
-                      setBookedAppointment(null);
-                      setAppointmentDate(clinicToday());
-                      onNavigate("my-animal-booking");
-                    }}>Book Veterinary Appointment</button>
-                  </div>
+              <div className="companion-record-layout">
+              <header className="my-animal-profile">
+                {animalImage(record.animal, "my-animal-profile-photo")}
+                <div className="my-animal-profile-copy">
+                  <p className="eyebrow">Your companion · {record.animal.publicId}</p>
+                  <h1>{record.animal.name}</h1>
+                  <p>
+                    {readable(record.animal.type)}
+                    {record.animal.breed ? ` · ${record.animal.breed}` : ""}
+                    {" · "}{readable(record.animal.gender)}
+                    {" · "}{record.animal.estimatedAge || "Age not recorded"}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="teal-button my-animal-profile-action"
+                  onClick={() => {
+                    setBookingStep(1);
+                    setSelectedTime("");
+                    setBookedAppointment(null);
+                    setAppointmentDate(clinicToday());
+                    onNavigate("my-animal-booking");
+                  }}
+                >
+                    Book an appointment
+                </button>
+                <div className="companion-next-visit">
+                  <span>Next visit</span>
+                  <strong>{upcomingAppointments[0] ? displayDate(upcomingAppointments[0].appointmentDate) : "Nothing scheduled"}</strong>
+                  <p>{upcomingAppointments[0] ? `${displayTime(upcomingAppointments[0].appointmentDate)} · Fiji time` : "Book a visit when your companion needs care."}</p>
+                  <button type="button" className="text-button" onClick={() => setActiveTab("appointments")}>Appointment history →</button>
                 </div>
               </header>
+              <div className="companion-record-content">
               <nav className="my-animal-tabs" aria-label={`${record.animal.name} records`}>
                 {(["overview", "medical", "appointments"] as const).map((tab) => (
                   <button type="button" key={tab} className={activeTab === tab ? "active" : ""} onClick={() => setActiveTab(tab)}>
-                    {tab === "medical" ? "Medical Records" : readable(tab)}
+                    {tab === "medical" ? "Medical Records" : readable(tab)}{tab === "appointments" && <span className="my-animal-tab-count">{upcomingAppointments.length}</span>}
                   </button>
                 ))}
               </nav>
               {activeTab === "overview" && (
                 <section className="my-animal-record-panel">
-                  <h2>Animal overview</h2>
+                  <p className="eyebrow">Getting to know {record.animal.name}</p>
+                  <h2>A little about {record.animal.name}</h2>
                   {record.animal.description && <p className="my-animal-description">{record.animal.description}</p>}
+                  <div className="companion-health-strip">
+                    <div><span>Medical clearance</span><strong>{record.animal.medicallyCleared ? "Cleared" : "Not recorded"}</strong>{record.animal.medicalClearanceDate && <small>{displayDate(record.animal.medicalClearanceDate)}</small>}</div>
+                    <div><span>Vaccination</span><strong>{readable(record.animal.vaccinationStatus)}</strong><button type="button" className="text-button" onClick={() => setActiveTab("medical")}>View medical records →</button></div>
+                  </div>
+                  <h3 className="companion-details-heading">Profile details</h3>
                   <dl className="my-animal-overview-facts">
                     <div><dt>Species</dt><dd>{readable(record.animal.type)}</dd></div>
                     <div><dt>Breed</dt><dd>{record.animal.breed || "Not recorded"}</dd></div>
@@ -558,8 +672,6 @@ export function MyAnimals({ currentView, animalId, onNavigate, onSelectAnimal }:
                     <div><dt>Sex</dt><dd>{readable(record.animal.gender)}</dd></div>
                     <div><dt>Colour</dt><dd>{readable(record.animal.colour)}</dd></div>
                     <div><dt>Size</dt><dd>{readable(record.animal.size)}</dd></div>
-                    <div><dt>Vaccination</dt><dd>{readable(record.animal.vaccinationStatus)}</dd></div>
-                    <div><dt>Medical clearance</dt><dd>{record.animal.medicallyCleared ? `Cleared${record.animal.medicalClearanceDate ? ` · ${displayDate(record.animal.medicalClearanceDate)}` : ""}` : "Not recorded"}</dd></div>
                   </dl>
                 </section>
               )}
@@ -601,7 +713,7 @@ export function MyAnimals({ currentView, animalId, onNavigate, onSelectAnimal }:
               )}
               {activeTab === "appointments" && (
                 <section className="my-animal-record-panel">
-                  <div className="my-animal-panel-title"><h2>Appointments</h2><IconClock size={18} /></div>
+                  <h2>Appointments</h2>
                   <h3 className="my-animal-subheading">Upcoming appointments</h3>
                   {upcomingAppointments.length === 0 ? (
                     <p className="my-animal-record-empty">No upcoming appointments.</p>
@@ -622,6 +734,8 @@ export function MyAnimals({ currentView, animalId, onNavigate, onSelectAnimal }:
                   )}
                 </section>
               )}
+              </div>
+              </div>
             </section>
           )
         ) : (

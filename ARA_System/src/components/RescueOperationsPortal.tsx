@@ -811,7 +811,7 @@ function MissionDetailPage({
           </h1>
         </div>
         <button type="button" className="ghost-button rescue-detail-back" onClick={onBack}>
-          <span aria-hidden="true">←</span> Back to {backLabel}
+          <span aria-hidden="true">←</span> {backLabel}
         </button>
       </div>
       <MissionDetail
@@ -1330,7 +1330,7 @@ function MissionDetail({
 
       <div className={isResolvedDispatcherView ? "rescue-history-overview" : "rescue-detail-columns"}>
         <div className="rescue-details-card">
-          <h3 className="rescue-card-title">Alert Details</h3>
+          <div className="rescue-facts-heading"><span className="rescue-facts-icon" aria-hidden="true"><RescueSummaryIcon name="clipboard" /></span><div><h3 className="rescue-card-title">Alert details</h3><p>The original report and location.</p></div></div>
           <dl className="rescue-details-list">
             <div className="rescue-detail-field">
               <dt>Reference number</dt>
@@ -1392,6 +1392,7 @@ function MissionDetail({
             </div>
           </dl>
 
+          {!isResolvedDispatcherView && <div className="rescue-mission-media">
           {hasPin && (
             <div className="rescue-detail-photo-block">
               <h4 className="rescue-card-subtitle">Location map</h4>
@@ -1406,11 +1407,13 @@ function MissionDetail({
                 {mission.photoUrls.map((url) => (
                   <a key={url} href={url} target="_blank" rel="noopener noreferrer">
                     <img src={url} alt={`Photo for ${mission.reference}`} />
+                    <span className="rescue-photo-caption">View full photo ↗</span>
                   </a>
                 ))}
               </div>
             </div>
           )}
+          </div>}
         </div>
 
         {isResolvedDispatcherView ? (
@@ -1496,34 +1499,9 @@ function MissionDetail({
       </div>
 
       {isResolvedDispatcherView ? (
-        <div className="rescue-history-lower-grid">
-          <div className="rescue-progress-block rescue-history-updates-card">
-            <h4 className="rescue-card-subtitle">Mission updates</h4>
-            {mission.updates.length > 0 ? (
-              <>
-                <ol className="rescue-activity-timeline">
-                  {mission.updates.slice(0, updatesToShow).map((update) => (
-                    <MissionUpdateEntry key={update.id} update={update} />
-                  ))}
-                </ol>
-                {hiddenUpdates > 0 && (
-                  <button
-                    type="button"
-                    className="ghost-button rescue-show-more"
-                    onClick={() => setUpdatesToShow(mission.updates.length)}
-                  >
-                    Show {hiddenUpdates} more update{hiddenUpdates === 1 ? "" : "s"}
-                  </button>
-                )}
-              </>
-            ) : (
-              <p className="rescue-history-empty">No mission updates were filed for this rescue.</p>
-            )}
-          </div>
-          <div className="rescue-history-progress-card">
-            <RescueProgressTimeline report={mission} compact />
-          </div>
-        </div>
+        <>
+          <MissionArchive mission={mission} />
+        </>
       ) : (
         <>
           {mission.updates.length > 0 && (
@@ -2065,6 +2043,56 @@ function DebriefForm({ onDebrief }: { onDebrief: (input: DebriefInput) => Promis
         Review and confirm
       </button>
     </form>
+  );
+}
+
+function MissionArchive({ mission }: { mission: RescueMission }) {
+  const hasPin = mission.latitude != null && mission.longitude != null;
+  const photos = [...new Set([...mission.photoUrls, ...mission.updates.flatMap((entry) => entry.imageUrls), ...mission.progress.flatMap((entry) => entry.imageUrls)])];
+  const [tab, setTab] = useState<"location" | "photos" | "activity">(hasPin ? "location" : photos.length ? "photos" : "activity");
+  return (
+    <section className="mission-archive" aria-label="Mission records">
+      <div className="mission-archive-tabs" role="group" aria-label="Mission record sections">
+        <button type="button" aria-pressed={tab === "location"} onClick={() => setTab("location")}>Location</button>
+        <button type="button" aria-pressed={tab === "photos"} onClick={() => setTab("photos")}>Photos <span>{photos.length}</span></button>
+        <button type="button" aria-pressed={tab === "activity"} onClick={() => setTab("activity")}>Activity</button>
+      </div>
+      {tab === "location" && <div className="mission-location-pane">
+        <div className="mission-location-info">
+          <span className="mission-location-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></svg></span>
+          <span className="eyebrow">On the ground</span>
+          <h3>Where the rescue began</h3>
+          <p>{mission.location}</p>
+          <a href={hasPin ? `https://www.google.com/maps?q=${mission.latitude},${mission.longitude}` : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mission.location)}`} target="_blank" rel="noopener noreferrer">Open directions <span aria-hidden="true">?</span></a>
+        </div>
+        {hasPin ? <div className="mission-map-frame"><RescueReadOnlyMap latitude={mission.latitude!} longitude={mission.longitude!} /><div className="mission-map-caption"><span><i /> Reported position</span><span>{mission.latitude!.toFixed(5)}, {mission.longitude!.toFixed(5)}</span></div></div> : <p>No map pin was provided with this report.</p>}
+      </div>}
+      {tab === "photos" && <div className="mission-photo-pane">{photos.length ? photos.map((url, index) => <a href={url} key={url} target="_blank" rel="noopener noreferrer"><img src={url} alt={`Mission photo ${index + 1} for ${mission.reference}`} loading="lazy" /><span>Photo {index + 1} ↗</span></a>) : <p>No photos were attached to this mission.</p>}</div>}
+      {tab === "activity" && <ResolvedMissionActivity mission={mission} />}
+    </section>
+  );
+}
+
+function ResolvedMissionActivity({ mission }: { mission: RescueMission }) {
+  const [limit, setLimit] = useState(5);
+  const entries = [
+    { id: "submitted", date: mission.createdAt, title: "Alert submitted", actor: mission.reporterName || "Reporter", detail: "Rescue report received.", photos: [] as string[], status: "submitted" as RescueReportStatus | null },
+    ...mission.progress.filter((entry) => entry.toStatus !== "submitted").map((entry) => ({
+      id: `progress-${entry.id}`, date: entry.createdAt, title: STATUS_BADGE_LABEL[entry.toStatus], actor: entry.dispatcherName || "SPCA team",
+      detail: [entry.notes, entry.outcome ? RESCUE_OUTCOME_LABELS[entry.outcome] : null, entry.additionalRemarks].filter(Boolean).join(" · "), photos: entry.imageUrls, status: entry.toStatus as RescueReportStatus | null,
+    })),
+    ...mission.updates.map((entry) => ({ id: `update-${entry.id}`, date: entry.createdAt, title: RESCUE_UPDATE_TYPE_LABELS[entry.updateType], actor: entry.dispatcherName || "SPCA team", detail: entry.message || "", photos: entry.imageUrls, status: null as RescueReportStatus | null })),
+  ].sort((a, b) => Date.parse(b.date) - Date.parse(a.date) || a.id.localeCompare(b.id));
+  return (
+    <section className="mission-activity-section" aria-label="Complete mission activity">
+      <header><div><p className="eyebrow">Every step of the rescue</p><h3>Mission journal</h3></div><span>{entries.length} updates &middot; Latest first</span></header>
+      <ol>{entries.slice(0, limit).map((entry) => <li key={entry.id}>
+        <time dateTime={entry.date}>{formatDateTime(entry.date)}</time>
+        <span className={`mission-feed-marker${entry.status === "resolved" ? " complete" : ""}`} aria-hidden="true"><RescueSummaryIcon name={entry.status === "resolved" ? "check" : entry.status === "in_progress" ? "pulse" : entry.status === "assigned" ? "inbox" : "clipboard"} /></span>
+        <div className="mission-feed-body"><div><strong>{entry.title}</strong><span>by {entry.actor}</span></div>{entry.detail && <p>{entry.detail}</p>}{entry.photos.length > 0 && <div className="mission-feed-photos">{entry.photos.map((url) => <a key={url} href={url} target="_blank" rel="noopener noreferrer"><img src={url} alt={`${entry.title} evidence`} loading="lazy" /></a>)}</div>}</div>
+      </li>)}</ol>
+      {entries.length > limit && <button type="button" className="ghost-button" onClick={() => setLimit(entries.length)}>Show {entries.length - limit} more updates</button>}
+    </section>
   );
 }
 
