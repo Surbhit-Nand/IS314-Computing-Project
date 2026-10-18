@@ -1,5 +1,8 @@
 import { SignInButton, useAuth, useUser } from "@clerk/react";
+import { useEffect, useState } from "react";
 import spcaLogo from "../assets/spca-logo.png";
+import { fetchAllAdoptionApplications } from "../services/adoptionsApi";
+import type { AdoptionApplication } from "../types/adoption";
 import { isDevBypassEnabled } from "../utils/devBypass";
 import { SiteHeader, type SiteHeaderView } from "./SiteHeader";
 
@@ -11,15 +14,52 @@ type StaffDashboardProps = {
 
 type StaffRole = "staff" | "veterinarian";
 
-const queueItems = [
-  ["Rescue alerts", "6 alerts need an initial review", "urgent"],
-  ["Animals awaiting intake", "4 animals need profile details", "active"],
-  ["Adoption applications", "8 applications are ready for review", "pending"],
-  ["Medical follow-ups", "3 appointments are scheduled today", "medical"],
+// Work-queue rows are shortcuts to the screen that resolves them. They carry no
+// counts of their own: this dashboard only has a data source for the adoption
+// queue (fetched from GET /api/adoptions below), so the other rows describe the
+// action instead of asserting a number nothing here can verify.
+type QueueItem = {
+  title: string;
+  detail: string;
+  dotClass: string;
+  view: SiteHeaderView;
+};
+
+const queueItems: QueueItem[] = [
+  {
+    title: "Rescue alerts",
+    detail: "Review incoming rescue reports",
+    dotClass: "urgent",
+    view: "manage-rescue-reports",
+  },
+  {
+    title: "Animals awaiting intake",
+    detail: "Finish profiles that still need details",
+    dotClass: "active",
+    view: "manage-animals",
+  },
+  {
+    title: "Adoption applications",
+    detail: "",
+    dotClass: "adoption",
+    view: "manage-adoption-applications",
+  },
 ];
 
+// Approved/completed, rejected and withdrawn are already resolved, so only
+// submitted and under_review applications are "awaiting a staff decision".
+function isAwaitingDecision(status: AdoptionApplication["status"]): boolean {
+  return status === "submitted" || status === "under_review";
+}
+
+// A real count can be unknown while it loads (or if the queue call fails) -
+// shown as a dash rather than a made-up number.
+function metricValue(value: number | null): string {
+  return value === null ? "—" : String(value);
+}
+
 export function StaffDashboard({ onNavigate }: StaffDashboardProps) {
-  const { isLoaded, isSignedIn } = useAuth();
+  const { getToken, isLoaded, isSignedIn } = useAuth();
   const { user } = useUser();
   const role = user?.publicMetadata.role;
   const hasStaffAccess = isDevBypassEnabled || role === "staff" || role === "veterinarian";
@@ -28,6 +68,57 @@ export function StaffDashboard({ onNavigate }: StaffDashboardProps) {
     veterinarian: "Veterinarian",
   };
   const currentRole = roleLabel[role as StaffRole] ?? "Staff";
+
+  // The real adoption review queue (staff-only endpoint). Null until it has
+  // loaded, so the tiles can tell "not loaded" apart from a genuine zero.
+  const [applications, setApplications] = useState<AdoptionApplication[] | null>(null);
+  const [queueError, setQueueError] = useState("");
+
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn || !hasStaffAccess) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const token = await getToken();
+        if (!token || cancelled) return;
+        const rows = await fetchAllAdoptionApplications(token);
+        if (!cancelled) setApplications(rows);
+      } catch {
+        // Leave the counts unknown ("—") rather than inventing a value; the
+        // review queue itself still surfaces the load error to the reviewer.
+        if (!cancelled) setQueueError("Adoption applications could not be loaded.");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [getToken, hasStaffAccess, isLoaded, isSignedIn]);
+
+  const newSubmissions =
+    applications?.filter((application) => application.status === "submitted").length ?? null;
+  const underReview =
+    applications?.filter((application) => application.status === "under_review").length ?? null;
+  const awaitingDecision =
+    newSubmissions === null || underReview === null ? null : newSubmissions + underReview;
+  // Pending applications that cannot be approved yet because a veterinarian has
+  // not cleared the animal - the same gate adoptions.service enforces.
+  const awaitingClearance =
+    applications?.filter(
+      (application) =>
+        isAwaitingDecision(application.status) &&
+        application.animal !== null &&
+        !application.animal.medicallyCleared,
+    ).length ?? null;
+
+  const adoptionQueueDetail = queueError
+    ? queueError
+    : applications === null
+      ? "Loading applications…"
+      : awaitingDecision === 0
+        ? "No applications are waiting for review"
+        : `${awaitingDecision} ${
+            awaitingDecision === 1 ? "application is" : "applications are"
+          } ready for review`;
 
   if (!isLoaded || !isSignedIn) {
     return (
@@ -141,26 +232,29 @@ export function StaffDashboard({ onNavigate }: StaffDashboardProps) {
         </div>
       </section>
 
-      <section className="dashboard-metrics" aria-label="Staff work summary">
-        <article>
-          <span>Rescue alerts</span>
-          <strong>6</strong>
-          <small>Awaiting initial review</small>
-        </article>
-        <article>
-          <span>Animals to intake</span>
-          <strong>4</strong>
-          <small>Profiles need attention</small>
-        </article>
+      {/* Every tile is derived from the real adoption queue above; the
+          rescue/intake/appointment counters this used to show were hardcoded
+          and had no data source here, so they were removed rather than faked. */}
+      <section className="dashboard-metrics" aria-label="Adoption review summary">
         <article>
           <span>Applications</span>
-          <strong>8</strong>
-          <small>Ready for review</small>
+          <strong>{metricValue(awaitingDecision)}</strong>
+          <small>Submitted or under review</small>
         </article>
         <article>
-          <span>Appointments today</span>
-          <strong>3</strong>
-          <small>Scheduled follow-ups</small>
+          <span>New submissions</span>
+          <strong>{metricValue(newSubmissions)}</strong>
+          <small>Not yet opened</small>
+        </article>
+        <article>
+          <span>Under review</span>
+          <strong>{metricValue(underReview)}</strong>
+          <small>Being assessed</small>
+        </article>
+        <article>
+          <span>Awaiting clearance</span>
+          <strong>{metricValue(awaitingClearance)}</strong>
+          <small>Cannot be approved yet</small>
         </article>
       </section>
 
@@ -170,17 +264,26 @@ export function StaffDashboard({ onNavigate }: StaffDashboardProps) {
             <p className="eyebrow">Work queue</p>
             <h2>Items needing attention</h2>
           </div>
-          <span className="panel-note">Updated just now</span>
         </div>
         <div className="activity-list">
-          {queueItems.map(([title, detail, status]) => (
-            <div key={title}>
-              <span className={`activity-dot ${status}`} />
+          {queueItems.map((item) => (
+            <div key={item.title}>
+              <span className={`activity-dot ${item.dotClass}`} />
               <p>
-                <strong>{title}</strong>
-                <span>{detail}</span>
+                <strong>{item.title}</strong>
+                <span>
+                  {item.view === "manage-adoption-applications"
+                    ? adoptionQueueDetail
+                    : item.detail}
+                </span>
               </p>
-              <span className="role-pill muted">Open queue</span>
+              <button
+                type="button"
+                className="mini-button"
+                onClick={() => onNavigate(item.view)}
+              >
+                Open queue
+              </button>
             </div>
           ))}
         </div>

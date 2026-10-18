@@ -9,6 +9,11 @@ import { Breadcrumbs } from "../../components/Breadcrumbs";
 import { SiteFooter } from "../../components/SiteFooter";
 import { SiteHeader, type SiteHeaderView } from "../../components/SiteHeader";
 import { SkeletonLoader } from "../../components/SkeletonLoader";
+import {
+  answerLabel,
+  yesNoLabel,
+  type AnswerSection,
+} from "./AdoptionQuestionnaireAnswers";
 
 type AdoptionApplicationFormProps = {
   // The animal being applied for (the one whose profile "Adopt" was clicked
@@ -94,6 +99,83 @@ function visibleSteps(form: FormState): StepId[] {
   return steps;
 }
 
+// Permissive client-side check mirroring the server's message; the server
+// remains authoritative (it also rejects disposable/undeliverable domains).
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Matches the multer limit on POST /api/adoptions/id-document (8 MB).
+const MAX_ID_PHOTO_BYTES = 8 * 1024 * 1024;
+
+// Read-only recap of everything entered so far, shown on the final step so
+// "Review & submit" actually reviews something before the applicant commits.
+// Labels come from AdoptionQuestionnaireAnswers so the wording matches the
+// staff review queue.
+function reviewSummary(form: FormState): AnswerSection[] {
+  const text = (value: string) => value.trim() || "Not provided";
+  const phone = (code: string, national: string) =>
+    national.trim() ? formatPhone(code, national) : "Not provided";
+
+  return [
+    {
+      title: "1. Applicant",
+      rows: [
+        { label: "Full name", value: text(form.fullName) },
+        { label: "Contact number", value: phone(form.contactCode, form.contactNumber) },
+        { label: "Email", value: text(form.applicantEmail) },
+        { label: "Age", value: answerLabel("ageBracket", form.ageBracket) ?? "Not provided" },
+        ...(form.ageBracket === "minor"
+          ? [
+              { label: "Guardian name", value: text(form.guardianName) },
+              { label: "Guardian contact", value: phone(form.guardianCode, form.guardianContact) },
+              {
+                label: "Guardian relationship",
+                value:
+                  answerLabel("guardianRelationship", form.guardianRelationship) ?? "Not provided",
+              },
+              { label: "Guardian consent", value: form.guardianConsent ? "Given" : "Not given" },
+            ]
+          : []),
+        {
+          label: "Identification",
+          value: answerLabel("idDocumentType", form.idDocumentType) ?? "Not provided",
+        },
+        { label: "ID photo", value: form.idDocumentUrl ? "Photo uploaded" : "Not uploaded yet" },
+      ],
+    },
+    {
+      title: "2. Household",
+      rows: [
+        { label: "Pet allergies", value: yesNoLabel(form.petAllergies) ?? "Not provided" },
+        {
+          label: "Asthma / respiratory condition",
+          value: yesNoLabel(form.respiratoryIssues) ?? "Not provided",
+        },
+      ],
+    },
+    {
+      title: "3. Experience",
+      rows: [
+        { label: "Owned pets before", value: yesNoLabel(form.ownedPetsBefore) ?? "Not provided" },
+        ...(form.ownedPetsBefore === "yes"
+          ? [{ label: "Previous pet outcome", value: text(form.previousPetOutcome) }]
+          : []),
+        { label: "Current pets", value: yesNoLabel(form.hasCurrentPets) ?? "Not provided" },
+        ...(form.hasCurrentPets === "yes"
+          ? [{ label: "Current pet details", value: text(form.currentPetsDetails) }]
+          : []),
+      ],
+    },
+    {
+      title: "4. Care plan",
+      rows: [
+        { label: "Vet cost plan", value: text(form.vetCostPlan) },
+        { label: "Next of kin", value: text(form.nextOfKinName) },
+        { label: "Next of kin contact", value: phone(form.nextOfKinCode, form.nextOfKinContact) },
+      ],
+    },
+  ];
+}
+
 // Public, signed-in apply-to-adopt wizard for one animal: one question group
 // per screen (no scrolling), Back/Next with per-page checks, and a review
 // screen before submitting. Reuses the shared animal-form CSS so the wizard
@@ -132,12 +214,6 @@ export function AdoptionApplicationForm({
   const steps = visibleSteps(form);
   const step = steps[Math.min(stepIndex, steps.length - 1)] as StepId;
 
-  // If the applicant flips from minor back to adult, drop them off the
-  // guardian page (its answers stay in state but are never submitted).
-  if (step === "guardian" && form.ageBracket !== "minor") {
-    setStepIndex(0);
-  }
-
   function setField<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((previous) => ({ ...previous, [key]: value }));
   }
@@ -153,7 +229,9 @@ export function AdoptionApplicationForm({
           const band = dialCodeByCode(form.contactCode);
           return `Enter a valid ${band.name} contact number (${expectedLengthLabel(form.contactCode)}).`;
         }
-        if (!form.applicantEmail.trim()) return "Enter a valid email address.";
+        if (!EMAIL_PATTERN.test(form.applicantEmail.trim())) {
+          return "Enter a valid email address.";
+        }
         if (!form.ageBracket) return "Tell us whether you are 18 or older.";
         return null;
       case "guardian":
@@ -222,8 +300,14 @@ export function AdoptionApplicationForm({
     // hosted URL is what the final submit sends. Content is not judged here -
     // staff decide at review, and the applicant always continues.
     if (!file) return;
-    if (!file.type.startsWith("image/")) {
+    if (file.type !== "image/png" && file.type !== "image/jpeg") {
       setErrorMessage("Upload a photo of your identification document (JPG or PNG).");
+      return;
+    }
+    if (file.size > MAX_ID_PHOTO_BYTES) {
+      setErrorMessage(
+        "Your identification photo must be 8 MB or smaller. Please upload a JPG or PNG under 8 MB.",
+      );
       return;
     }
     setErrorMessage("");
@@ -376,7 +460,7 @@ export function AdoptionApplicationForm({
           </section>
         ) : submittedAnimal ? (
           <section className="rescue-form-panel">
-            <div className="rescue-success">
+            <div className="rescue-success" role="status" aria-live="polite">
               <p className="eyebrow">Application received</p>
               <h2>Thank you for applying to adopt {submittedAnimal}.</h2>
               <p>
@@ -412,7 +496,11 @@ export function AdoptionApplicationForm({
                 clickable so applicants can go back and fix an answer. */}
             <ol className="wizard-progress" aria-label="Application progress">
               {steps.map((id, index) => (
-                <li key={id} className={index === steps.indexOf(step) ? "active" : index < steps.indexOf(step) ? "done" : ""}>
+                <li
+                  key={id}
+                  className={index === steps.indexOf(step) ? "active" : index < steps.indexOf(step) ? "done" : ""}
+                  aria-current={index === steps.indexOf(step) ? "step" : undefined}
+                >
                   <button
                     type="button"
                     disabled={index >= steps.indexOf(step)}
@@ -429,7 +517,11 @@ export function AdoptionApplicationForm({
               ))}
             </ol>
 
-            {errorMessage && <p className="invite-feedback error">{errorMessage}</p>}
+            {errorMessage && (
+              <p className="invite-feedback error" role="alert">
+                {errorMessage}
+              </p>
+            )}
 
             <form className="animal-form rescue-form" onSubmit={(event) => void handleSubmit(event)}>
               <div className="animal-form-grid">
@@ -570,7 +662,7 @@ export function AdoptionApplicationForm({
                       <span className="form-label-text">Document photo</span>
                       <input
                         type="file"
-                        accept="image/*"
+                        accept="image/png,image/jpeg"
                         onChange={(event) => void handleIdPhoto(event.target.files?.[0])}
                         disabled={isUploadingId}
                       />
@@ -760,6 +852,26 @@ export function AdoptionApplicationForm({
                 {step === "review" && (
                   <>
                     <h3 className="animal-form-full form-section-title">Review & submit</h3>
+                    <div className="animal-form-full">
+                      <h4 className="rescue-card-subtitle">Your answers so far</h4>
+                      <dl className="rescue-detail-grid">
+                        {reviewSummary(form).map((section) => (
+                          <div key={section.title} className="rescue-detail-item full">
+                            <dt>{section.title}</dt>
+                            <dd>
+                              {section.rows.map((row) => (
+                                <p key={row.label} className="adoption-answer-row">
+                                  <strong>{row.label}:</strong> {row.value}
+                                </p>
+                              ))}
+                            </dd>
+                          </div>
+                        ))}
+                      </dl>
+                      <p className="security-note">
+                        Use the numbered steps above to go back and change any answer.
+                      </p>
+                    </div>
                     <fieldset className="radio-group animal-form-full">
                       <legend className="form-label-text">Is this adoption for yourself or someone else?</legend>
                       <label className="radio-option">

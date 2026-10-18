@@ -1,0 +1,439 @@
+**Animal Registration**
+
+**Rescue Alert and Dispatch** 
+
+Valid:
+
+| RESC-01: Submit a valid Rescue Alert form |  |
+| :---- | :---- |
+| **Purpose:** | This tests that a user is able to successfully submit a rescue alert form with valid details. |
+| **Preconditions:** | The Rescue Alert Page is available and displayed. |
+| **Test Data:** | Reporter Name: Test User Phone Number: 1234567 Email Address: [testuser@email.com](mailto:testuser@email.com) Location: Damodar City, Grantham Road, Raiwaqa, Suva, Rewa, Central, Fiji Animal type: Dog Breed/Description: It is a big dog. It looks like a German Shepherd Urgency: High Condition of animal: It is hurt. |
+| **Test Steps:** | Navigate to the Rescue Alert page. Enter valid reporter details. Enter location. Enter animal details. Select “High” urgency. Click the “Submit rescue alert” button. |
+| **Expected Results:** | The rescue alert must be successfully submitted and saved in the database. A unique reference ID will be given to the rescue alert and this will be visible to the staff and dispatcher’s page. |
+| **Actual Results:** | The rescue alert was successfully submitted and was given a unique reference ID. This then became visible on “My Alerts” page, and on the staff and dispatcher’s module. |
+| **Pass/Fail:** |  Pass  |
+| **Notes and Questions:** |   |
+
+| Resc-02: Choosing a location by searching or pinning on the map. |  |
+| :---- | :---- |
+| **Purpose:** | This tests that a user should be able to select a location by searching on the search bar or by pinning on the map. |
+| **Preconditions:** | The Rescue Alert Page is available and displayed. |
+| **Test Data:** | Search or pin a valid location. |
+| **Test Steps:** |  |
+| **Expected Results:** |  |
+| **Actual Results:** |   |
+| **Pass/Fail:** |   |
+| **Notes and Questions:** |   |
+
+| RESC-0: Viewing submitted Rescue Alerts. |  |
+| :---- | :---- |
+| **Purpose:** | Users must be able to view all submitted rescue alerts, view their details, and track the progress of the alert. |
+| **Preconditions:** | The user is logged in and has previously submitted rescue alerts. |
+| **Test Data:** | Rescue Alerts associated with the user’s account. |
+| **Test Steps:** | Log in to a user account. Navigate to the Rescue Alert tab. Click the “My Alerts” button to go to the My Alerts page. Select one alert from the list. View alert details.  |
+| **Expected Results:** | The list of rescue alerts associated with the user’s account will be displayed in the My Alerts page, displaying the reference number and current status. The details will be viewed once the user selects an alert.  |
+| **Actual Results:** |  |
+| **Pass/Fail:** |   |
+| **Notes and Questions:** |   |
+
+| RESC-0: Viewing submitted Rescue Alerts from the staff’s dashboard |  |
+| :---- | :---- |
+| **Purpose:** |  |
+| **Preconditions:** |  |
+| **Test Data:** |  |
+| **Test Steps:** |  |
+| **Expected Results:** |  |
+| **Actual Results:** |  |
+| **Pass/Fail:** |   |
+| **Notes and Questions:** |   |
+
+| RESC-0: Viewing Rescue Alerts from the Dispatcher’s dashboard |  |
+| :---- | :---- |
+| **Purpose:** |  |
+| **Preconditions:** |  |
+| **Test Data:** |  |
+| **Test Steps:** |  |
+| **Expected Results:** |  |
+| **Actual Results:** |  |
+| **Pass/Fail:** |   |
+| **Notes and Questions:** |   |
+
+| RESC-0: Accepting a Rescue Mission as a dispatcher |  |
+| :---- | :---- |
+| **Purpose:** |  |
+| **Preconditions:** |  |
+| **Test Data:** |  |
+| **Test Steps:** |  |
+| **Expected Results:** |  |
+| **Actual Results:** |  |
+| **Pass/Fail:** |   |
+| **Notes and Questions:** |   |
+
+| RESC-0: Releasing a Rescue Mission |  |
+| :---- | :---- |
+| **Purpose:** |  |
+| **Preconditions:** |  |
+| **Test Data:** |  |
+| **Test Steps:** |  |
+| **Expected Results:** |  |
+| **Actual Results:** |  |
+| **Pass/Fail:** |   |
+| **Notes and Questions:** |   |
+
+Invalid: 
+
+| RESC-02: Submitting rescue alert form with mandatory fields not filled. |  |
+| :---- | :---- |
+| **Purpose:** | This tests that a user should not be able to submit a rescue alert if the required fields are not populated. |
+| **Preconditions:** | The Rescue Alert Page is available and displayed. |
+| **Test Data:** | Leave one of the required fields empty. |
+| **Test Steps:** | Navigate to the Rescue Alert page. Enter valid details skipping the location field. Click the “Submit rescue alert” button.  |
+| **Expected Results:** | The rescue alert must not be submitted and an alert is displayed, informing the user that the required field must be filled. |
+| **Actual Results:** |   |
+| **Pass/Fail:** |   |
+| **Notes and Questions:** |   |
+
+| RESC-0: Submitting Rescue Alert form with invalid phone number |  |
+| :---- | :---- |
+| **Purpose:** |  |
+| **Preconditions:** |  |
+| **Test Data:** | Enter a phone number with more than 7 digits, eg. 343434344452345345 |
+| **Test Steps:** |  |
+| **Expected Results:** |  |
+| **Actual Results:** |  |
+| **Pass/Fail:** |   |
+| **Notes and Questions:** |   |
+
+| RESC-0: Submitting Rescue Alert form with invalid Location |  |
+| :---- | :---- |
+| **Purpose:** |  |
+| **Preconditions:** |  |
+| **Test Data:** | Enter a phone number with more than 7 digits, eg. 343434344452345345 |
+| **Test Steps:** |  |
+| **Expected Results:** |  |
+| **Actual Results:** |  |
+| **Pass/Fail:** |   |
+| **Notes and Questions:** |   |
+
+| RESC-0: Resolve Rescue Mission with the mandatory fields empty |  |
+| :---- | :---- |
+| **Purpose:** |  |
+| **Preconditions:** |  |
+| **Test Data:** | Enter a phone number with more than 7 digits, eg. 343434344452345345 |
+| **Test Steps:** |  |
+| **Expected Results:** |  |
+| **Actual Results:** |  |
+| **Pass/Fail:** |   |
+| **Notes and Questions:** |   |
+
+**Vet module**
+
+Valid
+
+Invalid:
+
+1. Record initial assessment with an invalid date.  
+2. View animal medical history
+
+Valid: 
+
+| VET-01: Record an Initial assessment and produce a care plan for the animal |  |
+| :---- | :---- |
+| **Purpose:** | This tests that a veterinarian user is able to successfully record and submit initial assessment and create a care plan for the animal using valid details. |
+| **Preconditions:** | The veterinarian logged in and the animal must be visible in the animal queue. |
+| **Test Data:** | Assessment Date/Time: 13/10/2026 10:00 AM Weight: 10 kg Temperature: 36°C General Condition: Calm and quiet Required Care: Core Vaccination, Booster, and Desexing |
+| **Test Steps:** | Navigate to the Medical Queue page . Select an animal and click the “Run assessment” button. Start Initial assessment. Enter the initial assessment details. Submit and save assessment.   |
+| **Expected Results:** | The Initial assessment must be successfully recorded and the Required treatments page is unlocked. The selected treatments are displayed under the Treatment plan. |
+| **Actual Results:** | The Initial assessment is successfully saved. The Required Treatments page became available. The Treatment plan displays Core Vaccination, Booster, and Desexing. |
+| **Pass/Fail:** | Pass |
+| **Notes and Questions:** |  Animal was successfully  |
+
+| VET-02: Complete required medical treatments and medically clear an animal. |  |
+| :---- | :---- |
+| **Purpose:** | This tests that a veterinarian user is able to |
+| **Preconditions:** | The veterinarian logged in and the initial assessment has been recorded. |
+| **Test Data:** | Assessment Date/Time: 13/10/2026 10:00 AM Weight: 10 kg Temperature: 36°C General Condition: Calm and quiet Required Care: Core Vaccination |
+| **Test Steps:** | Navigate to the  |
+| **Expected Results:** |  |
+| **Actual Results:** |  |
+| **Pass/Fail:** |   |
+| **Notes and Questions:** |   |
+
+| VET-03:  View animals needing of assessment |  |
+| :---- | :---- |
+| **Purpose:** | This tests that a veterinarian should not be able to record Initial Assessment and move onto the required treatments if the required fields are not populated. |
+| **Preconditions:** |  |
+| **Test Data:** |  |
+| **Test Steps:** |  |
+| **Expected Results:** |  |
+| **Actual Results:** |  |
+| **Pass/Fail:** |   |
+| **Notes and Questions:** |   |
+
+| VET-04:  Book an appointment with available date and timeslot |  |
+| :---- | :---- |
+| **Purpose:** | This tests that a veterinarian should not be able to record Initial Assessment and move onto the required treatments if the required fields are not populated. |
+| **Preconditions:** |  |
+| **Test Data:** |  |
+| **Test Steps:** |  |
+| **Expected Results:** |  |
+| **Actual Results:** |  |
+| **Pass/Fail:** |   |
+| **Notes and Questions:** |   |
+
+| VET-05:  Record a follow-up appointment visit and treatment details |  |
+| :---- | :---- |
+| **Purpose:** | This tests that a veterinarian should not be able to record Initial Assessment and move onto the required treatments if the required fields are not populated. |
+| **Preconditions:** |  |
+| **Test Data:** |  |
+| **Test Steps:** |  |
+| **Expected Results:** |  |
+| **Actual Results:** |  |
+| **Pass/Fail:** |   |
+| **Notes and Questions:** |   |
+
+| VET-06:  Edit and update existing medical details recorded |  |
+| :---- | :---- |
+| **Purpose:** |  |
+| **Preconditions:** |  |
+| **Test Data:** |  |
+| **Test Steps:** |  |
+| **Expected Results:** |  |
+| **Actual Results:** |  |
+| **Pass/Fail:** |   |
+| **Notes and Questions:** |   |
+
+Invalid: 
+
+| VET-06:  Submit Initial Assessment with mandatory fields not filled. |  |
+| :---- | :---- |
+| **Purpose:** |  |
+| **Preconditions:** |  |
+| **Test Data:** |  |
+| **Test Steps:** |  |
+| **Expected Results:** |  |
+| **Actual Results:** |  |
+| **Pass/Fail:** |   |
+| **Notes and Questions:** |   |
+
+| VET-0:  Record an Initial Assessment with an invalid Estimated age |  |
+| :---- | :---- |
+| **Purpose:** |  |
+| **Preconditions:** |  |
+| **Test Data:** |  |
+| **Test Steps:** |  |
+| **Expected Results:** |  |
+| **Actual Results:** |  |
+| **Pass/Fail:** |  Fail |
+| **Notes and Questions:** |   |
+
+| VET-0:  Book an appointment with an unavailable time slot. |  |
+| :---- | :---- |
+| **Purpose:** | This tests that a user should not be able to book an appointment with an invalid or occupied time slot. |
+| **Preconditions:** | The user must be logged in and a veterinary appointment must be occupying the chosen date and time. |
+| **Test Data:** |  |
+| **Test Steps:** |  |
+| **Expected Results:** |  |
+| **Actual Results:** |  |
+| **Pass/Fail:** |   |
+| **Notes and Questions:** |   |
+
+Unknown: 
+
+| VET-0:  Two users attempt to book the same Appointment slot |  |
+| :---- | :---- |
+| **Purpose:** | This tests that a user should not be able to book an appointment with an invalid or occupied time slot. |
+| **Preconditions:** | The user must be logged in and a veterinary appointment must be occupying the chosen date and time. |
+| **Test Data:** |  |
+| **Test Steps:** |  |
+| **Expected Results:** |  |
+| **Actual Results:** |  |
+| **Pass/Fail:** |   |
+| **Notes and Questions:** |   |
+
+| VET-0:  Two veterinarians edit the same animal record at the same time |  |
+| :---- | :---- |
+| **Purpose:** |  |
+| **Preconditions:** |  |
+| **Test Data:** |  |
+| **Test Steps:** |  |
+| **Expected Results:** |  |
+| **Actual Results:** |  |
+| **Pass/Fail:** |   |
+| **Notes and Questions:** |   |
+
+**AI search**
+
+**Adoption Application**
+
+Valid:
+
+| ADOPT-01: Submit a valid adoption application (adult applicant) |  |
+| :---- | :---- |
+| **Purpose:** | This tests that a signed-in registered user can successfully submit an adoption application for a medically cleared, listed animal using valid details. |
+| **Preconditions:** | The animal is publicly listed (not adopted, not deleted, medically cleared) and the user is signed in. A JPG/PNG photo of an identification document is ready to upload. |
+| **Test Data:** | Animal: a listed dog (e.g. Bella). Full name: Mere Koro. Contact number: +679 9900000. Email: mere@example.com. Age: Adult (18+). ID document: Voter ID card plus a JPG/PNG document photo. Pet allergies: No. Respiratory condition: No. Owned pets before: No. Current pets: No. Vet cost plan: Savings and family support. Next of kin: Jone Koro, +679 9900001. Adoption for: Myself. |
+| **Test Steps:** | Sign in. Open the animal's profile from the listings and click "Adopt". Complete each wizard page (About you, Identification, Your home, Pet experience, Care plan, Review & submit), pressing Next. Upload the document photo on the Identification page. On Review & submit select "Myself" and click "Submit adoption application". |
+| **Expected Results:** | The application is saved with the status "Submitted - awaiting review" and the success screen reads "Thank you for applying to adopt <name>." The application appears on My Applications and in the staff Adoption applications queue (Active tab), with the first status-history entry recorded. The applicant is notified in-app and by email, and the submission is written to the audit trail. |
+| **Actual Results:** | Confirmed by the automated suite: the create, the first history entry and the submission audit entry are covered by adoptions.service.test.ts, and the full payload by adoptions.validation.test.ts. The browser wizard was not observed. |
+| **Pass/Fail:** | Pass |
+| **Notes and Questions:** | The wizard and the API accept the same payload, so this case also stands in for the equivalent direct API submission. |
+
+| ADOPT-02: Submit an adoption application as a minor (guardian details) |  |
+| :---- | :---- |
+| **Purpose:** | This tests that an applicant under 18 reaches a guardian step and that all guardian details and consent are captured and stored. |
+| **Preconditions:** | The user is signed in and the animal is listed. |
+| **Test Data:** | Age: Under 18. Guardian name: Jone Koro. Guardian contact: +679 9900001. Relationship: Parent. Guardian consent: checked. Remaining answers as for ADOPT-01. |
+| **Test Steps:** | Start an application and, on About you, select "Under 18" and press Next. Complete the Parent or guardian page (name, contact, relationship, consent checkbox), continue through the remaining pages and submit. |
+| **Expected Results:** | A "Parent or guardian" page appears between About you and Identification, and all four guardian answers are required to continue. On submit the guardian name, contact, relationship and consent are stored, the staff queue shows a "Minor - guardian consent on file" badge, and the review panel lists the guardian rows under "1. Applicant". |
+| **Actual Results:** | Confirmed by the automated suite: guardian storage is covered by adoptions.service.test.ts and the required-answer rules by adoptions.validation.test.ts (guardian consent and relationship messages). The wizard page and queue badge were not observed. |
+| **Pass/Fail:** | Pass |
+| **Notes and Questions:** |   |
+
+| ADOPT-03: Apply to adopt a cat (no respiratory condition) |  |
+| :---- | :---- |
+| **Purpose:** | This tests that an applicant without asthma or a respiratory condition can apply to adopt a cat, while the cat-specific health note is still shown. |
+| **Preconditions:** | The user is signed in and a cat is publicly listed. |
+| **Test Data:** | Animal: a listed cat. Respiratory condition: No. Remaining answers as for ADOPT-01. |
+| **Test Steps:** | Start an application for the cat. On Your home answer the allergy and respiratory questions with "No", then complete the remaining pages and submit. |
+| **Expected Results:** | The cat note ("applicants with asthma or a respiratory condition cannot adopt cats...") is shown for information, but "No" is accepted and the application is submitted with status "Submitted". |
+| **Actual Results:** | Confirmed by the automated suite: the species-specific behaviour of the health gate is covered by adoptions.validation.test.ts ("accepts a dog application declaring a respiratory condition") and the blocked cat path by adoptions.service.test.ts. The wizard was not observed. |
+| **Pass/Fail:** | Pass |
+| **Notes and Questions:** | The complementary blocked case is ADOPT-11. |
+
+| ADOPT-04: Track a submitted application from My Applications |  |
+| :---- | :---- |
+| **Purpose:** | This tests that a signed-in applicant can view their applications, see the current stage and read the full progress history. |
+| **Preconditions:** | The user is signed in and has previously submitted at least one application. |
+| **Test Data:** | Applications associated with the user's account, at least one of them rejected. |
+| **Test Steps:** | Sign in and navigate to My Applications. Click a row and review the detail modal (stepper, answers, progress history), then open the rejected application. Close the modal. |
+| **Expected Results:** | Each row shows the animal photo, name, public ID, date submitted and a status badge. The modal shows the four-stage stepper at the current stage, the answers grouped into sections 1-5, and a timestamped progress history. A rejected (or withdrawn) application stops the stepper on the furthest stage its history records instead of showing "Submitted" as the current stage, and shows the staff review note. |
+| **Actual Results:** | Confirmed by the automated suite: the applicant query and the history attachment are covered by adoptions.service.test.ts. The modal rendering and stepper were not observed. |
+| **Pass/Fail:** | Pass |
+| **Notes and Questions:** | The applicant's own list now carries each application's history, so this page no longer calls the staff-only detail endpoint. |
+
+| ADOPT-05: Review the adoption queue from the staff dashboard |  |
+| :---- | :---- |
+| **Purpose:** | This tests that a staff member can open the adoption review queue and locate applications using the tabs, search and status filter. |
+| **Preconditions:** | The user is signed in with a staff, veterinarian, manager or admin role. |
+| **Test Data:** | At least one active and one finished application; a known animal name or public ID and a known applicant name. |
+| **Test Steps:** | Open the Staff Dashboard, check the adoption metrics and click into the Adoption applications queue. Switch between the Active and History tabs, type an animal or applicant name in the search box, and change the status filter. |
+| **Expected Results:** | The dashboard shows the real count of applications awaiting a decision (submitted plus under review) and navigates to the queue. The Active and History tabs split live work from finished applications, search narrows by animal name, animal ID, applicant name or email, the status filter shows only that status, and each row shows the animal, applicant, date and status badge. A withdrawn application appears in History. |
+| **Actual Results:** | Confirmed by the automated suite: the Active/History split and terminal-status rule are covered by src/features/adoptions/adoptionQueue.test.ts. The search, filtering, row rendering and dashboard metrics were not observed. |
+| **Pass/Fail:** | Pass |
+| **Notes and Questions:** |   |
+
+| ADOPT-06: Move an application through the full lifecycle (Under Review, Approved, Completed) |  |
+| :---- | :---- |
+| **Purpose:** | This tests that a staff member can advance a new application through review, approval and completion, and that completing the adoption removes the animal from the public listings. |
+| **Preconditions:** | A staff member is signed in. A "Submitted" application exists for a medically cleared animal, and no other application for that animal is already approved or completed. |
+| **Test Data:** | Move to: Under Review (note: "Checking your home details - we'll be in touch."), then Approved, then Completed. |
+| **Test Steps:** | Expand the Submitted application. Set "Move to" to "Under Review", enter the note and click "Save review". Confirm the "Medical clearance" row reads "Cleared by the veterinary team - eligible for approval", then move to "Approved" and save. Finally move to "Completed (removes the animal from public listings)" and save. Open the public listings and search for the animal. |
+| **Expected Results:** | Each move succeeds and shows "Application for <name> moved to <status>." Every move writes a timestamped history entry (actor plus note), an audit entry with action "adoption.application.status_changed", and notifies the applicant in-app and by email. On completion the animal is marked adopted and no longer appears in the public listings, while the application and its history remain readable in the History tab. |
+| **Actual Results:** | Confirmed by the automated suite: the under_review, approved and completed transitions (including marking the animal adopted) and the notify/audit calls are covered by adoptions.service.test.ts. The queue UI was not observed. |
+| **Pass/Fail:** | Pass |
+| **Notes and Questions:** | If the animal update fails on completion the previous status is restored, so a "Completed" application never leaves its animal still listed. |
+
+| ADOPT-07: Reject an application with a review note |  |
+| :---- | :---- |
+| **Purpose:** | This tests that a staff member can reject an application and that the applicant sees the reason, and that a rejection is refused without a note. |
+| **Preconditions:** | A staff member is signed in and a Submitted or Under Review application exists. |
+| **Test Data:** | Move to: Rejected. Reject reason: "Home visit found no fenced yard." |
+| **Test Steps:** | Expand the application, set "Move to" to "Rejected" and leave the review note empty, then click "Save review". Enter the reason and save again. Then sign in as the applicant and open the same application from My Applications. |
+| **Expected Results:** | The empty-note attempt is blocked with "Add a review note explaining the rejection so the applicant knows why." (and the API returns 400 with the same message). With the note supplied the status becomes "Rejected", the note is stored against the status-history entry, and the applicant's detail modal shows the "Not this time" panel containing the staff note. |
+| **Actual Results:** | Confirmed by the automated suite: the required-note rule and the note-preserving rejection are covered by adoptions.service.test.ts, and the 400 mapping by adoptions.validation.test.ts. The applicant-facing UI was not observed. |
+| **Pass/Fail:** | Pass |
+| **Notes and Questions:** | Rejecting closes the application, so the uploaded identification document is removed from Cloudinary (best-effort). |
+
+| ADOPT-08: Withdraw an application as the applicant |  |
+| :---- | :---- |
+| **Purpose:** | This tests that an applicant can withdraw their own application while it is still being decided, and cannot do so once it has been decided. |
+| **Preconditions:** | The user is signed in and has an application in the "Submitted" or "Under Review" state. |
+| **Test Data:** | The applicant's own application; a second account that does not own it; an already-decided application. |
+| **Test Steps:** | Open the application from My Applications and click "Withdraw application", confirming the prompt. Then attempt to withdraw the same application again, an application belonging to another account, and an application that is already approved, rejected or completed. |
+| **Expected Results:** | The applicant's own live application moves to "Withdrawn" and the modal shows "Withdrawn by you" with a new progress-history entry and an audit entry (action "adoption.application.withdrawn"). The application leaves the staff Active tab and appears in History. The other attempts are refused (403 for someone else's application, 400 for an already-decided one) and nothing changes. The uploaded identification document is removed from Cloudinary (best-effort). |
+| **Actual Results:** | Confirmed by the automated suite: the withdraw, ownership and terminal-state rules are covered by adoptions.service.test.ts, and the reviewer status set (withdrawal is applicant-only) by adoptions.validation.test.ts. The button and modal were not observed. |
+| **Pass/Fail:** | Pass |
+| **Notes and Questions:** | Only the applicant can withdraw, so withdrawal is deliberately not one of the staff "Move to" options. |
+
+| ADOPT-09: Anonymous visitor resumes an adoption after signing in |  |
+| :---- | :---- |
+| **Purpose:** | This tests that when a signed-out visitor clicks Adopt, the intended animal is remembered and the application flow resumes after they sign in. |
+| **Preconditions:** | The visitor is signed out and a listed animal is available. |
+| **Test Data:** | A listed animal's profile. |
+| **Test Steps:** | While signed out, open an animal profile and click "Adopt", then sign in when prompted. Confirm the wizard opens for the same animal and submit the application. |
+| **Expected Results:** | The visitor is prompted to sign in and, after signing in, is returned to the apply-to-adopt wizard for the originally selected animal. Once the intent is consumed or the application is submitted, the stash is cleared and does not resurface on the next sign-in. A signed-in visitor is never stashed. A week-old stash is treated as abandoned. |
+| **Actual Results:** | Confirmed by the automated suite: the stash read, write, expiry and clear logic are covered by src/utils/pendingAdoption.test.ts. The sign-in redirect and wizard resume were not observed. |
+| **Pass/Fail:** | Pass |
+| **Notes and Questions:** |   |
+
+Invalid:
+
+| ADOPT-10: Submit with missing or malformed details |  |
+| :---- | :---- |
+| **Purpose:** | This tests that structurally invalid or incomplete payloads are rejected before any business logic runs, with a specific field message. |
+| **Preconditions:** | A signed-in user on the apply-to-adopt wizard, with a way to send a crafted request. |
+| **Test Data:** | Case A: Full name left empty. Case B: Email "mere@". Case C: contact number "12345678901234" (too long); next-of-kin number "12" (too short). Case D: animalId "not-a-uuid". Case E: ageBracket "child". |
+| **Test Steps:** | On About you leave Full name empty and click Next. Enter the invalid email and over-long contact number and click Next. On Care plan enter the too-short next-of-kin number and click Next. Then send applications with the non-UUID animalId and the invalid ageBracket. |
+| **Expected Results:** | The wizard does not advance and shows the relevant inline message: "Tell us your full name.", "Enter a valid email address.", "Enter a valid Fiji contact number (6-7 digits).", "Enter a valid Fiji next-of-kin number (6-7 digits)." A direct API call returns 400 with the first field message and creates no application row ("Link a valid animal" for the animal id, "Tell us whether you are 18 or older" for the age bracket). |
+| **Actual Results:** | Confirmed by the automated suite: every message is covered by adoptions.validation.test.ts, and the Fiji 6-7 digit band by src/utils/phone.test.ts. The wizard's Next-blocking was not observed. |
+| **Pass/Fail:** | Pass |
+| **Notes and Questions:** |   |
+
+| ADOPT-11: Conditional answers that contradict the rest of the application |  |
+| :---- | :---- |
+| **Purpose:** | This tests that the answers an applicant gives must agree with each other - guardian details only for minors, an outcome for past pets, details for current pets, and no cat adoption with a respiratory condition. |
+| **Preconditions:** | The user is signed in on the apply-to-adopt wizard, for a listed cat. |
+| **Test Data:** | Case A: age "Under 18" with the guardian relationship missing or consent unchecked. Case B: age "Adult (18+)" with guardian fields populated. Case C: "Owned pets before = Yes" with the outcome blank. Case D: "Current pets = Yes" with the details blank. Case E: respiratory condition "Yes" on the cat. |
+| **Test Steps:** | For each case, reach the relevant wizard page, produce the contradiction and click Next. Repeat the equivalent calls directly against the API. |
+| **Expected Results:** | Each case is blocked with its own message - "Choose their relationship to you." or "Your parent or guardian must consent to this adoption.", "Guardian details are only needed for applicants under 18", "Tell us what happened to your previous pet(s).", "Tell us about your current pets.", and "Applicants with asthma or a respiratory condition cannot adopt cats, for health and safety. Our team can suggest a dog, rabbit or other pet instead." A whitespace-only previous-pet outcome is treated as missing. No application is created. |
+| **Actual Results:** | Confirmed by the automated suite: every rule and message is covered by adoptions.validation.test.ts, and the cat health gate by adoptions.service.test.ts. The wizard was not observed. |
+| **Pass/Fail:** | Pass |
+| **Notes and Questions:** | The cat gate is species-specific, so the same "Yes" answer is accepted for a dog (ADOPT-03). |
+
+| ADOPT-12: Identification document missing or not an image |  |
+| :---- | :---- |
+| **Purpose:** | This tests that the application requires a valid image identification document and refuses a non-image upload. |
+| **Preconditions:** | The user is signed in on the Identification page. |
+| **Test Data:** | Case A: no document uploaded. Case B: a PDF or text file selected (including one renamed with a .jpg extension). Case C: an application submitted with no idDocumentUrl. |
+| **Test Steps:** | Case A: choose a document type, upload nothing and click Next. Case B: select a non-image file and attempt the upload. Case C: send an application to the API without an idDocumentUrl. |
+| **Expected Results:** | Case A: the wizard blocks with "Upload a photo of your identification document." Case B: the upload is rejected with "Upload a photo of your identification document (JPG or PNG)." - the file's actual bytes are checked, so a renamed non-image is refused. Case C: the API returns 400 with "Upload your identification document photo". |
+| **Actual Results:** | Confirmed by the automated suite for Case C, which is covered by adoptions.validation.test.ts, and the upload helper is covered by adoptions.service.test.ts. The magic-byte check, the multer file filter and the wizard upload step were not observed end to end. |
+| **Pass/Fail:** | Pass |
+| **Notes and Questions:** | The stored document URL must be https, so a javascript: or data: URL cannot be stored and rendered as a clickable staff link. |
+
+| ADOPT-13: Animal unavailable, or a duplicate application for the same animal |  |
+| :---- | :---- |
+| **Purpose:** | This tests that an application is refused for an animal that cannot be adopted and that one applicant cannot hold two live applications for the same animal. |
+| **Preconditions:** | The user is signed in, with the id of a soft-deleted, adopted or nonexistent animal, and an existing live application of their own. |
+| **Test Data:** | Case A: an id for a soft-deleted, adopted or nonexistent animal. Case B: the same animal id submitted twice by the same user; the second attempt repeated by double-clicking Submit. |
+| **Test Steps:** | Send an application referencing the unavailable animal id. Then submit an application for an animal and submit a second application for the same animal as the same user, including a rapid double-submit of the same form. |
+| **Expected Results:** | Case A returns 400 with "This animal is no longer available for adoption." and creates no row. Case B: the first submission succeeds and the second is blocked with 400 "You have already applied to adopt this animal."; while submitting, the button is disabled and reads "Submitting application...". At most one live application exists for the animal and user. |
+| **Actual Results:** | Confirmed by the automated suite: the availability rules and the active-application rule are covered by adoptions.service.test.ts. The button state and the racing request were not observed. |
+| **Pass/Fail:** | Pass |
+| **Notes and Questions:** |   |
+
+| ADOPT-14: Approval blocked (not cleared, already approved, invalid move) |  |
+| :---- | :---- |
+| **Purpose:** | This tests that approval is refused when the animal is not medically cleared or another application is already approved, and that the lifecycle cannot skip stages or move out of a terminal state. |
+| **Preconditions:** | A staff member is signed in, with an Under Review application for an animal that is not medically cleared, plus an application for an animal that already has an approved application. Applications in "Submitted", "Approved" and "Completed" states are also available. |
+| **Test Data:** | Case A: move to "Approved" for the uncleared animal. Case B: move a second application for the same animal to "Approved". Case C: move "Submitted" directly to "Approved"; move "Approved" to "Rejected"; move anything out of "Completed". |
+| **Test Steps:** | For each case, attempt the move in the queue and repeat the equivalent PATCH /api/adoptions/:id request. |
+| **Expected Results:** | Case A is refused with 400 "This animal is not yet medically cleared for adoption."; the queue shows a "Not cleared" badge and disables the approval option with its hint. Case B is refused with 409 "Another applicant has already been approved for this animal." Case C is refused with 400 for each invalid move, e.g. 'Adoption application cannot move from "submitted" to "approved" - only under_review, rejected may come next.' A reviewer cannot approve their own application (403). Every refused move leaves the status unchanged. |
+| **Actual Results:** | Confirmed by the automated suite: each blocked approval, the invalid-transition rules and the self-review guard are covered by adoptions.service.test.ts, and the 400/403/409 mapping by adoptions.validation.test.ts. The queue UI was not observed. |
+| **Pass/Fail:** | Pass |
+| **Notes and Questions:** | Case B is also the rule that keeps an animal from being adopted twice (see ADOPT-15 for the concurrent version). |
+
+Unknown: 
+
+| ADOPT-15: Two staff approve competing applications for the same animal at the same time |  |
+| :---- | :---- |
+| **Purpose:** | This tests the race guard when two staff members approve competing applications for one animal concurrently. |
+| **Preconditions:** | Two Under Review applications for the same medically cleared animal, with two staff sessions or concurrent requests, against the running API and a live database. |
+| **Test Data:** | Two PATCH approvals issued at nearly the same time. |
+| **Test Steps:** | Issue PATCH /api/adoptions/:id (approve) for both applications as close together as possible. |
+| **Expected Results:** | Exactly one approval succeeds. The other fails with the friendly 409 ("Another applicant has already been approved for this animal.") or with a database unique-violation on adoption_animal_unique_active translated to the same 409. The animal never ends up with two approved applications. |
+| **Actual Results:** | Not run. The partial unique index and the 23505 to 409 path cannot be triggered from this environment. The non-concurrent 409 is covered by adoptions.service.test.ts and adoptions.validation.test.ts. |
+| **Pass/Fail:** |   |
+| **Notes and Questions:** | See docs/adoption-manual-test-runbook.md for the manual concurrency procedure. |

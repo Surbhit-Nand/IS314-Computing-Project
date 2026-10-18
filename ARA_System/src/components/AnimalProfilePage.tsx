@@ -31,6 +31,9 @@ export function AnimalProfilePage({ animal, isLoaded, isSignedIn, currentPage, o
   const favorited = isFavorite(animal.id);
   const activePhoto = animal.photoUrls[activePhotoIndex] ?? animal.photoUrls[0];
   const hasMultiplePhotos = animal.photoUrls.length > 1;
+  // Availability follows the vet-clearance gate, not just "not adopted" - see
+  // adoptionStatusLabel in types/animal.ts and AGENTS.md's public-listing rule.
+  const availabilityLabel = adoptionStatusLabel(animal.status, animal.medicallyCleared);
 
   function showPreviousPhoto() {
     setActivePhotoIndex((index) => (index === 0 ? animal.photoUrls.length - 1 : index - 1));
@@ -156,13 +159,17 @@ export function AnimalProfilePage({ animal, isLoaded, isSignedIn, currentPage, o
 
               {/* Same checkmark-line language as the listing cards, instead
                   of a separate status badge repeating what the facts above
-                  already say. */}
-              <p className="pet-card-check profile-check">
-                ✓ {adoptionStatusLabel(animal.status)}
-              </p>
-              {!animal.medicallyCleared && (
+                  already say. An animal that is not medically cleared yet is
+                  not available (the same gate the public listing applies), so
+                  it falls back to the neutral open-circle marker rather than
+                  the teal checkmark. */}
+              {availabilityLabel === "Available for Adoption" ? (
+                <p className="pet-card-check profile-check">
+                  ✓ {availabilityLabel}
+                </p>
+              ) : (
                 <p className="profile-check-muted profile-check">
-                  ○ Medical review pending
+                  ○ {availabilityLabel}
                 </p>
               )}
               {/* Always shown, not just when vaccinated - "not yet vaccinated"
@@ -181,18 +188,24 @@ export function AnimalProfilePage({ animal, isLoaded, isSignedIn, currentPage, o
               )}
 
               {/* Routes to the public adoption application form for this
-                  animal (see App.tsx's "adoption-apply" branch). If the
-                  visitor is not signed in the form itself prompts them to
-                  log in before applying. Hidden once the animal is adopted. */}
+                  animal (see App.tsx's "adoption-apply" branch). The visitor's
+                  current animal is carried by the navigation state, so a
+                  signed-in user goes straight to the form. Only an anonymous
+                  visitor needs the stashed intent: it survives the
+                  sign-in/register round trip (and a reload), and the form
+                  clears it on successful submit. Hidden once the animal is
+                  adopted. */}
               {animal.status !== "adopted" && animal.medicallyCleared && (
                 <button
                   type="button"
                   className="teal-button profile-adopt-button"
                   onClick={() => {
-                    // Remember this animal across the sign-in/register round
-                    // trip (and a reload): App restores it once a session
-                    // exists, and the form clears it on successful submit.
-                    savePendingAdoption(animal.id);
+                    // Never stash for a signed-in visitor - they navigate
+                    // straight to the form, so a stash would only linger as a
+                    // stale resume prompt if they abandon the wizard.
+                    if (!isSignedIn) {
+                      savePendingAdoption(animal.id);
+                    }
                     onNavigate("adoption-apply");
                   }}
                 >

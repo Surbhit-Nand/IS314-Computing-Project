@@ -27,6 +27,25 @@ function codeLabel(value: string | null, map: Record<string, string>): string | 
   return map[value] ?? value;
 }
 
+// Human labels for the questionnaire answer codes, reused by the applicant
+// wizard's review summary so its wording matches the staff/queue views.
+export function answerLabel(
+  field: "ageBracket" | "idDocumentType" | "guardianRelationship" | "adoptionFor",
+  value: string | null,
+): string | null {
+  const maps = {
+    ageBracket: AGE_BRACKET_LABEL,
+    idDocumentType: ID_DOCUMENT_LABEL,
+    guardianRelationship: GUARDIAN_RELATIONSHIP_LABEL,
+    adoptionFor: ADOPTION_FOR_LABEL,
+  };
+  return codeLabel(value, maps[field]);
+}
+
+export function yesNoLabel(value: string | null): string | null {
+  return codeLabel(value, YES_NO_LABEL);
+}
+
 // Groups an application's questionnaire answers into titled sections for the
 // staff review queue and the applicant detail modal. Rows submitted before the
 // structured questionnaire (legacy free-text home/family answers) come back

@@ -184,7 +184,8 @@ npm test             # node:test via tsx — server + frontend suites
 - [x] Reporter tracks status — `MyReports.tsx`, `GET /api/rescue/mine`
 - [x] Registered user submits adoption application — `AdoptionApplicationForm.tsx`, `POST /api/adoptions`
 - [x] Staff review/approve/reject — `ManageAdoptionApplications.tsx`, `PATCH /api/adoptions/:id`
-- [x] Applicant tracks application status — `MyApplications.tsx`, `GET /api/adoptions/mine`
+- [x] Applicant tracks + withdraws their application — `MyApplications.tsx`,
+      `GET /api/adoptions/mine` (rows carry `history`), `POST /api/adoptions/:id/withdraw`
 - [x] Accepted application removes animal from public listings — partial unique index `adoption_animal_unique_active` on `(animal_id) WHERE status IN ('approved','completed')` + DB-level 23505 check in service
 
 **Veterinary & Health Management** — **BUILT** (merged from `origin/jasprit`
@@ -233,27 +234,56 @@ can read the vet queue but cannot issue clearance).
     `applicantId`→`applicantClerkUserId`.
   - **`reviewNotes`** (text, nullable) + **`updatedAt`** (timestamp, notNull,
     defaultNow) added by migration `0006_lumpy_sabretooth.sql`. Statuses are
-    free text, not an enum.
+    free text, not an enum - but `schema.ts` now declares a `check`
+    (`adoption_status_valid`) over the six known statuses, so
+    `db:generate`/`db:migrate` will enforce them at the database once applied.
 - **`adoptionStatusHistory`** table (migration `0006`): `id`,
   `applicationId` (FK), `fromStatus`, `toStatus`, `notes`, `changedBy`,
   `changedAt`. Joined in detail responses.
 - **Partial unique index** `adoption_animal_unique_active` on
   `adoption_applications(animal_id) WHERE status IN ('approved','completed')`
-  — prevents two concurrent approvals hitting 23505; service pre-checks via
-  `findAdoptionConflict` for friendly 409.
-- **Mounted at** `/api/adoptions`. Routes: `POST /`, `GET /mine`, `GET /`,
-  `GET /:id`, `PATCH /:id`. Auth: `requireClerkSession`, `requireStaffOrAbove`.
-- **Statuses**: `submitted → under_review → approved → completed`, or
-  `rejected`. Every transition timestamped in `adoptionStatusHistory` so both
-  the adopter stepper and the staff queue show *when*, not just *what*.
-- `rejected` requires `reviewNotes` shown to the applicant.
+  — prevents two concurrent approvals hitting 23505; the service pre-checks via
+  `findAdoptionConflict` for a friendly 409 and translates a genuine 23505 race
+  into the same 409 (`adoptionErrors.ts`).
+- **Mounted at** `/api/adoptions`. Routes: `POST /` (submit), `GET /mine`
+  (applicant's own - each row now carries its `history`), `GET /` (staff queue),
+  `GET /:id`, `PATCH /:id` (staff status move), `POST /:id/withdraw`
+  (applicant-only), `POST /id-document` (ID photo upload). `GET /`, `GET /:id`
+  and `PATCH /:id` add `requireStaffOrAbove`; `/mine`, `/id-document` and
+  `/withdraw` are session-only.
+- **Statuses**: `submitted → under_review → approved → completed`, plus the
+  terminal branch states `rejected` and `withdrawn`. Every transition is
+  timestamped in `adoptionStatusHistory` so both the adopter stepper and the
+  staff queue show *when*, not just *what*. `withdrawn` is written only by the
+  applicant's `POST /:id/withdraw`, so it is not a reviewer status
+  (`transitionSchema` = `z.enum(REVIEWER_STATUSES)`).
+- `rejected` requires `reviewNotes` shown to the applicant. A supplied review
+  note is now preserved on same-status saves (a note-only save used to write a
+  history row with the note dropped).
+- **Typed business errors**: `modules/adoptions/adoptionErrors.ts` owns
+  `AdoptionBusinessError(status, message)` (400/403/404/409) and
+  `isUniqueViolation`; `businessErrorStatus` maps them to HTTP codes. Do not
+  reintroduce string-matched status mapping — it silently turned a reworded 409
+  (and the real 23505 double-approval) into a 500.
+- **Self-review guard**: `transitionAdoptionApplication` returns 403 when the
+  actor is the applicant on `approved`/`completed`.
 - **Medical-clearance gate**: now a **hard gate**.
   `requireMedicallyCleared` reads `animals.medically_cleared` and throws
   "This animal is not yet medically cleared for adoption." on
-  `under_review -> approved`. Because `medically_cleared` is only ever written
-  by the vet-only `clearAnimal`, approval is genuinely vet-gated. The same
-  flag gates the public listing - see Data model guardrails.
-- Notifications on stage change (email or in-app) — not yet wired.
+  `under_review -> approved`; `submitAdoptionApplication` applies the same gate
+  at submission. Because `medically_cleared` is only ever written by the
+  vet-only `clearAnimal`, approval is genuinely vet-gated. The same flag gates
+  the public listing - see Data model guardrails.
+- **ID documents**: `applicationSchema.idDocumentUrl` must be `https://`, and
+  `POST /id-document` checks the image magic bytes (JPEG/PNG), not just the
+  claimed mimetype. Rejected/withdrawn applications have their hosted document
+  deleted best-effort (`deleteIdDocumentBestEffort`, only when Cloudinary is
+  configured).
+- Both list endpoints accept optional `?limit=&offset=` (limit bounded 1–500);
+  absent limit keeps today's "all rows" behaviour.
+- Notifications on stage change are wired best-effort (in-app row + email), and
+  both the submission (`adoption.application.submitted`) and every status change
+  are written to the audit trail.
 
 ## Entities & role-based access
 
@@ -347,17 +377,24 @@ Every route/action is gated server-side by role, not just hidden in the UI
   `requireVeterinaryAccess`; `registerAnimal` hard-codes it to `false`, and
   neither the registration nor the edit zod schema accepts it, so clearance is
   genuinely vet-only. Do not add a staff path to set it.
-- On adoption acceptance, remove the animal from public listings **in the
-  same transaction** as the status update, and use **database-level locking**
-  (two applicants for one animal — race risk) so only one application per
-  animal can be approved. Not implemented yet — build these into the
-  adoptions module.
+- On adoption acceptance, remove the animal from public listings — implemented
+  as a `completed` application setting `animals.status = 'adopted'`, which
+  `findPublicAnimals` filters out. **Database-level locking** is provided by the
+  partial unique index `adoption_animal_unique_active`, so only one active
+  (approved/completed) application per animal can exist; a concurrent second
+  approval raises 23505 and is mapped to a 409. neon-http has **no
+  transactions**, so the status move and the animal update are two statements
+  with compensation: the application is moved first (so the index already
+  blocks other approvals) and the animal update failure restores the previous
+  status. Submission likewise compensates a failed first-history write by
+  deleting the application row.
 - Rescue reports and vet bookings can arrive online *or* by phone — one
   schema/form path, distinguished by `source` (both are in
-  `rescue_reports`/`vet_appointments`). Same `source` field exists on the
-  adoptions flow to add.
-- Keep an **audit trail** — `auditLogs` table + `shared/audit/audit.service.ts`
-  (used by rescue/donations; reuse for adoption approvals).
+  `rescue_reports`/`vet_appointments`). The adoption request schema still has no
+  `source` field (Adoption.md's `source` add-on is not built).
+- Keep an **audit trail** — `auditLogs` table + `shared/audit/audit.service.ts`.
+  Adoption submission and every status change (including applicant withdrawal)
+  write to it.
 
 ## AI search
 

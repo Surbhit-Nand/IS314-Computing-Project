@@ -196,7 +196,7 @@ export function ManageAnimalProfiles({ onNavigate, onSelectAnimal }: ManageAnima
                     {animal.publicId} - {animal.type} - {animal.breed ?? "Unknown breed"}
                   </span>
                 </span>
-                <span className="role-pill muted">{adoptionStatusLabel(animal.status)}</span>
+                <span className="role-pill muted">{adoptionStatusLabel(animal.status, animal.medicallyCleared)}</span>
                 {/* Teal (accent) when vaccinated vs. muted/grey when not -
                     both states always render, just visually distinct, so
                     "not yet vaccinated" doesn't just disappear from the row. */}

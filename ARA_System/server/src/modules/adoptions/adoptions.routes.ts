@@ -4,14 +4,16 @@ import { z } from "zod";
 import { requireClerkSession } from "../../middleware/auth.js";
 import { requireStaffOrAbove } from "../../middleware/rbac.js";
 import { getIdParam } from "../../shared/http/routeParams.js";
+import { adoptionErrorMessage, adoptionErrorStatus } from "./adoptionErrors.js";
 import {
-	ADOPTION_STATUSES,
+	REVIEWER_STATUSES,
 	getAdoptionApplicationDetail,
 	listAdoptionApplications,
 	listMyAdoptionApplications,
 	submitAdoptionApplication,
 	transitionAdoptionApplication,
 	uploadAdoptionIdDocument,
+	withdrawAdoptionApplication,
 } from "./adoptions.service.js";
 
 // Shared optional-text normalizer (empty string -> absent) so optional fields
@@ -44,7 +46,16 @@ export const applicationSchema = z
 			["voter_card", "passport", "drivers_licence", "other"],
 			"Choose your identification document type",
 		),
-		idDocumentUrl: z.string().trim().url("Upload your identification document photo"),
+		idDocumentUrl: z
+			.string()
+			.trim()
+			.url("Upload your identification document photo")
+			// Staff render this as a clickable link, so only https documents are
+			// accepted - a javascript:/data: URL must never be storable.
+			.refine(
+				(value) => value.startsWith("https://"),
+				"Upload your identification document photo",
+			),
 		// Section 2: household (allergies + respiratory only).
 		petAllergies: yesNo,
 		respiratoryIssues: yesNo,
@@ -100,38 +111,33 @@ export const applicationSchema = z
 		}
 	});
 
-const transitionSchema = z.object({
-	status: z.enum(ADOPTION_STATUSES),
+// Exported for validation tests: the request body shape for a staff status
+// move (status enum + optional review note). Withdrawal is intentionally not a
+// reviewer status - it is applicant-only via POST /:id/withdraw.
+export const transitionSchema = z.object({
+	status: z.enum(REVIEWER_STATUSES),
 	reviewNotes: optionalText,
+});
+
+// Optional windowing for the two list endpoints. Bounded so a client cannot
+// ask for the entire table at once.
+export const listQuerySchema = z.object({
+	limit: z.coerce.number().int().min(1).max(500).optional(),
+	offset: z.coerce.number().int().min(0).optional(),
 });
 
 // Whole-year age helper removed with the date-of-birth field: age is now a
 // self-declared adult/minor bracket, and minors supply guardian details
 // instead of being blocked.
 
-// Maps a handful of known business-rule rejections to a specific status code
-// (409 double-approval, 400 invalid lifecycle move / cleared-gate / health
-// gate). Anything unrecognized falls through to the app-level 500 handler.
-function businessErrorStatus(error: unknown): number | null {
-	if (!(error instanceof Error)) {
-		return null;
-	}
-	if (error.message.startsWith("Another applicant has already been approved")) {
-		return 409;
-	}
-	if (error.message.startsWith("Adoption application cannot move")) {
-		return 400;
-	}
-	if (
-		error.message.startsWith("Add a review note") ||
-		error.message.includes("medically cleared") ||
-		error.message.includes("respiratory condition") ||
-		error.message.includes("no longer available for adoption") ||
-		error.message.includes("already applied")
-	) {
-		return 400;
-	}
-	return null;
+// Maps a thrown value to the HTTP status the route returns, or null to fall
+// through to the app-level 500 handler. Backed by the typed
+// AdoptionBusinessError plus unique-violation detection in adoptionErrors.ts:
+// the previous string-matching here silently turned a reworded 409 into a 500,
+// and a real concurrent double-approval (23505) into a 500 as well.
+// Exported for validation tests.
+export function businessErrorStatus(error: unknown): number | null {
+	return adoptionErrorStatus(error);
 }
 
 export const adoptionsRouter = Router();
@@ -152,6 +158,21 @@ const idUpload = multer({
 	},
 });
 
+// multer's fileFilter trusts the client-supplied mimetype, which is trivially
+// spoofed. Verify the actual bytes are a JPEG or PNG before uploading, so a
+// renamed executable cannot end up in the document bucket.
+function looksLikeImage(buffer: Buffer): boolean {
+	const isJpeg =
+		buffer.length > 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+	const isPng =
+		buffer.length > 8 &&
+		buffer[0] === 0x89 &&
+		buffer[1] === 0x50 &&
+		buffer[2] === 0x4e &&
+		buffer[3] === 0x47;
+	return isJpeg || isPng;
+}
+
 // Signed-in applicant: upload the identification photo before submitting.
 // Returns the hosted URL, which the wizard sends back with the application.
 // The document's validity is judged by staff at review - this endpoint only
@@ -163,6 +184,13 @@ adoptionsRouter.post(
 	async (request, response, next) => {
 		if (!request.file) {
 			response.status(400).json({ error: "An identification document photo is required." });
+			return;
+		}
+
+		if (!looksLikeImage(request.file.buffer)) {
+			response
+				.status(400)
+				.json({ error: "Upload a photo of your identification document (JPG or PNG)." });
 			return;
 		}
 
@@ -200,7 +228,7 @@ adoptionsRouter.post("/", requireClerkSession, async (request, response, next) =
 		const status = businessErrorStatus(error);
 		if (status !== null) {
 			response.status(status).json({
-				error: error instanceof Error ? error.message : "Adoption application failed",
+				error: adoptionErrorMessage(error, "Adoption application failed"),
 			});
 			return;
 		}
@@ -208,19 +236,58 @@ adoptionsRouter.post("/", requireClerkSession, async (request, response, next) =
 	}
 });
 
-// Signed-in applicant: their own applications, for the tracking page.
-adoptionsRouter.get("/mine", requireClerkSession, async (request, response, next) => {
+// Signed-in applicant: withdraw their own application before it is decided.
+// Separate from PATCH (staff-only) because the actor is the applicant, not a
+// reviewer, and withdrawal is not a reviewer status.
+adoptionsRouter.post("/:id/withdraw", requireClerkSession, async (request, response, next) => {
 	try {
-		response.json(await listMyAdoptionApplications(request.clerkUserId as string));
+		const application = await withdrawAdoptionApplication(
+			getIdParam(request.params.id),
+			request.clerkUserId as string,
+		);
+		if (!application) {
+			response.status(404).json({ error: "Adoption application not found" });
+			return;
+		}
+		response.json(application);
+	} catch (error) {
+		const status = businessErrorStatus(error);
+		if (status !== null) {
+			response.status(status).json({
+				error: adoptionErrorMessage(error, "Adoption application could not be withdrawn"),
+			});
+			return;
+		}
+		next(error);
+	}
+});
+
+// Signed-in applicant: their own applications (each with its history), for the
+// tracking page. Optional ?limit=&offset= windows the result.
+adoptionsRouter.get("/mine", requireClerkSession, async (request, response, next) => {
+	const query = listQuerySchema.safeParse(request.query);
+	if (!query.success) {
+		response.status(400).json({ error: "Invalid pagination parameters" });
+		return;
+	}
+
+	try {
+		response.json(await listMyAdoptionApplications(request.clerkUserId as string, query.data));
 	} catch (error) {
 		next(error);
 	}
 });
 
-// Staff-only: the full application queue.
-adoptionsRouter.get("/", requireClerkSession, requireStaffOrAbove, async (_request, response, next) => {
+// Staff-only: the full application queue. Optional ?limit=&offset=.
+adoptionsRouter.get("/", requireClerkSession, requireStaffOrAbove, async (request, response, next) => {
+	const query = listQuerySchema.safeParse(request.query);
+	if (!query.success) {
+		response.status(400).json({ error: "Invalid pagination parameters" });
+		return;
+	}
+
 	try {
-		response.json(await listAdoptionApplications());
+		response.json(await listAdoptionApplications(query.data));
 	} catch (error) {
 		next(error);
 	}
@@ -273,7 +340,7 @@ adoptionsRouter.patch(
 			const status = businessErrorStatus(error);
 			if (status !== null) {
 				response.status(status).json({
-					error: error instanceof Error ? error.message : "Adoption application update failed",
+					error: adoptionErrorMessage(error, "Adoption application update failed"),
 				});
 				return;
 			}

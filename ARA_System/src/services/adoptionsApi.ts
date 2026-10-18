@@ -53,6 +53,26 @@ export async function fetchMyAdoptionApplications(token: string): Promise<Adopti
   return result as AdoptionApplication[];
 }
 
+// Signed-in applicant: withdraw their own application before a decision is
+// made. Allowed only while the application is submitted or under review; the
+// server returns the updated row, or 400/403/404 with { error }.
+export async function withdrawAdoptionApplication(
+  token: string,
+  id: string,
+): Promise<AdoptionApplication> {
+  const response = await fetch(`${apiBaseUrl}/api/adoptions/${id}/withdraw`, {
+    method: "POST",
+    headers: authHeaders(token),
+  });
+  const result = await readApiResponse<AdoptionApplication | { error?: string }>(response);
+  if (!response.ok) {
+    throw new Error(
+      (result as { error?: string }).error ?? "The adoption application could not be withdrawn.",
+    );
+  }
+  return result as AdoptionApplication;
+}
+
 // Staff-only: every application, newest first, for the review queue.
 export async function fetchAllAdoptionApplications(token: string): Promise<AdoptionApplication[]> {
   const response = await fetch(`${apiBaseUrl}/api/adoptions`, {

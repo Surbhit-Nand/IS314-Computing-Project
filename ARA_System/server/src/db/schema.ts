@@ -1,5 +1,6 @@
 import {
 	boolean,
+	check,
 	date,
 	doublePrecision,
 	integer,
@@ -321,6 +322,13 @@ export const adoptionApplications = pgTable(
 		uniqueIndex("adoption_animal_unique_active")
 			.on(table.animalId)
 			.where(sql`${table.status} IN ('approved', 'completed')`),
+		// The lifecycle code keeps status as free text, so constrain it at the
+		// database too: no code path (or manual edit) can store an unknown
+		// status. Requires a migration to take effect on the live DB.
+		check(
+			"adoption_status_valid",
+			sql`${table.status} IN ('submitted', 'under_review', 'approved', 'completed', 'rejected', 'withdrawn')`,
+		),
 	],
 );
 

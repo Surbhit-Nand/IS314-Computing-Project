@@ -6,7 +6,8 @@ export type AdoptionStatus =
   | "under_review"
   | "approved"
   | "completed"
-  | "rejected";
+  | "rejected"
+  | "withdrawn";
 
 export type AdoptionStatusHistoryEntry = {
   id: string;
@@ -140,6 +141,8 @@ export function adoptionStatusLabel(status: AdoptionStatus): string {
       return "Approved - one step to go";
     case "completed":
       return "Adopted - welcome home!";
+    case "withdrawn":
+      return "Withdrawn by you";
     default:
       return "Not approved";
   }
@@ -158,6 +161,8 @@ export function adoptionStatusShortLabel(status: AdoptionStatus): string {
       return "Approved";
     case "completed":
       return "Adopted";
+    case "withdrawn":
+      return "Withdrawn";
     default:
       return "Not approved";
   }
