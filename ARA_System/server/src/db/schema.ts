@@ -229,6 +229,43 @@ export const rescueIntakeHandoffs = pgTable("rescue_intake_handoffs", {
 	receivedAt: timestamp("received_at", { withTimezone: true }),
 });
 
+// A dispatcher asking to take an Assigned mission over from the dispatcher
+// currently holding it. The mission stays with its owner while a request is
+// pending; only the owner can approve (which transfers the assignment) or
+// decline. Kept as its own table so every request and decision is an immutable
+// record of who asked, who transferred to whom, when, and why - the mission's
+// alert details, photos, and history are never touched by a takeover.
+export const rescueTakeoverRequests = pgTable(
+	"rescue_takeover_requests",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		reportId: uuid("report_id").notNull().references(() => rescueReports.id),
+		// The dispatcher requesting the takeover - becomes the new owner when
+		// the current owner approves.
+		requestedByClerkUserId: text("requested_by_clerk_user_id").notNull(),
+		// Display name denormalized like rescue_reports.assigned_to so the
+		// owner-facing list never needs a Clerk lookup.
+		requestedByName: text("requested_by_name"),
+		// The owner at request time (the only dispatcher who may decide).
+		assignedToClerkUserId: text("assigned_to_clerk_user_id").notNull(),
+		reason: text("reason").notNull(),
+		// 'pending' | 'approved' | 'declined' | 'withdrawn' | 'cancelled'
+		status: text("status").notNull().default("pending"),
+		decidedByClerkUserId: text("decided_by_clerk_user_id"),
+		decidedAt: timestamp("decided_at", { withTimezone: true }),
+		decisionNote: text("decision_note"),
+		createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+	},
+	(table) => [
+		// One pending request per dispatcher per mission - a dispatcher cannot
+		// spam duplicate requests. Enforced at the DB level so two concurrent
+		// submissions can never both land.
+		uniqueIndex("rescue_takeover_pending_unique")
+			.on(table.reportId, table.requestedByClerkUserId)
+			.where(sql`${table.status} = 'pending'`),
+	],
+);
+
 export const adoptionApplications = pgTable(
 	"adoption_applications",
 	{
@@ -444,6 +481,7 @@ export const notifications = pgTable("notifications", {
 	body: text("body"),
 	entityType: text("entity_type"),
 	entityId: text("entity_id"),
+	actionId: text("action_id"),
 	readAt: timestamp("read_at", { withTimezone: true }),
 	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

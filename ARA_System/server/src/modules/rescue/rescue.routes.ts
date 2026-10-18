@@ -9,12 +9,21 @@ import {
 } from "../../middleware/rbac.js";
 import { clerkClient } from "../../services/clerkClient.js";
 import {
+	FIJI_PHONE_ERROR,
+	formatFijiPhone,
+	normalizeFijiPhone,
+} from "../../shared/phone.js";
+import { FIJI_LOCATION_ERROR, isInFiji } from "../../shared/location.js";
+import {
 	acceptRescueMission,
 	addRescueUpdate,
 	claimRescueReport,
 	completeRescueDebrief,
+	decideMissionTakeover,
 	getRescueMissionById,
 	getRescueReportById,
+	getTakeoverRequestForViewer,
+	listAssignedToOthers,
 	listAvailableRescueReports,
 	listIntakeHandoffs,
 	listMissionBoard,
@@ -25,11 +34,13 @@ import {
 	listMyResolvedRescueReports,
 	listRescueReports,
 	markIntakeHandoffReceived,
+	requestMissionTakeover,
 	startRescueMission,
 	startRescueReport,
 	submitRescueReport,
 	resolveRescueReport,
 	releaseRescueMission,
+	withdrawMissionTakeover,
 	RESCUE_OUTCOMES,
 	RESCUE_UPDATE_TYPES,
 	RescueWorkflowError,
@@ -46,6 +57,21 @@ const optionalText = z
 	.optional()
 	.transform((value) => (value && value !== "" ? value : undefined));
 
+// The reporter phone is optional, but when supplied it must be a Fiji number.
+// Pasted "+679..." / spaced input is normalized to the 7 national digits and
+// stored in the one canonical "+679 NNNNNNN" form; another country's code or a
+// wrong length is rejected with the shared message.
+const optionalFijiPhone = optionalText
+	.superRefine((value, ctx) => {
+		if (value !== undefined && normalizeFijiPhone(value) === null) {
+			ctx.addIssue({ code: z.ZodIssueCode.custom, message: FIJI_PHONE_ERROR });
+		}
+	})
+	.transform((value) => {
+		const digits = value === undefined ? null : normalizeFijiPhone(value);
+		return digits ? formatFijiPhone(digits) : undefined;
+	});
+
 // Latitude/longitude coming from the map pin. Kept as a pair - a report
 // either has both coordinates or neither, never a lone value.
 const optionalCoordinate = () =>
@@ -58,12 +84,12 @@ const optionalCoordinate = () =>
 const reportSchema = z
 	.object({
 		reporterName: z.string().trim().min(1, "A reporter name is required"),
-		reporterPhone: optionalText,
+		reporterPhone: optionalFijiPhone,
 		reporterEmail: optionalText,
 		location: z.string().trim().min(1, "A location is required"),
 		latitude: optionalCoordinate(),
 		longitude: optionalCoordinate(),
-		animalType: z.enum(["dog", "cat", "rabbit", "other"]).optional(),
+		animalType: z.enum(["dog", "cat", "other"]).optional(),
 		animalBreed: optionalText,
 		conditionDescription: z.string().trim().min(1, "A condition description is required"),
 		urgency: z.enum(["low", "moderate", "high", "critical"]),
@@ -75,6 +101,20 @@ const reportSchema = z
 		{
 			message: "Both latitude and longitude must be provided together",
 			path: ["latitude"],
+		},
+	)
+	.refine((value) => value.latitude != null && value.longitude != null, {
+		message: "Select the animal's location on the map.",
+		path: ["location"],
+	})
+	.refine(
+		(value) =>
+			value.latitude != null &&
+			value.longitude != null &&
+			isInFiji(value.latitude, value.longitude),
+		{
+			message: FIJI_LOCATION_ERROR,
+			path: ["location"],
 		},
 	);
 
@@ -88,22 +128,19 @@ const startProgressSchema = z.object({
 });
 
 // Complete Rescue: the final report and outcome are required, images and
-// remarks optional - except that choosing "other" requires an explanation,
-// which rides in additionalRemarks so there's still a single report field.
-const resolveProgressSchema = z
-	.object({
-		notes: z.string().trim().min(1, "A final rescue report is required."),
-		outcome: z.enum(RESCUE_OUTCOMES),
-		additionalRemarks: optionalText,
-		imageUrls: progressImageUrls,
-	})
-	.refine(
-		(value) => value.outcome !== "other" || Boolean(value.additionalRemarks),
-		{
-			message: 'Please explain the "Other" outcome in the additional remarks.',
-			path: ["additionalRemarks"],
-		},
-	);
+// remarks optional. The "Other" outcome was retired for new resolutions -
+// historical records that used it remain readable, but no new write may
+// select it.
+const resolveProgressSchema = z.object({
+	notes: z.string().trim().min(1, "A final rescue report is required."),
+	outcome: z
+		.enum(RESCUE_OUTCOMES)
+		.refine((value) => value !== "other", {
+			message: '"Other" is no longer available as a rescue outcome.',
+		}),
+	additionalRemarks: optionalText,
+	imageUrls: progressImageUrls,
+});
 
 // Start a mission. Notes are OPTIONAL - a dispatcher en route must not be
 // blocked at a form. Anything entered here is still saved to the timeline.
@@ -119,6 +156,18 @@ const releaseMissionSchema = z.object({
 	reason: z.string().trim().min(1, "A short reason is required."),
 });
 
+// Mission takeover. A Request to Take Over requires a reason for the current
+// dispatcher; a decision is approve/decline with an optional note shown to the
+// requester when declined.
+const takeoverRequestSchema = z.object({
+	reason: z.string().trim().min(1, "A short reason is required."),
+});
+
+const takeoverDecisionSchema = z.object({
+	decision: z.enum(["approved", "declined"]),
+	decisionNote: optionalText,
+});
+
 // Quick update filed while a rescue is in progress: note / photo. Never
 // changes status and never requires a form.
 const missionUpdateSchema = z.object({
@@ -127,22 +176,19 @@ const missionUpdateSchema = z.object({
 	imageUrls: progressImageUrls,
 });
 
-// Veterinary priority for the intake handoff. Accepts an empty string as
-// "not chosen" so an untouched dropdown doesn't fail the whole debrief.
-const optionalPriority = z.preprocess(
-	(value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
-	z.enum(["low", "moderate", "high", "critical"]).optional(),
-);
-
-// The single Post-Rescue Debrief. whatHappened always; veterinary priority is
-// required in the service layer when the outcome is a rescued animal (so the
-// intake handoff is complete). Destination is no longer collected - a rescued
-// animal always goes to SPCA Fiji.
+// The single Post-Rescue Debrief. whatHappened is always required;
+// the resolution flow records only the outcome and debrief. Intake and
+// veterinary registration are separate workflows. "Other" is rejected here so
+// the dispatcher Resolve Mission flow can no longer select it - historical
+// debriefs that used the outcome are unaffected.
 const debriefSchema = z.object({
-	outcome: z.enum(RESCUE_OUTCOMES),
+	outcome: z
+		.enum(RESCUE_OUTCOMES)
+		.refine((value) => value !== "other", {
+			message: '"Other" is no longer available as a rescue outcome.',
+		}),
 	whatHappened: z.string().trim().min(1, "A debrief of what happened is required."),
 	animalCondition: optionalText,
-	veterinaryPriority: optionalPriority,
 	unsuccessfulDetails: optionalText,
 });
 
@@ -239,7 +285,9 @@ rescueRouter.post(
 rescueRouter.post("/", async (request, response, next) => {
 	const parsed = reportSchema.safeParse(request.body);
 	if (!parsed.success) {
-		response.status(400).json({ error: "Invalid rescue report details" });
+		response.status(400).json({
+			error: parsed.error.issues[0]?.message ?? "Invalid rescue report details",
+		});
 		return;
 	}
 
@@ -357,6 +405,134 @@ rescueRouter.get(
 	},
 );
 
+// Dispatcher-only: Assigned missions held by another dispatcher ("Assigned to
+// Others"), with the viewer's own pending takeover request attached so the list
+// can show "Request Pending" / Withdraw. Registered before "/missions/:id" so
+// the literal segment is never captured as an id.
+rescueRouter.get(
+	"/missions/assigned-to-others",
+	requireClerkSession,
+	requireDispatcher,
+	async (request, response, next) => {
+		try {
+			response.json(await listAssignedToOthers(request.clerkUserId as string));
+		} catch (error) {
+			next(error);
+		}
+	},
+);
+
+// Dispatcher-only: Request to Take Over an Assigned mission held by another
+// dispatcher. The mission stays with its owner until they approve; a reason is
+// required and shown to the owner.
+rescueRouter.post(
+	"/missions/:id/takeover",
+	requireClerkSession,
+	requireDispatcher,
+	async (request, response, next) => {
+		const parsed = takeoverRequestSchema.safeParse(request.body);
+		if (!parsed.success) {
+			response.status(400).json({ error: parsed.error.issues[0]?.message ?? "A short reason is required." });
+			return;
+		}
+		try {
+			const name = await resolveDispatcherName(request.clerkUserId as string);
+			const mission = await requestMissionTakeover(
+				getIdParam(request.params.id),
+				request.clerkUserId as string,
+				name,
+				parsed.data,
+			);
+			if (!mission) {
+				response.status(404).json({ error: "Rescue mission not found" });
+				return;
+			}
+			response.status(201).json(mission);
+		} catch (error) {
+			sendRescueError(error, response, next);
+		}
+	},
+);
+
+// Dispatcher-only: withdraw your own pending takeover request.
+rescueRouter.post(
+	"/missions/takeover/:requestId/withdraw",
+	requireClerkSession,
+	requireDispatcher,
+	async (request, response, next) => {
+		try {
+			const withdrawn = await withdrawMissionTakeover(
+				getIdParam(request.params.requestId),
+				request.clerkUserId as string,
+			);
+			if (!withdrawn) {
+				response.status(404).json({ error: "Takeover request not found" });
+				return;
+			}
+			response.json(withdrawn);
+		} catch (error) {
+			sendRescueError(error, response, next);
+		}
+	},
+);
+
+// Dispatcher-only: read one takeover request by id. This is the notification
+// deep-link target - opening it fetches the request's latest status so the
+// detail page can show "already handled" instead of stale decision buttons.
+// Only the mission owner the request was addressed to, or the requester, can
+// read it; anyone else gets 404.
+rescueRouter.get(
+	"/missions/takeover/:requestId",
+	requireClerkSession,
+	requireDispatcher,
+	async (request, response, next) => {
+		try {
+			const takeover = await getTakeoverRequestForViewer(
+				getIdParam(request.params.requestId),
+				request.clerkUserId as string,
+			);
+			if (!takeover) {
+				response.status(404).json({ error: "Takeover request not found" });
+				return;
+			}
+			response.json(takeover);
+		} catch (error) {
+			sendRescueError(error, response, next);
+		}
+	},
+);
+
+// Dispatcher-only: the mission's current owner approves or declines a pending
+// takeover request. Approval transfers the assignment atomically (status stays
+// Assigned) and closes any competing pending requests.
+rescueRouter.post(
+	"/missions/takeover/:requestId/decide",
+	requireClerkSession,
+	requireDispatcher,
+	async (request, response, next) => {
+		const parsed = takeoverDecisionSchema.safeParse(request.body);
+		if (!parsed.success) {
+			response.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid takeover decision" });
+			return;
+		}
+		try {
+			const mission = await decideMissionTakeover(
+				getIdParam(request.params.requestId),
+				request.clerkUserId as string,
+				parsed.data.decision,
+				{ decisionNote: parsed.data.decisionNote },
+			);
+			if (!mission) {
+				response.status(404).json({ error: "Takeover request not found" });
+				return;
+			}
+			response.json(mission);
+		} catch (error) {
+			sendRescueError(error, response, next);
+		}
+	},
+);
+
 // Staff + dispatchers: full detail for one mission - report, timeline, quick
 // updates, debrief, intake handoff, generated summary.
 rescueRouter.get(
@@ -365,7 +541,10 @@ rescueRouter.get(
 	requireRescueQueueAccess,
 	async (request, response, next) => {
 		try {
-			const mission = await getRescueMissionById(getIdParam(request.params.id));
+			const mission = await getRescueMissionById(
+				getIdParam(request.params.id),
+				request.clerkUserId as string,
+			);
 			if (!mission) {
 				response.status(404).json({ error: "Rescue mission not found" });
 				return;

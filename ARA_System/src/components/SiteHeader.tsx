@@ -7,9 +7,15 @@ import {
   markAllNotificationsRead,
   markNotificationRead,
 } from "../services/notificationsApi";
-import type { NotificationsInbox } from "../types/notification";
+import type { AppNotification, NotificationsInbox } from "../types/notification";
 import { isDevBypassEnabled } from "../utils/devBypass";
+import { formatDateTime } from "../utils/format";
 import { isDispatcherRole } from "../utils/roles";
+import {
+  TAKEOVER_REVIEW_EVENT,
+  TAKEOVER_REVIEW_STORAGE_KEY,
+  takeoverReviewTarget,
+} from "../utils/takeoverReview";
 
 export type SiteHeaderView =
   | "home"
@@ -127,17 +133,17 @@ export function SiteHeader({
   // notification can never route someone somewhere the API would reject.
   const canReviewAdoptions = isStaffModuleRole;
 
-  async function handleOpenNotification(id: string, entityType: string | null) {
+  async function handleOpenNotification(item: AppNotification) {
     setBellOpen(false);
     try {
       const token = await getToken();
       if (!token) return;
-      await markNotificationRead(token, id);
+      await markNotificationRead(token, item.id);
       setInbox((previous) =>
         previous
           ? {
-              items: previous.items.map((item) =>
-                item.id === id ? { ...item, readAt: item.readAt ?? new Date().toISOString() } : item,
+              items: previous.items.map((entry) =>
+                entry.id === item.id ? { ...entry, readAt: entry.readAt ?? new Date().toISOString() } : entry,
               ),
               unreadCount: Math.max(0, previous.unreadCount - 1),
             }
@@ -146,12 +152,43 @@ export function SiteHeader({
     } catch {
       // Read state syncs on the next poll.
     }
-    if (entityType === "adoption_application") {
+    // A takeover notice opens the exact rescue alert's detail page, with the
+    // matching request expanded for review - not just the Active Mission list.
+    const reviewTarget = takeoverReviewTarget(item);
+    if (reviewTarget) {
+      openTakeoverReview(reviewTarget);
+      return;
+    }
+    if (item.entityType === "adoption_application") {
       // Staff reviewers land on the all-users review queue; everyone else
       // (applicants, dispatchers) lands on their own tracking page. The queue
       // is staff-gated server-side, so sending a dispatcher there would 403.
       navigate(canReviewAdoptions ? "manage-adoption-applications" : "my-applications");
+      return;
     }
+    if (item.entityType === "rescue_report") {
+      if (isDispatcher) {
+        navigate("rescue-active");
+      } else if (canReviewAdoptions) {
+        navigate("manage-rescue-reports");
+      }
+    }
+  }
+
+  // Parks the deep link where the Rescue Operations portal will pick it up:
+  // sessionStorage survives a refresh and a full navigation, while the window
+  // event lets an already-mounted portal react without a remount. Both paths
+  // end on the Active Mission detail page for the requested alert.
+  function openTakeoverReview(target: ReturnType<typeof takeoverReviewTarget>) {
+    if (!target) return;
+    sessionStorage.setItem(TAKEOVER_REVIEW_STORAGE_KEY, JSON.stringify(target));
+    window.dispatchEvent(new CustomEvent(TAKEOVER_REVIEW_EVENT, { detail: target }));
+    setBellOpen(false);
+    navigate("rescue-active");
+  }
+
+  function handleReviewTakeover(item: NotificationsInbox["items"][number]) {
+    openTakeoverReview(takeoverReviewTarget(item));
   }
   // Internal screens rendered by account-type dashboards and staff forms swap
   // the public prompts for team navigation; staff can still preview the
@@ -407,22 +444,42 @@ export function SiteHeader({
                     <ul className="notification-list">
                       {inbox.items.slice(0, 10).map((item) => (
                         <li key={item.id}>
-                          <button
-                            type="button"
-                            className={`notification-item${item.readAt ? "" : " unread"}`}
-                            onClick={() => void handleOpenNotification(item.id, item.entityType)}
-                          >
-                            <span className="notification-item-title">{item.title}</span>
-                            {item.body && <span className="notification-item-body">{item.body}</span>}
-                            <span className="notification-item-time">
-                              {new Date(item.createdAt).toLocaleString(undefined, {
-                                day: "numeric",
-                                month: "short",
-                                hour: "numeric",
-                                minute: "2-digit",
-                              })}
-                            </span>
-                          </button>
+                          <div className={`notification-item${item.readAt ? "" : " unread"}`}>
+                            <button
+                              type="button"
+                              className="notification-item-content"
+                              onClick={() => void handleOpenNotification(item)}
+                            >
+                              <span className="notification-item-title">{item.title}</span>
+                              {item.body && <span className="notification-item-body">{item.body}</span>}
+                              <span className="notification-item-time">
+                                {formatDateTime(item.createdAt)}
+                              </span>
+                            </button>
+                            {item.type.startsWith("rescue.takeover_") && (
+                              <div className="notification-item-actions">
+                                {item.takeoverRequestStatus === "pending" ? (
+                                  <button
+                                    type="button"
+                                    className="teal-button mini-button"
+                                    onClick={() => handleReviewTakeover(item)}
+                                  >
+                                    Review request
+                                  </button>
+                                ) : (
+                                  <span className="notification-request-status">
+                                    {item.takeoverRequestStatus === "approved"
+                                      ? "Approved"
+                                      : item.takeoverRequestStatus === "declined"
+                                        ? "Declined"
+                                        : item.takeoverRequestStatus === "withdrawn"
+                                          ? "Withdrawn"
+                                          : "No longer available"}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </li>
                       ))}
                     </ul>

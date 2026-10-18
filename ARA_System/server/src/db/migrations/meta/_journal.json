@@ -113,6 +113,20 @@
       "when": 1791361940927,
       "tag": "0017_adoption_next_of_kin",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1791430000000,
+      "tag": "0018_rescue_takeover_requests",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1791431000000,
+      "tag": "0019_notification_action_id",
+      "breakpoints": true
     }
   ]
 }

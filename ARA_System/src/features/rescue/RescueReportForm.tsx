@@ -4,8 +4,13 @@ import spcaLogo from "../../assets/spca-logo.png";
 import { submitRescueReport, uploadRescuePhoto } from "../../services/rescueApi";
 import { reverseGeocodePlace, searchPlaces, type PlaceLookup } from "../../services/geocoding";
 import { RescueLocationMap } from "./RescueLocationMap";
-import type { RescueReportFormInput, RescueUrgency } from "../../types/rescue";
-import { DEFAULT_DIAL_CODE, dialCodeByCode, expectedLengthLabel, formatPhone, isValidPhoneNational } from "../../utils/phone";
+import {
+  RESCUE_ALERT_ANIMAL_TYPE_OPTIONS,
+  type RescueReportFormInput,
+  type RescueUrgency,
+} from "../../types/rescue";
+import { formatFijiPhone, isValidFijiPhone, normalizeFijiPhone } from "../../utils/phone";
+import { FIJI_LOCATION_ERROR, isInFiji } from "../../utils/fijiLocation";
 import { PhoneInput } from "../../components/PhoneInput";
 import { Breadcrumbs } from "../../components/Breadcrumbs";
 import { SiteHeader, type SiteHeaderView } from "../../components/SiteHeader";
@@ -60,14 +65,12 @@ export function RescueReportForm({ variant, source, isLoaded, onNavigate, onShow
   const { isSignedIn } = useUser();
   const { getToken } = useAuth();
   const [form, setForm] = useState<RescueReportFormInput>({ ...emptyForm, source });
-  // Dial-code half of the optional reporter phone number (Fiji default).
-  // Combined into `+code number` on submit; empty stays empty.
-  const [reporterPhoneCode, setReporterPhoneCode] = useState(DEFAULT_DIAL_CODE);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [createdReference, setCreatedReference] = useState("");
+  const [locationError, setLocationError] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Place-name search state: a debounced forward search feeds the suggestions
@@ -98,6 +101,9 @@ export function RescueReportForm({ variant, source, isLoaded, onNavigate, onShow
 
   function setField<K extends keyof RescueReportFormInput>(key: K, fieldValue: RescueReportFormInput[K]) {
     setForm((previous) => ({ ...previous, [key]: fieldValue }));
+    if (key === "latitude" || key === "longitude") {
+      setLocationError("");
+    }
   }
 
   // Debounced forward geocode of the typed location, feeding the dropdown.
@@ -120,6 +126,7 @@ export function RescueReportForm({ variant, source, isLoaded, onNavigate, onShow
             ? `No places found for "${query}". Try a town, village, or street landmark.`
             : "",
         );
+        setLocationError("");
       } catch {
         setPlaceSuggestions([]);
         setPlaceSearchError(
@@ -188,6 +195,7 @@ export function RescueReportForm({ variant, source, isLoaded, onNavigate, onShow
       setField("location", hit.displayName);
       setField("latitude", hit.latitude);
       setField("longitude", hit.longitude);
+      setLocationError(isInFiji(hit.latitude, hit.longitude) ? "" : FIJI_LOCATION_ERROR);
       setPlaceQuery(hit.displayName);
       setPlaceSuggestions([]);
       skipNextPlaceSearchRef.current = true;
@@ -205,6 +213,7 @@ export function RescueReportForm({ variant, source, isLoaded, onNavigate, onShow
     setField("location", place.displayName);
     setField("latitude", place.latitude);
     setField("longitude", place.longitude);
+    setLocationError(isInFiji(place.latitude, place.longitude) ? "" : FIJI_LOCATION_ERROR);
     setPlaceQuery(place.displayName);
     setPlaceSuggestions([]);
     setPlaceSearchError("");
@@ -270,11 +279,24 @@ export function RescueReportForm({ variant, source, isLoaded, onNavigate, onShow
       window.alert("Please fill in the reporter name, location, and condition description.");
       return;
     }
-    if (form.reporterPhone.trim() && !isValidPhoneNational(form.reporterPhone, reporterPhoneCode)) {
-      const band = dialCodeByCode(reporterPhoneCode);
-      window.alert(
-        `Enter a valid ${band.name} phone number (${expectedLengthLabel(reporterPhoneCode)}) or leave it blank.`,
-      );
+    if (
+      form.animalType !== "" &&
+      !RESCUE_ALERT_ANIMAL_TYPE_OPTIONS.some((option) => option.value === form.animalType)
+    ) {
+      window.alert("Select a valid animal type.");
+      return;
+    }
+    if (form.reporterPhone.trim() && !isValidFijiPhone(form.reporterPhone)) {
+      window.alert("Enter a valid 7-digit Fiji phone number.");
+      return;
+    }
+    if (
+      form.latitude == null ||
+      form.longitude == null ||
+      !isInFiji(form.latitude, form.longitude)
+    ) {
+      setLocationError(FIJI_LOCATION_ERROR);
+      window.alert(FIJI_LOCATION_ERROR);
       return;
     }
 
@@ -288,17 +310,17 @@ export function RescueReportForm({ variant, source, isLoaded, onNavigate, onShow
       if (isSignedIn && !token) {
         throw new Error("Your sign-in session has expired. Please sign in again.");
       }
+      const fijiPhone = normalizeFijiPhone(form.reporterPhone);
       const report = await submitRescueReport(
         {
           ...form,
-          reporterPhone: form.reporterPhone.trim()
-            ? formatPhone(reporterPhoneCode, form.reporterPhone)
-            : "",
+          reporterPhone: fijiPhone ? formatFijiPhone(fijiPhone) : "",
         },
         token ?? undefined,
       );
       setCreatedReference(report.reference);
       locationManuallyEditedRef.current = false;
+      setLocationError("");
       setForm({ ...emptyForm, source });
     } catch (error) {
       const message =
@@ -327,10 +349,9 @@ export function RescueReportForm({ variant, source, isLoaded, onNavigate, onShow
 
       <PhoneInput
         label="Phone number"
-        code={reporterPhoneCode}
         number={form.reporterPhone}
-        onCodeChange={setReporterPhoneCode}
         onNumberChange={(value) => setField("reporterPhone", value)}
+        fijiOnly
         hint={<em className="optional-hint">(optional)</em>}
       />
 
@@ -377,6 +398,7 @@ export function RescueReportForm({ variant, source, isLoaded, onNavigate, onShow
               </button>
             </div>
           </label>
+          {locationError && <p className="invite-feedback error">{locationError}</p>}
           {isSearchingPlaces && (
             <p className="rescue-location-status">Searching for places...</p>
           )}
@@ -393,7 +415,7 @@ export function RescueReportForm({ variant, source, isLoaded, onNavigate, onShow
             </ul>
           )}
         </div>
-        <span className="animal-photo-label">Mark the exact location on the map (optional)</span>
+        <span className="animal-photo-label">Mark the exact location on the map</span>
         <RescueLocationMap
           latitude={form.latitude}
           longitude={form.longitude}
@@ -401,6 +423,10 @@ export function RescueReportForm({ variant, source, isLoaded, onNavigate, onShow
             locationManuallyEditedRef.current = false;
             setField("latitude", selectedLatitude);
             setField("longitude", selectedLongitude);
+            if (!isInFiji(selectedLatitude, selectedLongitude)) {
+              setLocationError(FIJI_LOCATION_ERROR);
+              return;
+            }
             queueReverseGeocode(selectedLatitude, selectedLongitude);
           }}
         />
@@ -412,11 +438,11 @@ export function RescueReportForm({ variant, source, isLoaded, onNavigate, onShow
           value={form.animalType}
           onChange={(event) => setField("animalType", event.target.value as RescueReportFormInput["animalType"])}
         >
-          <option value="">Not sure</option>
-          <option value="dog">Dog</option>
-          <option value="cat">Cat</option>
-          <option value="rabbit">Rabbit</option>
-          <option value="other">Other</option>
+          {RESCUE_ALERT_ANIMAL_TYPE_OPTIONS.map((option) => (
+            <option key={option.value || "unknown"} value={option.value}>
+              {option.label}
+            </option>
+          ))}
         </select>
       </label>
 

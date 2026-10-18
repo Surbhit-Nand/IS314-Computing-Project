@@ -5,13 +5,35 @@ import {
 	markAllNotificationsRead,
 	markNotificationRead,
 } from "./notifications.repository.js";
+import { findTakeoverRequestById } from "../rescue/rescue.repository.js";
 
 export async function listMyNotifications(clerkUserId: string) {
 	const [items, unreadCount] = await Promise.all([
 		findNotificationsByRecipient(clerkUserId),
 		countUnreadNotifications(clerkUserId),
 	]);
-	return { items, unreadCount };
+	const enrichedItems = await Promise.all(
+		items.map(async (item) => {
+			if (!item.actionId || !item.type.startsWith("rescue.takeover_")) {
+				return {
+					...item,
+					takeoverRequestStatus: null,
+					takeoverRequestMissionId: null,
+				};
+			}
+			const request = await findTakeoverRequestById(item.actionId);
+			const belongsToRecipient =
+				request &&
+				(request.assignedToClerkUserId === clerkUserId ||
+					request.requestedByClerkUserId === clerkUserId);
+			return {
+				...item,
+				takeoverRequestStatus: belongsToRecipient ? request.status : null,
+				takeoverRequestMissionId: belongsToRecipient ? request.reportId : null,
+			};
+		}),
+	);
+	return { items: enrichedItems, unreadCount };
 }
 
 export async function createAdoptionStatusNotification(input: {
