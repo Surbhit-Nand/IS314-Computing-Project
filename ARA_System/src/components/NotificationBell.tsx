@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { fetchMyNotifications, markAllNotificationsRead, markNotificationRead } from "../services/notificationsApi";
-import type { NotificationsInbox } from "../types/notification";
+import type { AppNotification, NotificationsInbox } from "../types/notification";
 import { IconCheck, IconClipboard, IconActivity } from "./MedicalIcons";
 import "./NotificationBell.css";
 
@@ -9,7 +9,7 @@ type Props = {
   isSignedIn: boolean | undefined;
   getToken: () => Promise<string | null>;
   isVeterinarian: boolean;
-  onOpen: (entityType: string | null) => void;
+  onOpen: (entityType: string | null, item?: AppNotification) => void;
 };
 
 // The existing bell, shared by public/team headers and the veterinary sidebar.
@@ -89,7 +89,8 @@ export function NotificationBell({ isLoaded, isSignedIn, getToken, isVeterinaria
     } finally { setMarkingRead(false); }
   }
 
-  async function handleOpenNotification(id: string, entityType: string | null) {
+  async function handleOpenNotification(item: AppNotification) {
+    const { id, entityType } = item;
     setBellOpen(false);
     try {
       const token = await getToken();
@@ -108,7 +109,7 @@ export function NotificationBell({ isLoaded, isSignedIn, getToken, isVeterinaria
     } catch {
       // Read state syncs on the next poll.
     }
-    onOpen(entityType);
+    onOpen(entityType, item);
   }
   return (<div className="notification-bell-wrap" ref={bellRef}>
               <button
@@ -149,7 +150,7 @@ export function NotificationBell({ isLoaded, isSignedIn, getToken, isVeterinaria
                           <button
                             type="button"
                             className={`notification-item${item.readAt ? "" : " unread"}${item.entityType === "veterinary_emergency_alert" ? " veterinary-alert" : ""}${["veterinary.emergency.immediate", "veterinary.emergency.assistance"].includes(item.type) ? " immediate-alert" : ""}`}
-                            onClick={() => void handleOpenNotification(item.id, item.entityType)}
+                            onClick={() => void handleOpenNotification(item)}
                           >
                             <span className="notification-message-icon" aria-hidden="true">{item.entityType === "veterinary_emergency_alert" ? <IconActivity size={18} /> : <IconClipboard size={18} />}</span>
                             <span className="notification-message-copy">
@@ -165,6 +166,7 @@ export function NotificationBell({ isLoaded, isSignedIn, getToken, isVeterinaria
                                 timeZone: "Pacific/Fiji",
                               })}
                             </span>
+                            {item.type.startsWith("rescue.takeover_") && <span className="notification-emergency-action">{item.takeoverRequestStatus === "pending" ? "Review request" : item.takeoverRequestStatus === "approved" ? "Approved" : item.takeoverRequestStatus === "declined" ? "Declined" : item.takeoverRequestStatus === "withdrawn" ? "Withdrawn" : "View rescue update"}</span>}
                             </span>
                           </button>
                         </li>

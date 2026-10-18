@@ -1,22 +1,27 @@
 import { SignInButton, useAuth, useUser } from "@clerk/react";
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
 import spcaLogo from "../assets/spca-logo.png";
+
 import {
   acceptMission,
   completeMissionDebrief,
+  decideMissionTakeover,
+  fetchAssignedToOthers,
   fetchMissionBoard,
   fetchMissionHistory,
   fetchMyActiveMissions,
+  fetchTakeoverRequest,
   markIntakeHandoffReceived,
   postRescueUpdate,
   releaseMission,
+  requestMissionTakeover,
   startMission,
+  withdrawMissionTakeover,
+  type MyActiveMissions,
 } from "../services/rescueApi";
-import type { MyActiveMissions } from "../services/rescueApi";
 import {
   RESCUE_OUTCOME_LABELS,
   RESCUE_UPDATE_TYPE_LABELS,
-  isRescueSuccessOutcome,
   rescueStatusClass,
   rescueUrgencyLabel,
 } from "../types/rescue";
@@ -24,6 +29,7 @@ import type {
   RescueMission,
   RescueOutcome,
   RescueReportStatus,
+  RescueTakeoverRequest,
   RescueUpdateType,
   RescueUrgency,
 } from "../types/rescue";
@@ -31,6 +37,12 @@ import { isDevBypassEnabled } from "../utils/devBypass";
 import { getFreshClerkToken } from "../utils/clerkToken";
 import { isDispatcherRole } from "../utils/roles";
 import { formatDate, formatDateTime } from "../utils/format";
+import { filterEligibleTakeoverMissions } from "../utils/rescueMissionFilters";
+import {
+  TAKEOVER_REVIEW_EVENT,
+  TAKEOVER_REVIEW_STORAGE_KEY,
+  type TakeoverReviewTarget,
+} from "../utils/takeoverReview";
 import { RescueProgressTimeline } from "../features/rescue/RescueProgressTimeline";
 import { RescueReadOnlyMap } from "../features/rescue/RescueReadOnlyMap";
 import { ProgressImageUpload } from "../features/rescue/ProgressImageUpload";
@@ -100,7 +112,6 @@ type DebriefInput = {
   outcome: RescueOutcome;
   whatHappened: string;
   animalCondition?: string;
-  veterinaryPriority?: RescueUrgency;
   unsuccessfulDetails?: string;
 };
 
@@ -112,7 +123,6 @@ type RescueSummaryCard = {
   value: number;
   tone: "amber" | "red" | "blue" | "green" | "charcoal";
   icon: RescueSummaryIconName;
-  description: string;
 };
 
 function RescueSummaryIcon({ name }: { name: RescueSummaryIconName }) {
@@ -184,6 +194,7 @@ export function RescueOperationsPortal({ onNavigate, page = "rescue-board", deta
   const [board, setBoard] = useState<RescueMission[]>([]);
   const [myAssigned, setMyAssigned] = useState<RescueMission[]>([]);
   const [myInProgress, setMyInProgress] = useState<RescueMission[]>([]);
+  const [assignedToOthers, setAssignedToOthers] = useState<RescueMission[]>([]);
   const [history, setHistory] = useState<RescueMission[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -195,6 +206,19 @@ export function RescueOperationsPortal({ onNavigate, page = "rescue-board", deta
   // dialog stays local; detailMissionId/detailSource come from App history.
   const [boardModalId, setBoardModalId] = useState<string | null>(null);
   const requestVersion = useRef(0);
+  const [linkedReview, setLinkedReview] = useState<TakeoverReviewTarget | null>(null);
+  const detailTakeoverRequestId = linkedReview?.missionId === detailMissionId ? linkedReview.requestId : null;
+  // The takeover request a notification deep-linked to, fetched fresh so the
+  // detail page can show "already approved / declined / withdrawn / cancelled"
+  // instead of stale Approve/Decline buttons. `detailUnavailable` is set when a
+  // deep link points at an alert the viewer can no longer see.
+  const [reviewRequest, setReviewRequest] = useState<RescueTakeoverRequest | null>(null);
+  const [reviewRequestError, setReviewRequestError] = useState("");
+  const [detailUnavailable, setDetailUnavailable] = useState(false);
+  // Bumped after every list reload so the request-status fetch re-runs and the
+  // takeover banner reflects the latest decision.
+  const [dataVersion, setDataVersion] = useState(0);
+  const [isActionSubmitting, setIsActionSubmitting] = useState(false);
 
   // Navigating between rescue pages resets the local dialog. Restored detail
   // context must remain intact. Adjusting state
@@ -222,18 +246,67 @@ export function RescueOperationsPortal({ onNavigate, page = "rescue-board", deta
     try {
       const token = await getFreshClerkToken(getToken);
       if (!token) throw new Error("Your Clerk session has expired.");
-      const [nextBoard, nextHistory, nextActive]: [RescueMission[], RescueMission[], MyActiveMissions] =
-        await Promise.all([
-          fetchMissionBoard(token),
-          fetchMissionHistory(token),
-          canAct ? fetchMyActiveMissions(token) : Promise.resolve({ assigned: [], inProgress: [] }),
-        ]);
+      const [nextBoard, nextHistory, nextActive, nextAssignedToOthers]: [
+        RescueMission[],
+        RescueMission[],
+        MyActiveMissions,
+        RescueMission[],
+      ] = await Promise.all([
+        fetchMissionBoard(token),
+        fetchMissionHistory(token),
+        canAct ? fetchMyActiveMissions(token) : Promise.resolve({ assigned: [], inProgress: [] }),
+        canAct ? fetchAssignedToOthers(token) : Promise.resolve([]),
+      ]);
       if (version !== requestVersion.current) return;
       setBoard(nextBoard);
       setHistory(nextHistory);
       setMyAssigned(nextActive.assigned);
       setMyInProgress(nextActive.inProgress);
+      setAssignedToOthers(nextAssignedToOthers);
       setLoadError("");
+      const pendingReview = sessionStorage.getItem(TAKEOVER_REVIEW_STORAGE_KEY);
+      if (pendingReview) {
+        sessionStorage.removeItem(TAKEOVER_REVIEW_STORAGE_KEY);
+        try {
+          const review = JSON.parse(pendingReview) as TakeoverReviewTarget;
+          const missionId = review.missionId;
+          const allLoaded = [
+            ...nextActive.assigned,
+            ...nextActive.inProgress,
+            ...nextAssignedToOthers,
+            ...nextBoard,
+            ...nextHistory,
+          ];
+          if (missionId && allLoaded.some((mission) => mission.id === missionId)) {
+            onNavigateDestination({ view: "rescue-active", rescueMissionId: missionId, detailSource: "rescue-active" });
+            setLinkedReview(review);
+            setDetailUnavailable(false);
+          } else if (missionId) {
+            // The deep-linked alert is in none of the lists this dispatcher can
+            // see - it was reassigned away, resolved, or removed. Keep the user
+            // on the detail route but explain the alert is gone.
+            onNavigateDestination({ view: "rescue-active" });
+            setLinkedReview(null);
+            setDetailUnavailable(true);
+          }
+        } catch {
+          // Malformed payload - nothing to open.
+        }
+      } else if (
+        // If the mission open on a detail page just left every list this
+        // dispatcher can see, drop the detail view back to its list instead of
+        // showing a blank panel.
+        detailMissionId &&
+        !nextBoard.some((mission: RescueMission) => mission.id === detailMissionId) &&
+        !nextHistory.some((mission: RescueMission) => mission.id === detailMissionId) &&
+        !nextActive.assigned.some((mission: RescueMission) => mission.id === detailMissionId) &&
+        !nextActive.inProgress.some((mission: RescueMission) => mission.id === detailMissionId) &&
+        !nextAssignedToOthers.some((mission: RescueMission) => mission.id === detailMissionId)
+      ) {
+        onNavigateDestination({ view: detailSource ?? page }, true);
+      }
+      // Re-run the request-status fetch so a just-decided takeover refreshes.
+      setDataVersion((version) => version + 1);
     } catch (error) {
       if (version !== requestVersion.current) return;
       setLoadError(error instanceof Error ? error.message : "Rescue operations could not be loaded.");
@@ -243,12 +316,68 @@ export function RescueOperationsPortal({ onNavigate, page = "rescue-board", deta
   }
 
   // The mission shown on a Board details modal (only unassigned/awaiting
-  // missions live on the Board). Accepting it moves it off the list, so the
-  // modal disappears on its own.
+  // missions use the accept modal). Assigned-to-other missions use the
+  // takeover-capable detail page below.
   const boardModalMission = useMemo(
-    () => board.find((mission) => mission.id === boardModalId) ?? null,
+    () => board.find((mission) => mission.id === boardModalId && !mission.assignedToClerkUserId) ?? null,
     [board, boardModalId],
   );
+
+  // The header fires this when a takeover notification is opened while the
+  // portal is already mounted (e.g. the dispatcher is sitting on Active
+  // Mission, so navigating to the same view would not remount it). The header
+  // also parks the payload in sessionStorage, so a reload of the loader picks
+  // it up exactly like a fresh mount.
+  const loadAllRef = useRef(loadAll);
+  useEffect(() => {
+    loadAllRef.current = loadAll;
+  });
+  useEffect(() => {
+    function handleTakeoverReview(event: Event) {
+      const target = (event as CustomEvent<TakeoverReviewTarget>).detail;
+      if (!target?.missionId) return;
+      sessionStorage.setItem(TAKEOVER_REVIEW_STORAGE_KEY, JSON.stringify(target));
+      void loadAllRef.current();
+    }
+    window.addEventListener(TAKEOVER_REVIEW_EVENT, handleTakeoverReview);
+    return () => window.removeEventListener(TAKEOVER_REVIEW_EVENT, handleTakeoverReview);
+  }, []);
+
+  // Fetch the deep-linked takeover request's latest status so the detail page
+  // can show "already handled / no longer available" and never offers stale
+  // decision buttons. Re-runs when the linked request changes or after every
+  // list reload (dataVersion).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!detailTakeoverRequestId) {
+        if (!cancelled) {
+          setReviewRequest(null);
+          setReviewRequestError("");
+        }
+        return;
+      }
+      try {
+        const token = await getFreshClerkToken(getToken);
+        if (!token) throw new Error("Your Clerk session has expired.");
+        const request = await fetchTakeoverRequest(token, detailTakeoverRequestId);
+        if (!cancelled) {
+          setReviewRequest(request);
+          setReviewRequestError("");
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setReviewRequest(null);
+          setReviewRequestError(
+            error instanceof Error ? error.message : "The takeover request could not be loaded.",
+          );
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [detailTakeoverRequestId, dataVersion, getToken]);
 
   // The mission shown on an Active / History detail page. A mission opened
   // from Active that just got resolved lives in `history` after the reload, so
@@ -257,18 +386,20 @@ export function RescueOperationsPortal({ onNavigate, page = "rescue-board", deta
   const detailMission = useMemo(() => {
     if (!detailMissionId) return null;
     return (
+      board.find((mission) => mission.id === detailMissionId) ??
       history.find((mission) => mission.id === detailMissionId) ??
       myAssigned.find((mission) => mission.id === detailMissionId) ??
       myInProgress.find((mission) => mission.id === detailMissionId) ??
+      assignedToOthers.find((mission) => mission.id === detailMissionId) ??
       null
     );
-  }, [detailMissionId, history, myAssigned, myInProgress]);
+  }, [assignedToOthers, board, detailMissionId, history, myAssigned, myInProgress]);
 
   useEffect(() => {
-    if (detailMissionId && !isLoading && !loadError && !detailMission) {
+    if (detailMissionId && !isLoading && !loadError && !detailMission && !detailUnavailable) {
       onNavigateDestination({ view: detailSource ?? page }, true);
     }
-  }, [detailMissionId, detailMission, detailSource, page, isLoading, loadError, onNavigateDestination]);
+  }, [detailMissionId, detailMission, detailSource, page, isLoading, loadError, detailUnavailable, onNavigateDestination]);
 
 
   // Shared wrapper for every mutation: clears prior feedback, runs the API
@@ -284,6 +415,7 @@ export function RescueOperationsPortal({ onNavigate, page = "rescue-board", deta
   ): Promise<boolean> {
     setActionMessage("");
     setActionError("");
+    setIsActionSubmitting(true);
     try {
       const token = await getFreshClerkToken(getToken);
       if (!token) throw new Error("Your Clerk session has expired.");
@@ -294,6 +426,8 @@ export function RescueOperationsPortal({ onNavigate, page = "rescue-board", deta
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "The action could not be completed.");
       return false;
+    } finally {
+      setIsActionSubmitting(false);
     }
   }
 
@@ -338,25 +472,49 @@ export function RescueOperationsPortal({ onNavigate, page = "rescue-board", deta
     );
   }
 
-  async function handleMarkReceived(mission: RescueMission) {
-    const handoff = mission.intakeHandoff;
-    if (!handoff) return;
+  async function handleRequestTakeover(mission: RescueMission, reason: string) {
     await runAction(
-      `Intake for ${mission.reference} marked as received.`,
-      (token) => markIntakeHandoffReceived(token, handoff.id),
+      `Takeover request sent for ${mission.reference}.`,
+      (token) => requestMissionTakeover(token, mission.id, reason),
+    );
+  }
+
+  async function handleWithdrawTakeover(requestId: string, reference: string) {
+    await runAction(
+      `Takeover request withdrawn for ${reference}.`,
+      (token) => withdrawMissionTakeover(token, requestId),
+    );
+  }
+
+  async function handleDecideTakeover(requestId: string, reference: string, decision: "approved" | "declined", decisionNote?: string) {
+    const verb = decision === "approved" ? "approved" : "declined";
+    await runAction(
+      `Takeover request ${verb} for ${reference}.`,
+      (token) => decideMissionTakeover(token, requestId, decision, decisionNote),
     );
   }
 
   // One search box shared by every tab, applied to whichever list is showing.
-  // Each visible list is derived from its server-grouped source (Board =
-  // unassigned submitted alerts only; Active is already split server-side into
-  // Assigned / In Progress; History = resolved), so searching and tabbing can
-  // never mix groups.
+  // Each visible list is derived from its server-grouped source. The Board
+  // keeps unresolved work together while splitting unassigned and assigned
+  // missions into separate sections below.
   const search = searchTerm.trim().toLowerCase();
   const activeCount = myAssigned.length + myInProgress.length;
   const visibleBoard = useMemo(
     () => board.filter((mission) => matchesSearch(mission, search)),
     [board, search],
+  );
+  const visibleUnassignedBoard = useMemo(
+    () => visibleBoard.filter((mission) => !mission.assignedToClerkUserId),
+    [visibleBoard],
+  );
+  const assignedBoard = useMemo(
+    () => filterEligibleTakeoverMissions(assignedToOthers, user?.id),
+    [assignedToOthers, user?.id],
+  );
+  const visibleAssignedBoard = useMemo(
+    () => assignedBoard.filter((mission) => matchesSearch(mission, search)),
+    [assignedBoard, search],
   );
   const visibleAssigned = useMemo(
     () => myAssigned.filter((mission) => matchesSearch(mission, search)),
@@ -411,15 +569,18 @@ export function RescueOperationsPortal({ onNavigate, page = "rescue-board", deta
     );
   }
 
+  async function handleMarkReceived(mission: RescueMission) {
+    const handoff = mission.intakeHandoff;
+    if (!handoff) return;
+    await runAction(
+      `Intake for ${mission.reference} marked as received.`,
+      (token) => markIntakeHandoffReceived(token, handoff.id),
+    );
+  }
+
   const staffDashboardView: PortalView = role === "manager" || role === "admin" ? "dashboard" : "staff-dashboard";
   const pageTitle =
     page === "rescue-board" ? "Mission Board" : page === "rescue-active" ? "Active Mission" : "Mission History";
-  const pageDescription =
-    page === "rescue-board"
-      ? null
-      : page === "rescue-active"
-        ? "Your accepted missions, separated into Assigned and In Progress."
-        : "Resolved cases with their timeline, outcome, and debrief.";
 
   const panelTitle =
     page === "rescue-board"
@@ -461,7 +622,6 @@ export function RescueOperationsPortal({ onNavigate, page = "rescue-board", deta
           value: unclaimedCount,
           tone: "amber",
           icon: "inbox",
-          description: "Waiting for a dispatcher",
         },
         {
           key: "reassign",
@@ -469,7 +629,6 @@ export function RescueOperationsPortal({ onNavigate, page = "rescue-board", deta
           value: releasedCount,
           tone: "red",
           icon: "refresh",
-          description: "Ready for a new dispatcher",
         },
         {
           key: "assigned",
@@ -477,7 +636,6 @@ export function RescueOperationsPortal({ onNavigate, page = "rescue-board", deta
           value: myAssigned.length,
           tone: "blue",
           icon: "clipboard",
-          description: "Accepted and not started",
         },
         {
           key: "progress",
@@ -485,7 +643,6 @@ export function RescueOperationsPortal({ onNavigate, page = "rescue-board", deta
           value: myInProgress.length,
           tone: "green",
           icon: "pulse",
-          description: "Rescue underway",
         },
         {
           key: "resolved",
@@ -493,7 +650,6 @@ export function RescueOperationsPortal({ onNavigate, page = "rescue-board", deta
           value: history.length,
           tone: "charcoal",
           icon: "check",
-          description: "Completed rescue missions",
         },
       ]
     : [
@@ -503,7 +659,6 @@ export function RescueOperationsPortal({ onNavigate, page = "rescue-board", deta
           value: unclaimedCount,
           tone: "amber",
           icon: "inbox",
-          description: "Waiting for a dispatcher",
         },
         {
           key: "reassign",
@@ -511,7 +666,6 @@ export function RescueOperationsPortal({ onNavigate, page = "rescue-board", deta
           value: releasedCount,
           tone: "red",
           icon: "refresh",
-          description: "Ready for a new dispatcher",
         },
         {
           key: "urgent",
@@ -519,7 +673,6 @@ export function RescueOperationsPortal({ onNavigate, page = "rescue-board", deta
           value: board.filter((mission) => mission.urgency === "critical" || mission.urgency === "high").length,
           tone: "red",
           icon: "pulse",
-          description: "Urgent open alerts",
         },
         {
           key: "phone",
@@ -527,7 +680,6 @@ export function RescueOperationsPortal({ onNavigate, page = "rescue-board", deta
           value: board.filter((mission) => mission.source === "phone").length,
           tone: "blue",
           icon: "clipboard",
-          description: "Reported by phone",
         },
         {
           key: "resolved",
@@ -535,9 +687,44 @@ export function RescueOperationsPortal({ onNavigate, page = "rescue-board", deta
           value: history.length,
           tone: "charcoal",
           icon: "check",
-          description: "Completed rescue missions",
         },
       ];
+
+  // A takeover deep link can point at an alert this dispatcher can no longer
+  // see (reassigned away, resolved, or removed). Explain that instead of
+  // bouncing them back to the list with no context, and give a way back.
+  if (detailUnavailable) {
+    return (
+      <main className="dashboard-page rescue-workspace">
+        <SiteHeader
+          isLoaded={isLoaded}
+          isSignedIn={isSignedIn}
+          currentPage="rescue-active"
+          onNavigate={onNavigate}
+        />
+        <div className="rescue-container">
+          <div className="rescue-unavailable-card">
+            <p className="eyebrow">Rescue operations</p>
+            <h1>That rescue alert is no longer available</h1>
+            <p>
+              It may have been reassigned to another dispatcher, resolved, or removed, so there is
+              nothing to review here.
+            </p>
+            <button
+              type="button"
+              className="teal-button"
+              onClick={() => {
+                setDetailUnavailable(false);
+                onNavigateDestination({ view: "rescue-active" });
+              }}
+            >
+              Back to Active Mission
+            </button>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   // A mission opened from Active Mission or Mission History renders as its own
   // in-portal detail page: the dispatcher navbar stays put, the back link
@@ -564,14 +751,21 @@ export function RescueOperationsPortal({ onNavigate, page = "rescue-board", deta
             isDispatcher={isDispatcher}
             clerkUserId={user?.id}
             canReceiveIntake={canReceiveIntake}
+            onMarkReceived={() => handleMarkReceived(detailMission)}
             getToken={getToken}
             onBack={() => onNavigateDestination({ view: detailSource ?? page })}
             onAccept={() => handleAccept(detailMission)}
             onStart={(input) => handleStart(detailMission, input)}
             onUpdate={(input) => handleUpdate(detailMission, input)}
             onDebrief={(input) => handleDebrief(detailMission, input)}
-            onMarkReceived={() => handleMarkReceived(detailMission)}
             onRelease={(reason) => handleRelease(detailMission, reason)}
+            onRequestTakeover={handleRequestTakeover}
+            onWithdrawTakeover={handleWithdrawTakeover}
+            onDecideTakeover={handleDecideTakeover}
+            initialTakeoverRequestId={detailTakeoverRequestId}
+            reviewRequest={reviewRequest}
+            reviewRequestError={reviewRequestError}
+            isActionSubmitting={isActionSubmitting}
           />
         </div>
       </main>
@@ -589,7 +783,6 @@ export function RescueOperationsPortal({ onNavigate, page = "rescue-board", deta
               <p className="eyebrow">Rescue operations · {canAct ? "Dispatcher workspace" : "Rescue operations team"}</p>
             )}
             <h1>{pageTitle}</h1>
-            {pageDescription && <p className="rescue-page-desc">{pageDescription}</p>}
           </div>
           {(canReceiveIntake || !canAct) && (
             <div className="rescue-workspace-actions">
@@ -617,7 +810,6 @@ export function RescueOperationsPortal({ onNavigate, page = "rescue-board", deta
                 <div className="rescue-stat-content">
                   <span className="rescue-stat-label">{card.label}</span>
                   <strong className="rescue-stat-value">{card.value}</strong>
-                  <span className="rescue-stat-hint">{card.description}</span>
                 </div>
               </article>
             ))}
@@ -661,7 +853,7 @@ export function RescueOperationsPortal({ onNavigate, page = "rescue-board", deta
                 title={board.length === 0 ? "No alerts awaiting a dispatcher" : "No alerts match your search"}
                 hint={
                   board.length === 0
-                    ? "New rescue alerts from the public, phone alerts, and any released or handed-over missions will appear here for a dispatcher to accept."
+                    ? "New rescue alerts, released missions, and unresolved missions already assigned to a dispatcher will appear here."
                     : "Try a different reference, location, or reporter name."
                 }
               />
@@ -672,18 +864,57 @@ export function RescueOperationsPortal({ onNavigate, page = "rescue-board", deta
                 title={history.length === 0 ? "No resolved missions yet" : "No missions match your search"}
                 hint={
                   history.length === 0
-                    ? "Completed missions appear here with their debrief, outcome, and any intake handoff."
+                    ? "Completed missions appear here with their debrief and outcome."
                     : "Try a different reference, location, or reporter name."
                 }
               />
             )}
 
             {page === "rescue-board" && visibleBoard.length > 0 && (
-              <MissionsList
-                missions={visibleBoard}
-                group="board"
-                onOpen={(mission) => setBoardModalId(mission.id)}
-              />
+              <div className="ops-active-groups">
+                <section className="ops-mission-group board-unassigned">
+                  <div className="ops-group-heading">
+                    <div>
+                      <p className="eyebrow">Available for dispatch</p>
+                      <h3>Unassigned <span>{visibleUnassignedBoard.length}</span></h3>
+                    </div>
+                  </div>
+                  {visibleUnassignedBoard.length > 0 ? (
+                    <MissionsList
+                      missions={visibleUnassignedBoard}
+                      group="board"
+                      onOpen={(mission) => setBoardModalId(mission.id)}
+                    />
+                  ) : (
+                    <EmptyGroup
+                      title="No unassigned alerts"
+                      hint="New or released alerts will appear here when they are ready for a dispatcher."
+                    />
+                  )}
+                </section>
+                <section className="ops-mission-group board-assigned">
+                  <div className="ops-group-heading">
+                    <div>
+                      <p className="eyebrow">Already accepted</p>
+                      <h3>Assigned <span>{visibleAssignedBoard.length}</span></h3>
+                    </div>
+                  </div>
+                  {visibleAssignedBoard.length > 0 ? (
+                    <MissionsList
+                      missions={visibleAssignedBoard}
+                      group="assigned"
+                      onOpen={(mission) => {
+                        onNavigateDestination({ view: "rescue-active", rescueMissionId: mission.id, detailSource: "rescue-active" });
+                      }}
+                    />
+                  ) : (
+                    <EmptyGroup
+                      title="No assigned missions"
+                      hint="Accepted rescue missions will appear here until they are resolved."
+                    />
+                  )}
+                </section>
+              </div>
             )}
 
             {page === "rescue-active" && canAct && (
@@ -699,6 +930,7 @@ export function RescueOperationsPortal({ onNavigate, page = "rescue-board", deta
                     <MissionsList
                       missions={visibleAssigned}
                       group="assigned"
+                      hideAssignmentBadge
                       onOpen={(mission) => {
                         onNavigateDestination({ view: "rescue-active", rescueMissionId: mission.id, detailSource: "rescue-active" });
                       }}
@@ -718,6 +950,7 @@ export function RescueOperationsPortal({ onNavigate, page = "rescue-board", deta
                     <MissionsList
                       missions={visibleInProgress}
                       group="in_progress"
+                      hideAssignmentBadge
                       onOpen={(mission) => {
                         onNavigateDestination({ view: "rescue-active", rescueMissionId: mission.id, detailSource: "rescue-active" });
                       }}
@@ -769,39 +1002,54 @@ function MissionDetailPage({
   isDispatcher,
   clerkUserId,
   canReceiveIntake,
+  onMarkReceived,
   getToken,
   onBack,
   onAccept,
   onStart,
   onUpdate,
   onDebrief,
-  onMarkReceived,
   onRelease,
+  onRequestTakeover,
+  onWithdrawTakeover,
+  onDecideTakeover,
+  initialTakeoverRequestId,
+  reviewRequest,
+  reviewRequestError,
+  isActionSubmitting,
 }: {
   mission: RescueMission;
-  source: "rescue-active" | "rescue-history" | null;
+  source: "rescue-board" | "rescue-active" | "rescue-history" | null;
   canAct: boolean;
   isDispatcher: boolean;
   clerkUserId: string | undefined;
   canReceiveIntake: boolean;
+  onMarkReceived: () => Promise<void>;
   getToken: () => Promise<string | null>;
   onBack: () => void;
   onAccept: () => Promise<boolean>;
   onStart: (input: { notes?: string; imageUrls?: string[] }) => Promise<void>;
   onUpdate: (input: { updateType: RescueUpdateType; message?: string; imageUrls?: string[] }) => Promise<boolean>;
   onDebrief: (input: DebriefInput) => Promise<void>;
-  onMarkReceived: () => Promise<void>;
   onRelease: (reason: string) => Promise<void>;
+  onRequestTakeover: (mission: RescueMission, reason: string) => Promise<void>;
+  onWithdrawTakeover: (requestId: string, reference: string) => Promise<void>;
+  onDecideTakeover: (requestId: string, reference: string, decision: "approved" | "declined", decisionNote?: string) => Promise<void>;
+  initialTakeoverRequestId?: string | null;
+  reviewRequest?: RescueTakeoverRequest | null;
+  reviewRequestError?: string;
+  isActionSubmitting: boolean;
 }) {
   const isOwner = clerkUserId != null && mission.assignedToClerkUserId === clerkUserId;
   const isResolvedDispatcherView = canAct && mission.status === "resolved";
-  const backLabel = source === "rescue-history" ? "Mission History" : "Active Mission";
+  const backLabel =
+    source === "rescue-history" ? "Mission History" : source === "rescue-board" ? "Mission Board" : "Active Mission";
   return (
     <div className={`rescue-detail-page${isResolvedDispatcherView ? " rescue-history-page" : ""}`}>
       <div className="rescue-detail-page-head">
         <div className="rescue-detail-page-head-text">
           <p className="eyebrow">
-            Rescue operations · {isResolvedDispatcherView ? "Mission history" : canAct ? "Dispatcher workspace" : "Rescue operations team"}
+            Rescue operations  {isResolvedDispatcherView ? "Mission history" : canAct ? "Dispatcher workspace" : "Rescue operations team"}
           </p>
           <h1>
             {mission.reference}{" "}
@@ -817,17 +1065,25 @@ function MissionDetailPage({
       <MissionDetail
         key={mission.id}
         mission={mission}
+        isActiveMission={source === "rescue-active"}
         canAct={canAct}
         isDispatcher={isDispatcher}
         isOwner={isOwner}
         canReceiveIntake={canReceiveIntake}
+        onMarkReceived={onMarkReceived}
         getToken={getToken}
         onAccept={onAccept}
         onStart={onStart}
         onUpdate={onUpdate}
         onDebrief={onDebrief}
-        onMarkReceived={onMarkReceived}
         onRelease={onRelease}
+        onRequestTakeover={onRequestTakeover}
+        onWithdrawTakeover={onWithdrawTakeover}
+        onDecideTakeover={onDecideTakeover}
+        initialTakeoverRequestId={initialTakeoverRequestId}
+        reviewRequest={reviewRequest}
+        reviewRequestError={reviewRequestError}
+        isActionSubmitting={isActionSubmitting}
       />
     </div>
   );
@@ -869,27 +1125,32 @@ function BoardMissionModal({
       <div className="modal board-mission-modal" role="dialog" aria-modal="true" aria-label={`${mission.reference} details`}>
         <div className="modal-header board-mission-header">
           <div className="board-mission-heading">
-            <p className="eyebrow">Mission Board · alert details</p>
+            <p className="eyebrow">Mission Board &middot; Alert Details</p>
             <h2>{mission.reference}</h2>
             <div className="board-mission-header-badges">
-              <span className={`rescue-status-badge ${rescueStatusClass(mission.status)}`}>
-                {STATUS_BADGE_LABEL[mission.status]}
-              </span>
+              {isHandedOver ? (
+                <span className="rescue-status-badge awaiting-reassignment">Needs Reassignment</span>
+              ) : (
+                <span className={`rescue-status-badge ${rescueStatusClass(mission.status)}`}>
+                  {STATUS_BADGE_LABEL[mission.status]}
+                </span>
+              )}
               <span className={`ops-urgency-badge ${mission.urgency}`} title={rescueUrgencyLabel(mission.urgency)}>
                 <span className="ops-urgency-dot" aria-hidden="true" />
                 {URGENCY_SHORT_LABEL[mission.urgency]}
               </span>
-              {isHandedOver && <span className="ops-case-reassign-tag board-mission-reassign-badge">Needs reassignment</span>}
             </div>
           </div>
           <button
             type="button"
             className="ghost-button modal-close"
             onClick={onClose}
-            aria-label="Close details"
-            title="Close details"
+           aria-label="Close alert details"
+           title="Close alert details"
           >
-            ×
+           <svg className="board-mission-close-icon" viewBox="0 0 16 16" focusable="false" aria-hidden="true">
+             <path d="m4 4 8 8M12 4l-8 8" />
+           </svg>
           </button>
         </div>
 
@@ -986,7 +1247,6 @@ function BoardMissionModal({
             <div className="board-mission-section-heading">
               <div>
                 <p className="eyebrow">Saved alert location</p>
-                <h3>Location &amp; action</h3>
               </div>
             </div>
             <p className="board-mission-map-address">{mission.location}</p>
@@ -1005,13 +1265,20 @@ function BoardMissionModal({
             {canAct && (
               <div className="board-mission-map-tools">
                 <a className="ghost-button board-mission-direction" href={directionsUrl} target="_blank" rel="noreferrer">
-                  Get directions
+                  Open Directions
                 </a>
               </div>
             )}
 
             <div className="board-mission-action-area">
-              {canAct && <MissionAcceptButton isHandedOver={isHandedOver} onAccept={onAccept} onSuccess={onClose} />}
+              {canAct && (
+                <MissionAcceptButton
+                  isHandedOver={isHandedOver}
+                  onAccept={onAccept}
+                  onSuccess={onClose}
+                  showHint={false}
+                />
+              )}
               {!canAct && isDispatcher && (
                 <p className="board-mission-readonly">Dispatchers accept missions from their own queue.</p>
               )}
@@ -1031,10 +1298,12 @@ function BoardMissionModal({
 function MissionsList({
   missions,
   group,
+  hideAssignmentBadge = false,
   onOpen,
 }: {
   missions: RescueMission[];
   group: "board" | "assigned" | "in_progress" | "history";
+  hideAssignmentBadge?: boolean;
   onOpen: (mission: RescueMission) => void;
 }) {
   if (missions.length === 0) return null;
@@ -1080,6 +1349,9 @@ function MissionsList({
               {mission.status === "awaiting_reassignment" && (
                 <span className="ops-case-reassign-tag">Needs reassignment</span>
               )}
+              {!hideAssignmentBadge && mission.assignedToClerkUserId && mission.status !== "awaiting_reassignment" && (
+                <span className="ops-case-reassign-tag">Assigned to {mission.assignedTo ?? "dispatcher"}</span>
+              )}
             </span>
             <span className="ops-case-cell">
               <span className="ops-case-loc">
@@ -1102,7 +1374,9 @@ function MissionsList({
             <span className="ops-view-details">
               <span>View Details</span>
               <span className="ops-chevron" aria-hidden="true">
-                ›
+                <svg viewBox="0 0 12 12" focusable="false">
+                  <path d="M4 2.5 7.5 6 4 9.5" />
+                </svg>
               </span>
             </span>
           </button>
@@ -1259,36 +1533,64 @@ function RescueSidePanel({
   );
 }
 
+// Mission History's Rescue Progress card shows only the main mission progress
+// events: acceptance, release, reassignment/handover (the same-status
+// "Mission transferred" entry written on an approved takeover), rescue started,
+// and resolved. Standalone note/photo history rows - entries logged without a
+// status change and without a handover - are filtered out here; they remain in
+// the Mission Updates card, and the underlying timeline data is untouched.
+function mainMissionProgress(progress: RescueMission["progress"]): RescueMission["progress"] {
+  return progress.filter(
+    (entry) => entry.fromStatus !== entry.toStatus || entry.toStatus === "assigned",
+  );
+}
+
 // The full detail/actions panel for one mission: the progress tracker, the
 // generated mission summary, the report details + map + photos, the
 // dispatcher's action forms (or read-only state), the in-rescue quick updates,
-// the debrief, and any intake handoff.
+// the debrief.
 function MissionDetail({
   mission,
+  isActiveMission,
   canAct,
   isDispatcher,
   isOwner,
   canReceiveIntake,
+  onMarkReceived,
   getToken,
   onAccept,
   onStart,
   onUpdate,
   onDebrief,
-  onMarkReceived,
   onRelease,
+  onRequestTakeover,
+  onWithdrawTakeover,
+  onDecideTakeover,
+  initialTakeoverRequestId,
+  reviewRequest,
+  reviewRequestError,
+  isActionSubmitting,
 }: {
   mission: RescueMission;
+  isActiveMission: boolean;
   canAct: boolean;
   isDispatcher: boolean;
   isOwner: boolean;
   canReceiveIntake: boolean;
+  onMarkReceived: () => Promise<void>;
   getToken: () => Promise<string | null>;
   onAccept: () => Promise<boolean>;
   onStart: (input: { notes?: string; imageUrls?: string[] }) => Promise<void>;
   onUpdate: (input: { updateType: RescueUpdateType; message?: string; imageUrls?: string[] }) => Promise<boolean>;
   onDebrief: (input: DebriefInput) => Promise<void>;
-  onMarkReceived: () => Promise<void>;
   onRelease: (reason: string) => Promise<void>;
+  onRequestTakeover: (mission: RescueMission, reason: string) => Promise<void>;
+  onWithdrawTakeover: (requestId: string, reference: string) => Promise<void>;
+  onDecideTakeover: (requestId: string, reference: string, decision: "approved" | "declined", decisionNote?: string) => Promise<void>;
+  initialTakeoverRequestId?: string | null;
+  reviewRequest?: RescueTakeoverRequest | null;
+  reviewRequestError?: string;
+  isActionSubmitting: boolean;
 }) {
   const currentStage = CURRENT_STAGE[mission.status];
   const isResolvedDispatcherView = canAct && mission.status === "resolved";
@@ -1296,9 +1598,11 @@ function MissionDetail({
   const canAccept = canAct && (mission.status === "submitted" || mission.status === "awaiting_reassignment") && !mission.assignedToClerkUserId;
   const canStart = canAct && isOwner && mission.status === "assigned";
   const canWork = canAct && isOwner && mission.status === "in_progress";
-  // A released/handed-over alert can be given up again only by whoever is now
-  // holding it; it is accepted from the board while unassigned.
-  const canRelease = canAct && isOwner && (mission.status === "assigned" || mission.status === "in_progress");
+  const shouldShowDirectionsBelowMap =
+    isActiveMission &&
+    hasPin &&
+    isDispatcher &&
+    (mission.status === "assigned" || mission.status === "in_progress");
   const isHandedOver =
     mission.status === "awaiting_reassignment" &&
     mission.progress[mission.progress.length - 1]?.fromStatus === "in_progress";
@@ -1308,11 +1612,168 @@ function MissionDetail({
   const directionsUrl = hasPin
     ? `https://www.google.com/maps/dir/?api=1&destination=${mission.latitude},${mission.longitude}`
     : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mission.location)}`;
-  // Long histories start collapsed to a manageable count; dispatchers can
-  // reveal the rest instead of scrolling past years of updates. Keyed by
-  // mission.id at the call site so the count resets between missions.
+  // Long histories start collapsed; changing missions resets this local state.
   const [updatesToShow, setUpdatesToShow] = useState(5);
   const hiddenUpdates = mission.updates.length - updatesToShow;
+  const pendingTakeoverRequests = mission.takeoverRequests ?? [];
+  const [takeoverRequestsOpen, setTakeoverRequestsOpen] = useState(Boolean(initialTakeoverRequestId));
+  const [previousReviewId, setPreviousReviewId] = useState(initialTakeoverRequestId);
+  if (previousReviewId !== initialTakeoverRequestId) {
+    setPreviousReviewId(initialTakeoverRequestId);
+    if (initialTakeoverRequestId) setTakeoverRequestsOpen(true);
+  }
+  const [confirmingTakeoverId, setConfirmingTakeoverId] = useState<string | null>(null);
+  const takeoverRequestRefs = useRef(new Map<string, HTMLDivElement>());
+
+  // The request a notification deep-linked to. While it is still pending it is
+  // in `pendingTakeoverRequests` and the review card below handles it. Once it
+  // has been decided, withdrawn, or cancelled it drops out of that list, so we
+  // show its current status from the freshly-fetched request instead - and the
+  // decision buttons are never offered again.
+  const linkedRequestIsPending =
+    !!initialTakeoverRequestId &&
+    pendingTakeoverRequests.some((req) => req.id === initialTakeoverRequestId);
+  const linkedRequestStatusMessage = (() => {
+    if (!initialTakeoverRequestId || linkedRequestIsPending) return null;
+    if (reviewRequest && reviewRequest.status !== "pending") {
+      const who = reviewRequest.requestedByName ?? "The requesting dispatcher";
+      switch (reviewRequest.status) {
+        case "approved":
+          return {
+            tone: "approved" as const,
+            text: `${who}'s takeover request was approved - the mission was transferred.`,
+          };
+        case "declined":
+          return {
+            tone: "declined" as const,
+            text: `${who}'s takeover request was declined.`,
+            note: reviewRequest.decisionNote ?? undefined,
+          };
+        case "withdrawn":
+          return { tone: "withdrawn" as const, text: `${who} withdrew their takeover request.` };
+        case "cancelled":
+          return {
+            tone: "cancelled" as const,
+            text: `${who}'s takeover request was closed because the mission moved on.`,
+          };
+        default:
+          return null;
+      }
+    }
+    if (reviewRequestError) return { tone: "unavailable" as const, text: reviewRequestError };
+    return null;
+  })();
+
+  useEffect(() => {
+    if (!initialTakeoverRequestId) return;
+    takeoverRequestRefs.current.get(initialTakeoverRequestId)?.scrollIntoView({
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+      block: "center",
+    });
+  }, [initialTakeoverRequestId, pendingTakeoverRequests.length]);
+
+  // Alert Details is rendered once here and reused by both layouts: the active
+  // view uses it as a direct grid child, while the resolved view nests it in
+  // the left column, so the card markup is never duplicated.
+  const alertDetailsCard = (
+    <div className="rescue-details-card">
+      <div className="rescue-facts-heading"><span className="rescue-facts-icon" aria-hidden="true"><RescueSummaryIcon name="clipboard" /></span><div><h3 className="rescue-card-title">Alert details</h3><p>The original report and location.</p></div></div>
+      <dl className="rescue-details-list">
+        <div className="rescue-detail-field">
+          <dt>Reference number</dt>
+          <dd>{mission.reference}</dd>
+        </div>
+        <div className="rescue-detail-field">
+          <dt>Animal type</dt>
+          <dd>{mission.animalType ?? "Not recorded"}</dd>
+        </div>
+        <div className="rescue-detail-field">
+          <dt>Breed / description</dt>
+          <dd>{mission.animalBreed || "Not recorded"}</dd>
+        </div>
+        <div className="rescue-detail-field">
+          <dt>Urgency</dt>
+          <dd>{rescueUrgencyLabel(mission.urgency)}</dd>
+        </div>
+        <div className="rescue-detail-field full">
+          <dt>Condition / observation</dt>
+          <dd>{mission.conditionDescription}</dd>
+        </div>
+        <div className="rescue-detail-field full">
+          <dt>Location</dt>
+          <dd>
+            {mission.location}
+            {mission.latitude != null && mission.longitude != null ? (
+              <>
+                {" "}
+                -{" "}
+                <a
+                  href={`https://www.google.com/maps?q=${mission.latitude},${mission.longitude}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {mission.latitude.toFixed(5)}, {mission.longitude.toFixed(5)}
+                </a>
+              </>
+            ) : null}
+          </dd>
+        </div>
+        <div className="rescue-detail-field">
+          <dt>Reporter</dt>
+          <dd>
+            {mission.reporterName}
+            {mission.reporterPhone ? <span> - {mission.reporterPhone}</span> : null}
+          </dd>
+        </div>
+        <div className="rescue-detail-field">
+          <dt>Contact</dt>
+          <dd>{mission.reporterEmail || "No email provided"}</dd>
+        </div>
+        <div className="rescue-detail-field">
+          <dt>Reported</dt>
+          <dd>{formatDate(mission.createdAt)}</dd>
+        </div>
+        <div className="rescue-detail-field">
+          <dt>Source</dt>
+          <dd>{mission.source === "phone" ? "Phone call" : "Online form"}</dd>
+        </div>
+      </dl>
+
+      {!isResolvedDispatcherView && <div className="rescue-mission-media">
+      {hasPin && (
+        <div className="rescue-detail-photo-block">
+          <h4 className="rescue-card-subtitle">Location map</h4>
+          <RescueReadOnlyMap latitude={mission.latitude as number} longitude={mission.longitude as number} />
+          {shouldShowDirectionsBelowMap && (
+            <div className="rescue-detail-directions">
+              <a
+                className="teal-button dispatch-save"
+                href={directionsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Open Directions
+              </a>
+            </div>
+          )}
+        </div>
+      )}
+
+      {mission.photoUrls.length > 0 && (
+        <div className="rescue-detail-photo-block">
+          <h4 className="rescue-card-subtitle">Submitted photo</h4>
+          <div className="rescue-detail-photos">
+            {mission.photoUrls.map((url) => (
+              <a key={url} href={url} target="_blank" rel="noopener noreferrer">
+                <img src={url} alt={`Photo for ${mission.reference}`} />
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+      </div>}
+    </div>
+  );
 
   return (
     <div className={`rescue-detail-body${isResolvedDispatcherView ? " rescue-history-body" : ""}`}>
@@ -1328,97 +1789,29 @@ function MissionDetail({
         ))}
       </div>
 
-      <div className={isResolvedDispatcherView ? "rescue-history-overview" : "rescue-detail-columns"}>
-        <div className="rescue-details-card">
-          <div className="rescue-facts-heading"><span className="rescue-facts-icon" aria-hidden="true"><RescueSummaryIcon name="clipboard" /></span><div><h3 className="rescue-card-title">Alert details</h3><p>The original report and location.</p></div></div>
-          <dl className="rescue-details-list">
-            <div className="rescue-detail-field">
-              <dt>Reference number</dt>
-              <dd>{mission.reference}</dd>
-            </div>
-            <div className="rescue-detail-field">
-              <dt>Animal type</dt>
-              <dd>{mission.animalType ?? "Not recorded"}</dd>
-            </div>
-            <div className="rescue-detail-field">
-              <dt>Breed / description</dt>
-              <dd>{mission.animalBreed || "Not recorded"}</dd>
-            </div>
-            <div className="rescue-detail-field">
-              <dt>Urgency</dt>
-              <dd>{rescueUrgencyLabel(mission.urgency)}</dd>
-            </div>
-            <div className="rescue-detail-field full">
-              <dt>Condition / observation</dt>
-              <dd>{mission.conditionDescription}</dd>
-            </div>
-            <div className="rescue-detail-field full">
-              <dt>Location</dt>
-              <dd>
-                {mission.location}
-                {mission.latitude != null && mission.longitude != null ? (
-                  <>
-                    {" "}
-                    -{" "}
-                    <a
-                      href={`https://www.google.com/maps?q=${mission.latitude},${mission.longitude}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      {mission.latitude.toFixed(5)}, {mission.longitude.toFixed(5)}
-                    </a>
-                  </>
-                ) : null}
-              </dd>
-            </div>
-            <div className="rescue-detail-field">
-              <dt>Reporter</dt>
-              <dd>
-                {mission.reporterName}
-                {mission.reporterPhone ? <span> - {mission.reporterPhone}</span> : null}
-              </dd>
-            </div>
-            <div className="rescue-detail-field">
-              <dt>Contact</dt>
-              <dd>{mission.reporterEmail || "No email provided"}</dd>
-            </div>
-            <div className="rescue-detail-field">
-              <dt>Reported</dt>
-              <dd>{formatDate(mission.createdAt)}</dd>
-            </div>
-            <div className="rescue-detail-field">
-              <dt>Source</dt>
-              <dd>{mission.source === "phone" ? "Phone call" : "Online form"}</dd>
-            </div>
-          </dl>
-
-          {!isResolvedDispatcherView && <div className="rescue-mission-media">
-          {hasPin && (
-            <div className="rescue-detail-photo-block">
-              <h4 className="rescue-card-subtitle">Location map</h4>
-              <RescueReadOnlyMap latitude={mission.latitude as number} longitude={mission.longitude as number} />
-            </div>
+      {linkedRequestStatusMessage && (
+        <section
+          className={`rescue-takeover-status rescue-takeover-status-${linkedRequestStatusMessage.tone}`}
+          role="status"
+          aria-label="Takeover request status"
+        >
+          <strong>Takeover request update</strong>
+          <p>{linkedRequestStatusMessage.text}</p>
+          {"note" in linkedRequestStatusMessage && linkedRequestStatusMessage.note && (
+            <p className="rescue-takeover-status-note">Note: "{linkedRequestStatusMessage.note}"</p>
           )}
+        </section>
+      )}
 
-          {mission.photoUrls.length > 0 && (
-            <div className="rescue-detail-photo-block">
-              <h4 className="rescue-card-subtitle">Submitted photo</h4>
-              <div className="rescue-detail-photos">
-                {mission.photoUrls.map((url) => (
-                  <a key={url} href={url} target="_blank" rel="noopener noreferrer">
-                    <img src={url} alt={`Photo for ${mission.reference}`} />
-                    <span className="rescue-photo-caption">View full photo ↗</span>
-                  </a>
-                ))}
-              </div>
-            </div>
-          )}
-          </div>}
-        </div>
-
-        {isResolvedDispatcherView ? (
-          <ResolvedMissionDebrief mission={mission} />
-        ) : (
+      {isResolvedDispatcherView ? (
+        <>
+          <div className="rescue-history-overview">{alertDetailsCard}<ResolvedMissionDebrief mission={mission} /></div>
+          <MissionArchive mission={mission} />
+        </>
+      ) : (
+        <div className="rescue-detail-columns">
+          {alertDetailsCard}
+          <>
           <div className="rescue-dispatch-card">
           <h3 className="rescue-card-title">Mission Actions</h3>
           <div className="dispatch-field">
@@ -1454,7 +1847,7 @@ function MissionDetail({
             </div>
           )}
 
-          {canAct && isDispatcher && (
+          {canAct && isDispatcher && !shouldShowDirectionsBelowMap && (
             <a
               className="teal-button dispatch-save"
               href={directionsUrl}
@@ -1467,9 +1860,57 @@ function MissionDetail({
 
           {canAccept && <MissionAcceptButton isHandedOver={isHandedOver} onAccept={onAccept} />}
 
-          {canStart && <StartMissionForm getToken={getToken} onStart={onStart} />}
+          {canStart && mission.status === "assigned" && isOwner && (
+            <AssignedMissionStartActions
+              getToken={getToken}
+              onStart={onStart}
+              onUpdate={onUpdate}
+              onRelease={onRelease}
+            />
+          )}
 
-          {canRelease && <ReleaseMissionForm isHandover={mission.status === "in_progress"} onRelease={onRelease} />}
+          {mission.status === "assigned" && canAct && !isOwner && mission.myTakeoverRequest && (
+            <div className="dispatch-field dispatch-note">
+              <span className="dispatch-label">Request Pending</span>
+              <p>You requested to take this over: "{mission.myTakeoverRequest.reason}"</p>
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() => onWithdrawTakeover(mission.myTakeoverRequest!.id, mission.reference)}
+              >
+                Withdraw Request
+              </button>
+            </div>
+          )}
+
+          {mission.status === "assigned" && canAct && !isOwner && !mission.myTakeoverRequest && (
+            <div className="dispatch-field">
+              <span className="dispatch-label">Request to take over</span>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const form = e.currentTarget;
+                  const reason = (form.elements.namedItem("takeoverReason") as HTMLTextAreaElement).value;
+                  if (reason.trim()) {
+                    onRequestTakeover(mission, reason.trim());
+                    form.reset();
+                  }
+                }}
+                style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}
+              >
+                <textarea
+                  name="takeoverReason"
+                  placeholder="Why are you better positioned to take this mission?"
+                  className="dispatch-input"
+                  rows={2}
+                  required
+                />
+                <button type="submit" className="teal-button" style={{ alignSelf: "flex-start" }}>
+                  Request Takeover
+                </button>
+              </form>
+            </div>
+          )}
 
           {mission.status === "assigned" && canAct && !isOwner && (
             <p className="dispatch-form-hint">
@@ -1485,24 +1926,111 @@ function MissionDetail({
               </p>
             )}
 
-          {canWork && <QuickUpdateForm getToken={getToken} onUpdate={onUpdate} />}
-          {canWork && <DebriefForm onDebrief={onDebrief} />}
+          {canWork && (
+            <InProgressMissionActions
+              getToken={getToken}
+              onUpdate={onUpdate}
+              onDebrief={onDebrief}
+              onRelease={onRelease}
+            />
+          )}
 
           {mission.status === "resolved" && (
             <p className="dispatch-form-hint">
-              This mission is resolved and read-only. Its full timeline, debrief, and any intake handoff are
-              shown below.
+              This mission is resolved and read-only. Its full timeline and debrief are shown below.
             </p>
           )}
           </div>
-        )}
-      </div>
+          {mission.status === "assigned" && canAct && isDispatcher && isOwner && (
+            <section className="rescue-takeover-card" aria-label="Takeover Requests">
+              <button
+                type="button"
+                className="rescue-takeover-card-header"
+                aria-expanded={takeoverRequestsOpen}
+                onClick={() => setTakeoverRequestsOpen((open) => !open)}
+              >
+                <span>Takeover requests · {pendingTakeoverRequests.length}</span>
+                <span aria-hidden="true">{takeoverRequestsOpen ? "−" : "+"}</span>
+              </button>
+              {takeoverRequestsOpen && (
+                <div className="rescue-takeover-card-body">
+                  {pendingTakeoverRequests.length === 0 ? (
+                    <p className="dispatch-empty">No pending takeover requests.</p>
+                  ) : (
+                    pendingTakeoverRequests.map((req) => (
+                      <div
+                        key={req.id}
+                        className={`rescue-takeover-request${req.id === initialTakeoverRequestId ? " rescue-takeover-request-linked" : ""}`}
+                        ref={(element) => {
+                          if (element) takeoverRequestRefs.current.set(req.id, element);
+                          else takeoverRequestRefs.current.delete(req.id);
+                        }}
+                      >
+                        <div className="rescue-takeover-request-copy">
+                          <strong>{req.requestedByName ?? "Another dispatcher"}</strong>
+                          <p>{req.reason}</p>
+                          <time dateTime={req.createdAt}>Submitted {formatDateTime(req.createdAt)}</time>
+                        </div>
+                        {confirmingTakeoverId === req.id ? (
+                          <div className="rescue-takeover-confirmation">
+                            <p>
+                              Transfer this mission to {req.requestedByName ?? "this dispatcher"}? It will move from
+                              your active missions to theirs.
+                            </p>
+                            <div className="rescue-takeover-actions">
+                              <button
+                                type="button"
+                                className="teal-button"
+                                disabled={isActionSubmitting}
+                                onClick={() => {
+                                  setConfirmingTakeoverId(null);
+                                  void onDecideTakeover(req.id, mission.reference, "approved");
+                                }}
+                              >
+                                Confirm transfer
+                              </button>
+                              <button
+                                type="button"
+                                className="ghost-button"
+                                disabled={isActionSubmitting}
+                                onClick={() => setConfirmingTakeoverId(null)}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="rescue-takeover-actions">
+                            <button
+                              type="button"
+                              className="teal-button"
+                              disabled={isActionSubmitting}
+                              onClick={() => setConfirmingTakeoverId(req.id)}
+                            >
+                              Approve transfer
+                            </button>
+                            <button
+                              type="button"
+                              className="ghost-button"
+                              disabled={isActionSubmitting}
+                              onClick={() => void onDecideTakeover(req.id, mission.reference, "declined")}
+                            >
+                              Decline
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </section>
+          )}
+          </>
+        </div>
+      )}
 
-      {isResolvedDispatcherView ? (
-        <>
-          <MissionArchive mission={mission} />
-        </>
-      ) : (
+      {!isResolvedDispatcherView && (
         <>
           {mission.updates.length > 0 && (
             <div className="rescue-progress-block">
@@ -1527,8 +2055,7 @@ function MissionDetail({
           {mission.debrief && <DebriefSummary mission={mission} />}
 
           {mission.intakeHandoff && <IntakeHandoffSummary mission={mission} canReceiveIntake={canReceiveIntake} onMarkReceived={onMarkReceived} />}
-
-          <RescueProgressTimeline report={mission} />
+          <RescueProgressTimeline report={{ ...mission, progress: mainMissionProgress(mission.progress) }} />
         </>
       )}
     </div>
@@ -1539,10 +2066,12 @@ function MissionAcceptButton({
   isHandedOver,
   onAccept,
   onSuccess,
+  showHint = true,
 }: {
   isHandedOver: boolean;
   onAccept: () => Promise<boolean>;
   onSuccess?: () => void;
+  showHint?: boolean;
 }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -1562,19 +2091,21 @@ function MissionAcceptButton({
 
   return (
     <div className="dispatch-form">
-      <p className="dispatch-form-hint">
-        {isHandedOver ? (
-          <>
-            Accepting a <strong>handed-over</strong> mission keeps every update already filed and resumes it at{" "}
-            <strong>In Progress</strong>.
-          </>
-        ) : (
-          <>
-            Accepting assigns this alert to you and moves it to <strong>Assigned</strong>. Once en route you can
-            start it without filling a form.
-          </>
-        )}
-      </p>
+      {showHint && (
+        <p className="dispatch-form-hint">
+          {isHandedOver ? (
+            <>
+              Accepting a <strong>handed-over</strong> mission keeps every update already filed and resumes it at{" "}
+              <strong>In Progress</strong>.
+            </>
+          ) : (
+            <>
+              Accepting assigns this alert to you and moves it to <strong>Assigned</strong>. Once en route you can
+              start it without filling a form.
+            </>
+          )}
+        </p>
+      )}
       {error && <p className="invite-feedback error">{error}</p>}
       <button type="button" className="teal-button dispatch-save" onClick={() => void handleClick()} disabled={submitting}>
         {submitting ? "Accepting mission..." : "Accept Mission"}
@@ -1583,66 +2114,60 @@ function MissionAcceptButton({
   );
 }
 
-// Start Mission: notes and photos are optional - an en-route dispatcher is
-// never blocked at a form. Anything entered is still saved to the timeline.
-function StartMissionForm({
+function AssignedMissionStartActions({
   getToken,
   onStart,
+  onUpdate,
+  onRelease,
 }: {
   getToken: () => Promise<string | null>;
   onStart: (input: { notes?: string; imageUrls?: string[] }) => Promise<void>;
+  onUpdate: (input: { updateType: RescueUpdateType; message?: string; imageUrls?: string[] }) => Promise<boolean>;
+  onRelease: (reason: string) => Promise<void>;
 }) {
-  const notesId = useId();
-  const [notes, setNotes] = useState("");
-  const [images, setImages] = useState<string[]>([]);
-  const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
 
-  async function submit(input: { notes?: string; imageUrls?: string[] }) {
+  async function handleStart() {
     setError("");
     setSubmitting(true);
     try {
-      await onStart(input);
-    } catch (startError) {
-      setError(startError instanceof Error ? startError.message : "The mission could not be started.");
+      await onStart({ notes: undefined, imageUrls: [] });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "The mission could not be started.");
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <form
-      className="dispatch-form"
-      onSubmit={(event) => {
-        event.preventDefault();
-        void submit({ notes: notes.trim() || undefined, imageUrls: images });
-      }}
-    >
-      <p className="dispatch-form-hint">
-        Start work on this mission. Notes are <strong>optional</strong> - the status will move to{" "}
-        <strong>In Progress</strong>.
-      </p>
-      <div className="dispatch-field">
-        <label className="dispatch-label" htmlFor={notesId}>
-          Notes / action plan <em className="optional-hint">(optional)</em>
-        </label>
-        <textarea
-          id={notesId}
-          rows={4}
-          value={notes}
-          onChange={(event) => setNotes(event.target.value)}
-          placeholder="Optional - what you plan to do, or anything worth recording at the start..."
-          disabled={submitting}
-        />
-      </div>
-      <ProgressImageUpload value={images} onChange={setImages} getToken={getToken} disabled={submitting} />
+    <div className="mission-action-sections" aria-label="Assigned mission actions">
+      <details className="mission-action-section">
+        <summary className="mission-action-trigger">
+          <span>Add notes or photos (optional)</span>
+        </summary>
+        <div className="mission-action-body">
+          <QuickUpdateForm getToken={getToken} onUpdate={onUpdate} />
+        </div>
+      </details>
+      <details className="mission-action-section">
+        <summary className="mission-action-trigger">
+          <span>Release Mission</span>
+        </summary>
+        <div className="mission-action-body">
+          <ReleaseMissionForm isHandover={false} onRelease={onRelease} embedded />
+        </div>
+      </details>
+      <button
+        type="button"
+        className="teal-button dispatch-save mission-start-cta"
+        disabled={submitting}
+        onClick={() => void handleStart()}
+      >
+        {submitting ? "Starting mission..." : "Start Mission"}
+      </button>
       {error && <p className="invite-feedback error">{error}</p>}
-      <div className="rescue-confirm-actions">
-        <button type="submit" className="teal-button dispatch-save" disabled={submitting}>
-          {submitting ? "Starting mission..." : "Start Mission"}
-        </button>
-      </div>
-    </form>
+    </div>
   );
 }
 
@@ -1653,11 +2178,14 @@ function StartMissionForm({
 function ReleaseMissionForm({
   isHandover,
   onRelease,
+  embedded = false,
 }: {
   isHandover: boolean;
   onRelease: (reason: string) => Promise<void>;
+  embedded?: boolean;
 }) {
   const reasonId = useId();
+  const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -1674,9 +2202,21 @@ function ReleaseMissionForm({
     }
   }
 
+  if (!embedded && !open) {
+    return (
+      <button
+        type="button"
+        className="ghost-button mission-secondary-button"
+        onClick={() => setOpen(true)}
+      >
+        {isHandover ? "Request Handover" : "Release Mission"}
+      </button>
+    );
+  }
+
   return (
     <form
-      className="dispatch-form"
+      className="mission-release-panel"
       onSubmit={(event) => {
         event.preventDefault();
         const trimmed = reason.trim();
@@ -1698,8 +2238,7 @@ function ReleaseMissionForm({
             Releasing returns this alert to the Mission Board for another dispatcher to accept as a fresh{" "}
             <strong>Assigned</strong> mission.
           </>
-        )}{" "}
-        Your reason is shown to them on the timeline.
+        )}
       </p>
       <div className="dispatch-field">
         <label className="dispatch-label" htmlFor={reasonId}>
@@ -1720,11 +2259,63 @@ function ReleaseMissionForm({
       </div>
       {error && <p className="invite-feedback error">{error}</p>}
       <div className="rescue-confirm-actions">
+        <button
+          type="button"
+          className="ghost-button"
+          onClick={() => {
+            if (!embedded) setOpen(false);
+            setError("");
+          }}
+          disabled={submitting}
+        >
+          Cancel
+        </button>
         <button type="submit" className="danger-button dispatch-save" disabled={submitting}>
-          {submitting ? "Releasing alert..." : isHandover ? "Request Handover" : "Release Mission"}
+          {submitting ? "Releasing alert..." : isHandover ? "Confirm Handover" : "Confirm Release"}
         </button>
       </div>
     </form>
+  );
+}
+
+function InProgressMissionActions({
+  getToken,
+  onUpdate,
+  onDebrief,
+  onRelease,
+}: {
+  getToken: () => Promise<string | null>;
+  onUpdate: (input: { updateType: RescueUpdateType; message?: string; imageUrls?: string[] }) => Promise<boolean>;
+  onDebrief: (input: DebriefInput) => Promise<void>;
+  onRelease: (reason: string) => Promise<void>;
+}) {
+  return (
+    <div className="mission-action-sections" aria-label="In-progress mission actions">
+      <details className="mission-action-section">
+        <summary className="mission-action-trigger">
+          <span>Add update</span>
+        </summary>
+        <div className="mission-action-body">
+          <QuickUpdateForm getToken={getToken} onUpdate={onUpdate} />
+        </div>
+      </details>
+      <details className="mission-action-section">
+        <summary className="mission-action-trigger">
+          <span>Request Handover</span>
+        </summary>
+        <div className="mission-action-body">
+          <ReleaseMissionForm isHandover onRelease={onRelease} embedded />
+        </div>
+      </details>
+      <details className="mission-action-section mission-action-section--primary">
+        <summary className="mission-action-trigger">
+          <span>Resolve Mission</span>
+        </summary>
+        <div className="mission-action-body">
+          <DebriefForm onDebrief={onDebrief} />
+        </div>
+      </details>
+    </div>
   );
 }
 
@@ -1858,18 +2449,23 @@ function DebriefForm({ onDebrief }: { onDebrief: (input: DebriefInput) => Promis
   const [outcome, setOutcome] = useState<RescueOutcome | "">("");
   const [whatHappened, setWhatHappened] = useState("");
   const [animalCondition, setAnimalCondition] = useState("");
-  const [veterinaryPriority, setVeterinaryPriority] = useState<RescueUrgency | "">("");
   const [unsuccessfulDetails, setUnsuccessfulDetails] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  const rescued = outcome !== "" && isRescueSuccessOutcome(outcome);
   const showUnsuccessfulDetails = outcome === "other";
+  // "Animal could not be located" has no animal to describe, so the optional
+  // condition field is hidden for that outcome and never submitted - even if
+  // one was typed before the outcome was switched.
+  const showAnimalCondition = outcome !== "not_located";
 
+  // "Other" was retired for new dispatcher resolutions - historical debriefs
+  // that used it still render in Mission History, but the Resolve Mission form
+  // can no longer select or submit it.
   function validate(): string {
     if (!outcome) return "Select a rescue outcome.";
+    if (outcome === "other") return '"Other" is no longer available as a rescue outcome.';
     if (!whatHappened.trim()) return "A debrief of what happened is required.";
-    if (rescued && !veterinaryPriority) return "Veterinary priority is required so the intake team can triage.";
     if (showUnsuccessfulDetails && !unsuccessfulDetails.trim()) return 'Please explain the "Other" outcome.';
     return "";
   }
@@ -1892,8 +2488,7 @@ function DebriefForm({ onDebrief }: { onDebrief: (input: DebriefInput) => Promis
       await onDebrief({
         outcome: outcome as RescueOutcome,
         whatHappened: whatHappened.trim(),
-        animalCondition: animalCondition.trim() || undefined,
-        veterinaryPriority: veterinaryPriority === "" ? undefined : veterinaryPriority,
+        animalCondition: showAnimalCondition ? animalCondition.trim() || undefined : undefined,
         unsuccessfulDetails: unsuccessfulDetails.trim() || undefined,
       });
     } catch (debriefError) {
@@ -1908,8 +2503,7 @@ function DebriefForm({ onDebrief }: { onDebrief: (input: DebriefInput) => Promis
     return (
       <div className="rescue-confirm-panel">
         <p className="dispatch-form-hint">
-          Review your debrief before confirming. Confirming marks this mission <strong>Resolved</strong> and,
-          for rescued animals, creates the intake handoff.
+          Review your debrief before confirming. Confirming marks this mission <strong>Resolved</strong>.
         </p>
         <div className="dispatch-field">
           <span className="dispatch-label">Rescue outcome</span>
@@ -1919,16 +2513,10 @@ function DebriefForm({ onDebrief }: { onDebrief: (input: DebriefInput) => Promis
           <span className="dispatch-label">What happened</span>
           <p className="rescue-confirm-text">{whatHappened.trim()}</p>
         </div>
-        {animalCondition.trim() && (
+        {showAnimalCondition && animalCondition.trim() && (
           <div className="dispatch-field">
             <span className="dispatch-label">Animal condition</span>
             <p className="rescue-confirm-text">{animalCondition.trim()}</p>
-          </div>
-        )}
-        {veterinaryPriority && (
-          <div className="dispatch-field">
-            <span className="dispatch-label">Veterinary priority</span>
-            <strong>{rescueUrgencyLabel(veterinaryPriority)}</strong>
           </div>
         )}
         {unsuccessfulDetails.trim() && (
@@ -1953,8 +2541,7 @@ function DebriefForm({ onDebrief }: { onDebrief: (input: DebriefInput) => Promis
   return (
     <form className="dispatch-form" onSubmit={handleReview}>
       <p className="dispatch-form-hint">
-        Complete the mission with a short debrief. Resolved animals automatically create an intake handoff
-        triaged by your selected veterinary priority.
+        Complete the mission with a short debrief.
       </p>
       <div className="dispatch-field">
         <span className="dispatch-label">
@@ -1969,11 +2556,13 @@ function DebriefForm({ onDebrief }: { onDebrief: (input: DebriefInput) => Promis
           disabled={submitting}
         >
           <option value="">Select an outcome</option>
-          {(Object.keys(RESCUE_OUTCOME_LABELS) as RescueOutcome[]).map((key) => (
-            <option key={key} value={key}>
-              {RESCUE_OUTCOME_LABELS[key]}
-            </option>
-          ))}
+          {(Object.keys(RESCUE_OUTCOME_LABELS) as RescueOutcome[])
+            .filter((key) => key !== "other")
+            .map((key) => (
+              <option key={key} value={key}>
+                {RESCUE_OUTCOME_LABELS[key]}
+              </option>
+            ))}
         </select>
       </div>
       <div className="dispatch-field">
@@ -1989,39 +2578,20 @@ function DebriefForm({ onDebrief }: { onDebrief: (input: DebriefInput) => Promis
           disabled={submitting}
         />
       </div>
-      <div className="dispatch-field">
-        <label className="dispatch-label" htmlFor={animalConditionId}>
-          Animal condition <em className="optional-hint">(optional)</em>
-        </label>
-        <input
-          id={animalConditionId}
-          type="text"
-          value={animalCondition}
-          onChange={(event) => setAnimalCondition(event.target.value)}
-          placeholder="e.g. Alert, minor injuries, very thin"
-          disabled={submitting}
-        />
-      </div>
-      {rescued && (
-        <>
-          <div className="dispatch-field">
-            <span className="dispatch-label">
-              Veterinary priority <em className="optional-hint">(required - the intake team triages on this)</em>
-            </span>
-            <select
-              value={veterinaryPriority}
-              onChange={(event) => setVeterinaryPriority(event.target.value as RescueUrgency)}
-              disabled={submitting}
-            >
-              <option value="">Select a priority</option>
-              {(["low", "moderate", "high", "critical"] as RescueUrgency[]).map((priority) => (
-                <option key={priority} value={priority}>
-                  {rescueUrgencyLabel(priority)}
-                </option>
-              ))}
-            </select>
-          </div>
-        </>
+      {showAnimalCondition && (
+        <div className="dispatch-field">
+          <label className="dispatch-label" htmlFor={animalConditionId}>
+            Animal condition <em className="optional-hint">(optional)</em>
+          </label>
+          <input
+            id={animalConditionId}
+            type="text"
+            value={animalCondition}
+            onChange={(event) => setAnimalCondition(event.target.value)}
+            placeholder="e.g. Alert, minor injuries, very thin"
+            disabled={submitting}
+          />
+        </div>
       )}
       {showUnsuccessfulDetails && (
         <div className="dispatch-field">
@@ -2138,18 +2708,8 @@ function ResolvedMissionDebrief({ mission }: { mission: RescueMission }) {
     );
   }
 
-  const handoff = mission.intakeHandoff;
-  const rescued = isRescueSuccessOutcome(debrief.outcome);
-  const priority = debrief.veterinaryPriority ?? handoff?.veterinaryPriority ?? null;
-  const intakeStatus = handoff ? (handoff.status === "pending" ? "pending" : "received") : "not-required";
-  const intakeLabel = handoff ? (handoff.status === "pending" ? "Pending intake" : "Received") : "Not required";
-  const destination = handoff?.destination ?? (rescued ? "SPCA Fiji" : "Not applicable");
-  const destinationNote = handoff
-    ? "Set automatically for rescued animals"
-    : rescued
-      ? "Set automatically to SPCA Fiji"
-      : "No intake handoff was created";
-  const dispatcher = debrief.dispatcherName ?? handoff?.dispatcherName ?? mission.assignedTo ?? "SPCA team";
+  const dispatcher = debrief.dispatcherName ?? mission.assignedTo ?? "SPCA team";
+  const outcomeLabel = RESCUE_OUTCOME_LABELS[debrief.outcome] ?? debrief.outcome;
 
   return (
     <section className="rescue-debrief-card" aria-label="Post-rescue debrief">
@@ -2163,48 +2723,39 @@ function ResolvedMissionDebrief({ mission }: { mission: RescueMission }) {
 
       <div className="rescue-debrief-outcome-panel">
         <span className="rescue-debrief-label">Rescue outcome</span>
-        <strong>{RESCUE_OUTCOME_LABELS[debrief.outcome] ?? debrief.outcome}</strong>
+        <strong>{outcomeLabel}</strong>
       </div>
 
-      <div className="rescue-debrief-narrative">
-        <span className="rescue-debrief-label">What happened</span>
-        <p>{debrief.whatHappened}</p>
+      <hr className="rescue-debrief-divider" />
+
+      <div className="rescue-debrief-group">
+        <div className="rescue-debrief-field">
+          <span className="rescue-debrief-label">What happened</span>
+          <p className="rescue-debrief-text">{debrief.whatHappened}</p>
+        </div>
+        {debrief.outcome !== "not_located" && debrief.animalCondition && (
+          <div className="rescue-debrief-field">
+            <span className="rescue-debrief-label">Animal condition</span>
+            <p className="rescue-debrief-text">{debrief.animalCondition}</p>
+          </div>
+        )}
+        {debrief.unsuccessfulDetails && (
+          <div className="rescue-debrief-field">
+            <span className="rescue-debrief-label">Additional outcome details</span>
+            <p className="rescue-debrief-text">{debrief.unsuccessfulDetails}</p>
+          </div>
+        )}
       </div>
 
-      <div className="rescue-debrief-facts">
-        <div className="rescue-debrief-fact">
-          <span className="rescue-debrief-label">Veterinary priority</span>
-          {priority ? (
-            <span className={`rescue-debrief-priority ${priority}`}>{rescueUrgencyLabel(priority)}</span>
-          ) : (
-            <span className="rescue-debrief-value-muted">Not specified</span>
-          )}
-        </div>
-        <div className="rescue-debrief-fact">
-          <span className="rescue-debrief-label">Intake handoff status</span>
-          <span className={`rescue-debrief-intake-badge ${intakeStatus}`}>{intakeLabel}</span>
-        </div>
-        <div className="rescue-debrief-fact">
-          <span className="rescue-debrief-label">Destination</span>
-          <strong>{destination}</strong>
-          <span className="rescue-debrief-fact-note">{destinationNote}</span>
-        </div>
-        <div className="rescue-debrief-fact">
-          <span className="rescue-debrief-label">Dispatcher</span>
-          <strong>{dispatcher}</strong>
-        </div>
-        <div className="rescue-debrief-fact wide">
-          <span className="rescue-debrief-label">Completed</span>
-          <strong>{formatDateTime(debrief.createdAt)}</strong>
-        </div>
-      </div>
+      <hr className="rescue-debrief-divider" />
 
-      {debrief.unsuccessfulDetails && (
-        <div className="rescue-debrief-extra">
-          <span className="rescue-debrief-label">Additional outcome details</span>
-          <p>{debrief.unsuccessfulDetails}</p>
-        </div>
-      )}
+      <p className="rescue-debrief-meta">
+        <span>{dispatcher}</span>
+        <span className="rescue-debrief-meta-sep" aria-hidden="true">
+          ·
+        </span>
+        <span>{formatDateTime(debrief.createdAt)}</span>
+      </p>
     </section>
   );
 }
@@ -2228,12 +2779,6 @@ function DebriefSummary({ mission }: { mission: RescueMission }) {
           <div className="rescue-detail-field">
             <dt>Animal condition</dt>
             <dd>{debrief.animalCondition}</dd>
-          </div>
-        )}
-        {debrief.veterinaryPriority && (
-          <div className="rescue-detail-field">
-            <dt>Veterinary priority</dt>
-            <dd>{rescueUrgencyLabel(debrief.veterinaryPriority)}</dd>
           </div>
         )}
         {debrief.unsuccessfulDetails && (

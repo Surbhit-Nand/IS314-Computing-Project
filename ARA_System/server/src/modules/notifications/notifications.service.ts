@@ -7,13 +7,19 @@ import {
 } from "./notifications.repository.js";
 import { clerkClient } from "../../services/clerkClient.js";
 import { normalizeRole } from "../../shared/types/roles.js";
+import { findTakeoverRequestById } from "../rescue/rescue.repository.js";
 
 async function hasVeterinaryAccess(userId: string) {
 	try { const user = await clerkClient.users.getUser(userId); return normalizeRole(user.publicMetadata.role) === "veterinarian" && !user.banned && !user.locked; }
 	catch { return false; } // Fail closed for emergency details; ordinary inbox remains available.
 }
 
-export async function listMyNotifications(clerkUserId: string, dependencies = {
+export async function listMyNotifications(clerkUserId: string, dependencies: {
+	access: typeof hasVeterinaryAccess;
+	find: typeof findNotificationsByRecipient;
+	count: typeof countUnreadNotifications;
+	takeover?: typeof findTakeoverRequestById;
+} = {
 	access: hasVeterinaryAccess, find: findNotificationsByRecipient, count: countUnreadNotifications,
 }) {
 	const veterinaryAccess = await dependencies.access(clerkUserId);
@@ -21,7 +27,28 @@ export async function listMyNotifications(clerkUserId: string, dependencies = {
 		dependencies.find(clerkUserId, 30, veterinaryAccess),
 		dependencies.count(clerkUserId, veterinaryAccess),
 	]);
-	return { items, unreadCount };
+	const enrichedItems = await Promise.all(
+		items.map(async (item) => {
+			if (!item.actionId || !item.type.startsWith("rescue.takeover_")) {
+				return {
+					...item,
+					takeoverRequestStatus: null,
+					takeoverRequestMissionId: null,
+				};
+			}
+			const request = await (dependencies.takeover ?? findTakeoverRequestById)(item.actionId);
+			const belongsToRecipient =
+				request &&
+				(request.assignedToClerkUserId === clerkUserId ||
+					request.requestedByClerkUserId === clerkUserId);
+			return {
+				...item,
+				takeoverRequestStatus: belongsToRecipient ? request.status : null,
+				takeoverRequestMissionId: belongsToRecipient ? request.reportId : null,
+			};
+		}),
+	);
+	return { items: enrichedItems, unreadCount };
 }
 
 export async function createAdoptionStatusNotification(input: {

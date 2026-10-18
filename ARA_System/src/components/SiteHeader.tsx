@@ -2,6 +2,8 @@ import { SignInButton, SignUpButton, SignOutButton, UserButton, useAuth, useUser
 import { useState } from "react";
 import spcaLogo from "../assets/spca-logo.png";
 import { DonateModal } from "../features/donations/DonateModal";
+import type { AppNotification } from "../types/notification";
+import { TAKEOVER_REVIEW_EVENT, TAKEOVER_REVIEW_STORAGE_KEY, takeoverReviewTarget } from "../utils/takeoverReview";
 import { NotificationBell } from "./NotificationBell";
 import { openVeterinaryEmergencyQueue } from "../utils/veterinaryEmergencyFocus";
 import { isDevBypassEnabled } from "../utils/devBypass";
@@ -83,7 +85,15 @@ export function SiteHeader({
   // notification can never route someone somewhere the API would reject.
   const canReviewAdoptions = isStaffModuleRole;
 
-  function handleNotificationNavigation(entityType: string | null) {
+  function handleNotificationNavigation(entityType: string | null, item?: AppNotification) {
+    const target = item ? takeoverReviewTarget(item) : null;
+    if (target && isDispatcher) {
+      sessionStorage.setItem(TAKEOVER_REVIEW_STORAGE_KEY, JSON.stringify(target));
+      window.dispatchEvent(new CustomEvent(TAKEOVER_REVIEW_EVENT, { detail: target }));
+      navigate("rescue-active");
+      return;
+    }
+    if (entityType === "rescue_report") navigate(isDispatcher ? "rescue-active" : canReviewAdoptions ? "manage-rescue-reports" : "my-reports");
     if (entityType === "adoption_application") navigate(canReviewAdoptions ? "manage-adoption-applications" : "my-applications");
     if (entityType === "veterinary_emergency_alert" && isVeterinarian) openVeterinaryEmergencyQueue(navigate);
   }
