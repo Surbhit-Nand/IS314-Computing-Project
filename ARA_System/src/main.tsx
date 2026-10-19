@@ -3,6 +3,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 import App from "./App.tsx";
+import { BackToTop } from "./components/BackToTop";
 import "./visual-system.css";
 import "./workspace.css";
 import "./workspace-minimal.css";
@@ -15,6 +16,7 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <ClerkProvider publishableKey={publishableKey} afterSignOutUrl="/">
       <App />
+      <BackToTop />
     </ClerkProvider>
   </StrictMode>,
 );

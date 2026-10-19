@@ -124,3 +124,61 @@
   outline: 2px solid var(--aqua);
   outline-offset: 3px;
 }
+
+#root .dashboard-page:has(.workspace-sidebar) .dashboard-metrics > article {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+/* Sidebar content must retain its height instead of clipping in short windows. */
+#root .workspace-sidebar > :is(.brand-group, .workspace-nav-label, .main-nav, .workspace-sidebar-note, .header-actions, .workspace-signout),
+#root .workspace-sidebar .vm-header-inner > * {
+  flex-shrink: 0;
+}
+#root .workspace-sidebar .workspace-sidebar-note {
+  margin-top: 24px;
+  padding: 16px;
+}
+#root .workspace-sidebar .workspace-sidebar-note strong {
+  font-size: .9rem;
+  line-height: 1.4;
+}
+#root .workspace-sidebar .workspace-sidebar-note p {
+  margin: 8px 0 12px;
+}
+#root .workspace-sidebar .header-actions {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 40px;
+  align-items: center;
+  gap: 12px;
+  padding-top: 16px;
+  margin: 20px 0 12px;
+}
+#root .workspace-sidebar .header-actions > .user-avatar-circle {
+  grid-column: 1;
+  grid-row: 1;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  box-shadow: none;
+}
+#root .workspace-sidebar .header-actions > .workspace-user-name {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+#root .workspace-sidebar .header-actions > .notification-bell-wrap {
+  grid-column: 3;
+  grid-row: 1;
+}
+#root .workspace-sidebar .workspace-signout {
+  min-height: 40px;
+  margin-top: 0;
+  font-weight: 400;
+}
