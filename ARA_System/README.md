@@ -17,9 +17,10 @@ approval transfers ownership and removes the animal from public listings.
 Owner appointments use the same `vet_appointments` schedule as veterinary
 follow-ups; slots are offered in Fiji time, Monday-Friday 08:00-17:00 and
 Saturday 08:00-13:00, in 30-minute increments. Apply pending database changes
-with `npm run db:migrate`; it currently halts at `0021_remove_rapid_triage`, a
-deliberately guarded destructive cleanup that requires explicit approval, so
-later migrations stay pending until that is resolved. See
+with `npm run db:migrate`, after `npm install` and before starting the API. The
+shared database matches the journal as of 19 October 2026, including the
+guarded `0021_remove_rapid_triage` cleanup and the `adoption_status_valid`
+CHECK. See
 [docs/kara-merge-migration-review.md](docs/kara-merge-migration-review.md).
 
 See [backend setup and AI search](server/README.md) for configuration, visibility,

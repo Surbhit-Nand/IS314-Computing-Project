@@ -125,8 +125,9 @@ explicitly approved repair; omitting it validates active metadata only.
   or prove every database environment has the same schema.
 - The installed Neon HTTP migrator selects pending work by the latest applied
   timestamp. It can skip a missing older migration without noticing its hash.
-- Ordinary migration execution will still encounter guarded pending 0021.
-  Do not execute or approve it as a consequence of metadata validation.
+- Ordinary migration execution no longer encounters a guarded pending 0021: it
+  was applied on 19 October 2026 after separate owner approval (see the addendum
+  below). Metadata validation must never be treated as that approval.
 - Metadata introspection can serialize expressions differently from the
   TypeScript schema. Any future generated migration needs review in isolation;
   passing `drizzle-kit check` alone is not approval to apply generated changes.
@@ -148,15 +149,25 @@ explicitly approved repair; omitting it validates active metadata only.
 
 ## Addendum — `0024_adoption_status_check` (19 October 2026)
 
-A later change queued an eighth migration, `0024_adoption_status_check`
-(journal idx 24), **behind** the still-unapproved `0021_remove_rapid_triage`. It
-adds only `ALTER TABLE "adoption_applications" ADD CONSTRAINT
-"adoption_status_valid" CHECK (...)` and leaves `0021` untouched.
+A later change added an eighth queued migration, `0024_adoption_status_check`
+(journal idx 24), adding only `ALTER TABLE "adoption_applications" ADD CONSTRAINT
+"adoption_status_valid" CHECK (...)`.
+
+Both it and the previously queued cleanup were then applied to the shared Neon
+database later on 19 October 2026, after the owner separately approved retiring
+the stored assessments. `0021_remove_rapid_triage` ran in one persistent
+transaction together with its history row (row 32, `1792336355002`); the next
+ordinary `npm run db:migrate` applied `0024` (row 33, `1792379152338`). The
+procedure and outcome are recorded in
+`server/src/db/migrations/0021_remove_rapid_triage.approval.md`, and the
+post-application state in `docs/kara-merge-migration-review.md`.
 
 The reconstruction above remains valid for the 22 entries it covered, but
 `validate-snapshots.mjs` no longer runs unchanged: it asserts a 22-entry journal
 (`journal.entries.length === 22`) and treats `0021_remove_rapid_triage` as the
 last entry (`assert.equal(i, journal.entries.length - 1)`). Both assumptions
 predate `0024`, and `validation-results.json` still records 22 snapshots. Read
-this document as the record of the 19 October repair, not as a description of
-the current journal tip.
+this document as the record of the 19 October repair, not as a description of the
+current journal tip. The validator's immutability check still guards the SQL
+files and journal bytes, so applying the cleanup changed no migration SQL and no
+journal byte.

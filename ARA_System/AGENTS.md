@@ -94,11 +94,12 @@ npm run lint          # eslint .
 npm test             # node:test via tsx — server + frontend suites
 ```
 
-- **⚠️ `npm run db:migrate` currently FAILS at migration `0021`** — it is a
-  deliberately guarded destructive cleanup (`0021_remove_rapid_triage.sql` +
-  `.approval.md`) that raises unless session-local
-  `ara.approve_rapid_triage_removal=on` and a matching row count are set; no
-  approval settings exist on Neon. It refuses unattended runs on purpose. Read
+- **`npm run db:migrate` is fully applied on Neon as of 19 Oct 2026.** The one
+  hold-out was the deliberately guarded destructive cleanup
+  (`0021_remove_rapid_triage.sql` + `.approval.md`), which raises unless
+  transaction-local `ara.approve_rapid_triage_removal=on` and a matching row
+  count are set. It was applied with explicit approval (assessment rows exported
+  first), so a plain unattended `db:migrate` now succeeds. Read
   `docs/kara-merge-migration-review.md` before touching migrations.
 - `npm run server:dev` runs through `node --use-system-ca --import tsx` so the
   system certificate store is used for Neon/Clerk TLS.
@@ -175,11 +176,11 @@ npm test             # node:test via tsx — server + frontend suites
   so a hand-written snapshot can match what the tool itself would have emitted.
   `docs/migration-snapshot-repair-20261019/` holds the reconstruction record
   (its `validate-snapshots.mjs` still asserts the pre-0024 22-entry baseline).
-- The journal currently **ends** with `0024_adoption_status_check` (idx 24),
-  queued behind the unapproved `0021_remove_rapid_triage`. It adds only the
-  `adoption_status_valid` CHECK and cannot go live until `0021` is resolved.
-  Because the tip is no longer the cleanup, `retireTriageMigration.test.ts`
-  locates `0021` by tag instead of by position.
+- The journal **ends** with `0024_adoption_status_check` (idx 24), which adds the
+  `adoption_status_valid` CHECK. Both it and `0021_remove_rapid_triage` were
+  applied on 19 Oct 2026, so the live schema now matches the journal.
+  `retireTriageMigration.test.ts` locates `0021` by tag instead of by position,
+  because the cleanup is no longer the journal tip.
 - The API prints a **non-fatal** schema-drift warning at boot if `schema.ts`
   columns are missing on the live DB (`server/src/db/drift-check.ts`) — warns,
   never crashes. Its table list is fixed (`animals`, `rescueReports`,
@@ -300,11 +301,11 @@ can read the vet queue but cannot issue clearance).
       `hasVeterinaryAccess` **fails closed**. Emergency notification types are
       filtered out for non-vets and sorted first for vets. Think of these as
       best-effort: a directory outage degrades delivery, never care.
-- [~] **Rapid Triage was removed** in favour of the coordination model above.
-      The code no longer reads or writes `veterinary_triage_assessments` (the
-      table/enums are dropped by `0021_remove_rapid_triage.sql`, which is
-      **prepared but deliberately NOT applied**). Deploying the code does not
-      require it; read the sibling `.approval.md` before applying.
+- [x] **Rapid Triage was removed** in favour of the coordination model above.
+      The code no longer reads or writes `veterinary_triage_assessments`; the
+      table and its four enum types were dropped by
+      `0021_remove_rapid_triage.sql`, applied on 19 Oct 2026 after the two
+      assessment rows were exported (see the sibling `.approval.md`).
 
 **Donations (cross-cutting)**
 - [~] Donation flow works as **card/QR data-entry** (validate + insert,
@@ -336,8 +337,8 @@ can read the vet queue but cannot issue clearance).
     free text, not an enum - but `schema.ts` declares a `check`
     (`adoption_status_valid`) over the six known statuses, added by the
     hand-written migration `0024_adoption_status_check.sql` (see Database / Neon
-    gotchas). It is **not live yet**: `0024` sits behind the unapproved
-    `0021_remove_rapid_triage`.
+    gotchas). Both it and `0021_remove_rapid_triage` were applied on Neon on
+    19 Oct 2026.
 - **`adoptionStatusHistory`** table (migration `0006`): `id`,
   `applicationId` (FK), `fromStatus`, `toStatus`, `notes`, `changedBy`,
   `changedAt`. Joined in detail responses.

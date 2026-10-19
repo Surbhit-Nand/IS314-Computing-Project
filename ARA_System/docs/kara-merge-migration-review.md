@@ -20,6 +20,9 @@ The takeover table and notifications.action_id column both exist. Prepared
 0021_remove_rapid_triage has no history row. Its separately required approval
 has not been granted by this merge request.
 
+> Superseded: the owner approved the cleanup later on 19 October 2026 and it was
+> applied — see the addendum at the end of this document.
+
 ## Approved journal-only resolution
 
 Both branches assigned journal indices 18 and 19 to different migrations.
@@ -94,3 +97,29 @@ to replace that one URL with an existing tracked image such as
 ./assets/spca-hero.webp, after confirming the intended sign-in artwork. This
 would preserve the intentional deletion and avoid adding duplicate assets.
 The image reference has not been changed as part of journal reconciliation.
+
+## Addendum: the guarded cleanup was applied (19 October 2026, later the same day)
+
+Everything above records the state at the time of the reconciliation review. The
+owner later explicitly approved retiring the stored Rapid Triage assessments, so
+the cleanup was applied and the following migration landed normally:
+
+- The two `veterinary_triage_assessments` rows were exported first, to
+  `%TEMP%\opencode\rapid-triage-assessments-2026-10-19.json`.
+- `0021_remove_rapid_triage` was executed in one persistent PostgreSQL
+  transaction together with its Drizzle history row, using transaction-local
+  settings `ara.approve_rapid_triage_removal=on` and
+  `ara.approved_rapid_triage_row_count=2`. The procedure and its outcome are
+  recorded in `server/src/db/migrations/0021_remove_rapid_triage.approval.md`.
+- Database history rows 32 (`0021_remove_rapid_triage`, `1792336355002`) and 33
+  (`0024_adoption_status_check`, `1792379152338`) both record SHA-256 hashes
+  that match the current SQL files.
+- `public.veterinary_triage_assessments` and its four `triage_*` enum types no
+  longer exist. Animals, adoption applications, adoption status history,
+  `veterinary_emergency_responses` and the earlier history rows were unaffected.
+- `npm run db:migrate` now reports success unattended, with no journal entry
+  pending.
+
+No previously applied history row was modified, and applying the cleanup changed
+no SQL file, snapshot or timestamp. The snapshot-lineage caveat above still
+stands.
