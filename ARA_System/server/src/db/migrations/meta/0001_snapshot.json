@@ -1,6 +1,4 @@
 {
-  "id": "b2e08777-557a-4714-bb66-cb8097b923fd",
-  "prevId": "fa60eb6b-0587-463b-9260-7594ef28b97a",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -72,6 +70,7 @@
           "name": "adoption_applications_animal_id_animals_id_fk",
           "tableFrom": "adoption_applications",
           "tableTo": "animals",
+          "schemaTo": "public",
           "columnsFrom": [
             "animal_id"
           ],
@@ -84,8 +83,8 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "policies": {},
       "checkConstraints": {},
+      "policies": {},
       "isRLSEnabled": false
     },
     "public.animals": {
@@ -216,6 +215,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {},
@@ -223,15 +228,15 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "animals_public_id_unique": {
-          "name": "animals_public_id_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "public_id"
-          ]
+          ],
+          "nullsNotDistinct": false,
+          "name": "animals_public_id_unique"
         }
       },
-      "policies": {},
       "checkConstraints": {},
+      "policies": {},
       "isRLSEnabled": false
     },
     "public.audit_logs": {
@@ -287,8 +292,8 @@
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "policies": {},
       "checkConstraints": {},
+      "policies": {},
       "isRLSEnabled": false
     },
     "public.donations": {
@@ -365,8 +370,8 @@
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "policies": {},
       "checkConstraints": {},
+      "policies": {},
       "isRLSEnabled": false
     },
     "public.rescue_reports": {
@@ -422,18 +427,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
-        },
-        "latitude": {
-          "name": "latitude",
-          "type": "double precision",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "longitude": {
-          "name": "longitude",
-          "type": "double precision",
-          "primaryKey": false,
-          "notNull": false
         },
         "animal_type": {
           "name": "animal_type",
@@ -519,6 +512,7 @@
           "name": "rescue_reports_animal_id_animals_id_fk",
           "tableFrom": "rescue_reports",
           "tableTo": "animals",
+          "schemaTo": "public",
           "columnsFrom": [
             "animal_id"
           ],
@@ -532,15 +526,15 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "rescue_reports_reference_unique": {
-          "name": "rescue_reports_reference_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "reference"
-          ]
+          ],
+          "nullsNotDistinct": false,
+          "name": "rescue_reports_reference_unique"
         }
       },
-      "policies": {},
       "checkConstraints": {},
+      "policies": {},
       "isRLSEnabled": false
     },
     "public.vet_appointments": {
@@ -606,6 +600,7 @@
           "name": "vet_appointments_animal_id_animals_id_fk",
           "tableFrom": "vet_appointments",
           "tableTo": "animals",
+          "schemaTo": "public",
           "columnsFrom": [
             "animal_id"
           ],
@@ -618,60 +613,60 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "policies": {},
       "checkConstraints": {},
+      "policies": {},
       "isRLSEnabled": false
     }
   },
   "enums": {
     "public.animal_size": {
       "name": "animal_size",
-      "schema": "public",
       "values": [
         "small",
         "medium",
         "large",
         "extra_large"
-      ]
+      ],
+      "schema": "public"
     },
     "public.animal_status": {
       "name": "animal_status",
-      "schema": "public",
       "values": [
         "intake",
         "in_treatment",
         "medically_cleared",
         "adopted",
         "closed"
-      ]
+      ],
+      "schema": "public"
     },
     "public.animal_type": {
       "name": "animal_type",
-      "schema": "public",
       "values": [
         "dog",
         "cat",
         "rabbit",
         "other"
-      ]
+      ],
+      "schema": "public"
     },
     "public.donation_status": {
       "name": "donation_status",
-      "schema": "public",
       "values": [
         "pending",
         "completed",
         "failed",
         "refunded"
-      ]
+      ],
+      "schema": "public"
     },
     "public.vaccination_status": {
       "name": "vaccination_status",
-      "schema": "public",
       "values": [
         "not_vaccinated",
         "vaccinated"
-      ]
+      ],
+      "schema": "public"
     }
   },
   "schemas": {},
@@ -680,8 +675,10 @@
   "policies": {},
   "views": {},
   "_meta": {
-    "columns": {},
     "schemas": {},
-    "tables": {}
-  }
+    "tables": {},
+    "columns": {}
+  },
+  "id": "dd5728dc-5d48-56a0-aca9-daa0c865f473",
+  "prevId": "2fec6f53-4e0c-5e0e-b05a-fdc014b39bcd"
 }

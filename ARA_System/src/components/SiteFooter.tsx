@@ -1,11 +1,19 @@
 import spcaLogo from "../assets/spca-logo.png";
+import type { SiteHeaderView } from "./SiteHeader";
 
-export function SiteFooter() {
+export function SiteFooter({
+  onNavigate,
+  isSignedIn,
+}: {
+  onNavigate?: (view: SiteHeaderView) => void;
+  isSignedIn?: boolean;
+}) {
   return (
     <footer className="spca-footer" id="donate">
       <div className="spca-footer-inner">
         <div className="spca-footer-col spca-footer-brand-col">
           <img src={spcaLogo} alt="SPCA Fiji logo" className="brand-logo footer-logo" />
+          {onNavigate ? <p className="spca-footer-tagline">Animal Rescue &amp; Adoption · Fiji</p> : null}
           <p className="spca-footer-follow">Follow us!</p>
           <div className="spca-social">
             <a
@@ -35,6 +43,17 @@ export function SiteFooter() {
             </a>
           </div>
         </div>
+
+        {onNavigate ? (
+          <nav className="spca-footer-col spca-footer-nav" aria-label="Footer navigation">
+            <h4>Explore</h4>
+            <button type="button" onClick={() => onNavigate("home")}>Home</button>
+            <button type="button" onClick={() => onNavigate("about")}>About SPCA Fiji</button>
+            <button type="button" onClick={() => onNavigate("animal-listings")}>Meet the animals</button>
+            <button type="button" onClick={() => onNavigate("rescue-report")}>Report an animal</button>
+            <button type="button" onClick={() => onNavigate(isSignedIn ? "my-reports" : "login")}>My rescue alerts</button>
+          </nav>
+        ) : null}
 
         <div className="spca-footer-col">
           <h4>Opening Times</h4>

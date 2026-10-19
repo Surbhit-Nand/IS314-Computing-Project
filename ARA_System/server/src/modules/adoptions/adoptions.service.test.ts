@@ -34,12 +34,9 @@ function currentImpl(name: string) {
 	return fn;
 }
 
-// node:test's mock.module takes an options object. The installed @types/node
-// still types it with the older `namedExports` key, but the runtime prefers
-// `exports` (passing `namedExports` prints a deprecation warning on every
-// run), so the options are cast through unknown to use the current shape.
-function moduleMock(specifier: string | URL, exports: Record<string, unknown>) {
-	mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
+// node:test's mock.module exposes ESM named exports through `namedExports`.
+function moduleMock(specifier: string | URL, namedExports: Record<string, unknown>) {
+	mock.module(specifier, { namedExports });
 }
 
 moduleMock("./adoptions.repository.js", {
@@ -538,14 +535,14 @@ describe("adoptions.service", () => {
 			assert.equal(current.status, "under_review");
 		});
 
-		it("moves under_review -> approved when the animal is cleared and no conflict exists", async () => {
+		it("approves the application and assigns the animal to the adopter", async () => {
 			const current = statefulApplication("under_review");
 
 			const result = await transitionAdoptionApplication(APPLICATION_ID, { status: "approved" }, ACTOR_ID);
 
 			assert.equal(result?.status, "approved");
 			assert.equal(current.status, "approved");
-			assert.equal(animalUpdateSpy.length, 0);
+			assert.deepEqual(animalUpdateSpy, [{ status: "adopted" }]);
 		});
 
 		it("blocks approval when the animal is not medically cleared", async () => {
@@ -561,7 +558,7 @@ describe("adoptions.service", () => {
 			assert.equal(animalUpdateSpy.length, 0);
 		});
 
-		it("moves approved -> completed and marks the animal adopted", async () => {
+		it("moves approved -> completed and keeps the animal adopted", async () => {
 			const current = statefulApplication("approved");
 
 			const result = await transitionAdoptionApplication(APPLICATION_ID, { status: "completed" }, ACTOR_ID);

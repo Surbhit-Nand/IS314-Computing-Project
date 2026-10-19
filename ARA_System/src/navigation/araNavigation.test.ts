@@ -91,6 +91,8 @@ test("same logical destination is a no-op; entity and scene changes create entri
 
 const detailFlows: [string, NavigationSession, NavigationDestination, NavigationDestination][] = [
   ["edit animal", session("staff"), { view: "manage-animals" }, { view: "edit-animal", selectedAnimalId: "A" }],
+  ["owned animal record", session(), { view: "my-animals" }, { view: "my-animal-record", selectedAnimalId: "A" }],
+  ["owned animal booking", session(), { view: "my-animal-record", selectedAnimalId: "A" }, { view: "my-animal-booking", selectedAnimalId: "A" }],
   ["queue record", session("veterinarian"), { view: "veterinary-dashboard" }, { view: "veterinary-record", selectedAnimalId: "A", veterinaryParent: "veterinary-dashboard" }],
   ["history record", session("veterinarian"), { view: "veterinary-records" }, { view: "veterinary-record", selectedAnimalId: "A", veterinaryParent: "veterinary-records" }],
   ["appointment", session("veterinarian"), { view: "vet-appointments" }, { view: "vet-appointment-details", selectedAppointmentId: "appointment-A", veterinaryParent: "vet-appointments" }],
@@ -154,6 +156,7 @@ test("invalid contexts repair to parents, including during popstate without losi
   const cases: [unknown, View][] = [
     [{ view: "animal-profile" }, "animal-listings"], [{ view: "adoption-apply", viewedAnimal: { id: "fake" } }, "animal-listings"],
     [{ view: "edit-animal", selectedAnimalId: "" }, "manage-animals"],
+    [{ view: "my-animal-record" }, "my-animals"], [{ view: "my-animal-booking", selectedAnimalId: "" }, "my-animals"],
     [{ view: "veterinary-record" }, "veterinary-dashboard"],
     [{ view: "veterinary-record", veterinaryParent: "veterinary-records" }, "veterinary-records"],
     [{ view: "vet-appointment-details", veterinaryParent: "vet-appointments" }, "vet-appointments"],
@@ -177,14 +180,17 @@ test("current Clerk role overrides fabricated history; account changes discard e
   assert.equal(resolveNavigation({ view: "dashboard" }, { ...session(), devBypass: true }).view, "home");
   const privateAnimal = { ...animal("intake"), medicallyCleared: false };
   assert.equal(resolveNavigation({ view: "animal-profile", viewedAnimal: privateAnimal }, anonymous).view, "animal-listings");
+  for (const view of ["my-animals", "my-animal-record", "my-animal-booking"] as const) {
+    assert.equal(resolveNavigation({ view, selectedAnimalId: "A" }, anonymous).view, "home");
+  }
   const win = browser(); const nav = createAraHistory(win.host); const cleanup = nav.connect(session("staff"));
   nav.navigate({ view: "edit-animal", selectedAnimalId: "A" }); cleanup();
   nav.connect(session("staff", "different-user"));
   assert.equal(nav.getSnapshot()?.view, "staff-dashboard"); assert.equal(nav.getSnapshot()?.selectedAnimalId, undefined);
 });
 
-test("all 31 views resolve, extraneous UI state is discarded, dispatcher alias deduplicates", () => {
-  assert.equal(views.length, 31);
+test("all 34 views resolve, extraneous UI state is discarded, dispatcher alias deduplicates", () => {
+  assert.equal(views.length, 34);
   for (const view of views) assert.ok(views.includes(resolveNavigation({ view }, session("veterinarian")).view));
   assert.deepEqual(resolveNavigation({ view: "animal-listings", search: "dog", selectedAnimalId: "old", form: {} }, anonymous), {
     version: 1, ownerUserId: null, view: "animal-listings",

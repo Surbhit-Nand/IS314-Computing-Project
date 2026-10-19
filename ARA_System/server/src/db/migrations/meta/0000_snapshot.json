@@ -1,6 +1,4 @@
 {
-  "id": "fa60eb6b-0587-463b-9260-7594ef28b97a",
-  "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -72,6 +70,7 @@
           "name": "adoption_applications_animal_id_animals_id_fk",
           "tableFrom": "adoption_applications",
           "tableTo": "animals",
+          "schemaTo": "public",
           "columnsFrom": [
             "animal_id"
           ],
@@ -84,8 +83,8 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "policies": {},
       "checkConstraints": {},
+      "policies": {},
       "isRLSEnabled": false
     },
     "public.animals": {
@@ -223,15 +222,15 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "animals_public_id_unique": {
-          "name": "animals_public_id_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "public_id"
-          ]
+          ],
+          "nullsNotDistinct": false,
+          "name": "animals_public_id_unique"
         }
       },
-      "policies": {},
       "checkConstraints": {},
+      "policies": {},
       "isRLSEnabled": false
     },
     "public.audit_logs": {
@@ -287,8 +286,8 @@
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "policies": {},
       "checkConstraints": {},
+      "policies": {},
       "isRLSEnabled": false
     },
     "public.donations": {
@@ -365,8 +364,8 @@
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "policies": {},
       "checkConstraints": {},
+      "policies": {},
       "isRLSEnabled": false
     },
     "public.rescue_reports": {
@@ -507,6 +506,7 @@
           "name": "rescue_reports_animal_id_animals_id_fk",
           "tableFrom": "rescue_reports",
           "tableTo": "animals",
+          "schemaTo": "public",
           "columnsFrom": [
             "animal_id"
           ],
@@ -520,15 +520,15 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "rescue_reports_reference_unique": {
-          "name": "rescue_reports_reference_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "reference"
-          ]
+          ],
+          "nullsNotDistinct": false,
+          "name": "rescue_reports_reference_unique"
         }
       },
-      "policies": {},
       "checkConstraints": {},
+      "policies": {},
       "isRLSEnabled": false
     },
     "public.vet_appointments": {
@@ -594,6 +594,7 @@
           "name": "vet_appointments_animal_id_animals_id_fk",
           "tableFrom": "vet_appointments",
           "tableTo": "animals",
+          "schemaTo": "public",
           "columnsFrom": [
             "animal_id"
           ],
@@ -606,60 +607,60 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "policies": {},
       "checkConstraints": {},
+      "policies": {},
       "isRLSEnabled": false
     }
   },
   "enums": {
     "public.animal_size": {
       "name": "animal_size",
-      "schema": "public",
       "values": [
         "small",
         "medium",
         "large",
         "extra_large"
-      ]
+      ],
+      "schema": "public"
     },
     "public.animal_status": {
       "name": "animal_status",
-      "schema": "public",
       "values": [
         "intake",
         "in_treatment",
         "medically_cleared",
         "adopted",
         "closed"
-      ]
+      ],
+      "schema": "public"
     },
     "public.animal_type": {
       "name": "animal_type",
-      "schema": "public",
       "values": [
         "dog",
         "cat",
         "rabbit",
         "other"
-      ]
+      ],
+      "schema": "public"
     },
     "public.donation_status": {
       "name": "donation_status",
-      "schema": "public",
       "values": [
         "pending",
         "completed",
         "failed",
         "refunded"
-      ]
+      ],
+      "schema": "public"
     },
     "public.vaccination_status": {
       "name": "vaccination_status",
-      "schema": "public",
       "values": [
         "not_vaccinated",
         "vaccinated"
-      ]
+      ],
+      "schema": "public"
     }
   },
   "schemas": {},
@@ -668,8 +669,10 @@
   "policies": {},
   "views": {},
   "_meta": {
-    "columns": {},
     "schemas": {},
-    "tables": {}
-  }
+    "tables": {},
+    "columns": {}
+  },
+  "id": "2fec6f53-4e0c-5e0e-b05a-fdc014b39bcd",
+  "prevId": "00000000-0000-0000-0000-000000000000"
 }

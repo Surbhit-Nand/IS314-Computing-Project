@@ -1,0 +1,63 @@
+#root .my-alerts-page .page-shell { width: min(1100px, calc(100% - 48px)); }
+.my-alerts-header { display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 20px 0 24px; }
+#root .my-alerts-page .my-alerts-header h1 { margin: 0 0 10px; font-size: clamp(1.7rem, 3vw, 2.3rem); line-height: 1.15; }
+.my-alerts-header p { margin: 0; color: var(--slate); font-size: 0.85rem; line-height: 1.6; }
+.my-alerts-header .my-alerts-count { margin-top: 8px; font-size: 0.75rem; }
+.my-alerts-header button { flex-shrink: 0; }
+#root .my-alerts-page .tracking-results { max-width: none; margin: 0 0 40px; }
+#root .my-alerts-page .catalog-hero { padding-top: 28px; padding-bottom: 12px; margin-bottom: 28px; }
+#root .my-alerts-page .catalog-results-head { align-items: center; margin-bottom: 20px; gap: 20px; }
+#root .my-alerts-page .catalog-results-head h2 { font-size: 1.05rem; margin: 0 0 6px; }
+.my-alerts-count { margin: 0; color: var(--slate); font-size: 0.8rem; }
+#root .my-alerts-page .my-report-list { display: grid; gap: 0; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--white); }
+#root .my-alerts-page .my-report-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 140px 150px 20px;
+  align-items: center;
+  gap: 24px;
+  width: 100%;
+  padding: 18px 24px;
+  margin: 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  color: var(--navy);
+  font-family: inherit;
+  font-weight: 400;
+  text-align: left;
+  box-shadow: none;
+  cursor: pointer;
+  transition: background-color 150ms ease;
+}
+#root .my-alerts-page .my-report-row:last-child { border-bottom: 0; }
+#root .my-alerts-page .my-report-row:hover { background: var(--teal-tint); transform: none; box-shadow: none; }
+#root .my-alerts-page .my-report-row:focus-visible { outline: 2px solid var(--teal-dark); outline-offset: -3px; }
+.my-alert-row-copy { display: grid; gap: 7px; min-width: 0; }
+#root .my-alerts-page .my-report-reference { font-size: 0.8rem; letter-spacing: 0.01em; font-weight: 800; }
+.my-alert-row-location { color: var(--slate); font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.my-alert-row-date { color: var(--slate); font-size: 0.7rem; }
+.my-alert-row-arrow { color: var(--slate); font-size: 1rem; }
+#root .my-alerts-page .report-status { justify-self: start; padding: 5px 10px; border-radius: 6px; border: 0; font-size: 0.7rem; font-weight: 400; box-shadow: none; }
+#root .my-alerts-page .report-status.resolved { background: var(--success-tint); color: var(--navy); }
+.my-alert-column-head { display: grid; grid-template-columns: minmax(0, 1fr) 140px 150px 20px; gap: 24px; padding: 14px 24px; border-bottom: 1px solid var(--line); background: var(--bg); color: var(--slate); font-size: 0.65rem; letter-spacing: 0.05em; }
+.my-alert-filters { display: flex; gap: 24px; margin-bottom: 18px; border-bottom: 1px solid var(--line); }
+#root .my-alerts-page .my-alert-filters button { display: inline-flex; align-items: center; gap: 8px; padding: 12px 0; margin-bottom: -1px; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--slate); font-size: 0.8rem; font-weight: 400; cursor: pointer; }
+#root .my-alerts-page .my-alert-filters button[aria-pressed="true"] { color: var(--navy); border-bottom-color: var(--teal-dark); }
+.my-alert-filters button span { background: var(--white); padding: 2px 6px; border-radius: 4px; color: var(--slate); font-size: 0.65rem; }
+.my-alert-filter-empty { padding: 24px; margin: 0; color: var(--slate); font-size: 0.8rem; }
+@media (max-width: 900px) {
+  #root .my-alerts-page .my-report-row, .my-alert-column-head { grid-template-columns: minmax(0, 1fr) 110px 130px 16px; gap: 16px; }
+}
+@media (max-width: 620px) {
+  .my-alerts-header { flex-direction: column; align-items: flex-start; gap: 16px; padding-block: 16px 20px; }
+  #root .my-alerts-page .page-shell { width: calc(100% - 32px); }
+  #root .my-alerts-page .my-report-row { padding: 18px 16px; gap: 12px; grid-template-columns: minmax(0, 1fr) auto; }
+  .my-alert-column-head { display: none; }
+  .my-alert-row-date { grid-column: 1; grid-row: 2; }
+  #root .my-alerts-page .report-status { grid-column: 2; grid-row: 1 / span 2; }
+  .my-alert-filters { gap: 16px; }
+  .my-alert-row-arrow { display: none; }
+  #root .my-alerts-page .catalog-results-head { align-items: flex-start; flex-direction: column; }
+}
+@media (prefers-reduced-motion: reduce) { #root .my-alerts-page .my-report-row { transition: none; } }

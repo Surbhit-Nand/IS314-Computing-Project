@@ -3,12 +3,17 @@ import assert from "node:assert/strict";
 import {
   COUNTRY_DIAL_CODES,
   DEFAULT_DIAL_CODE,
+  FIJI_COUNTRY_CODE,
   countPhoneDigits,
   dialCodeByCode,
   expectedLengthLabel,
+  formatFijiPhone,
   formatPhone,
+  isValidFijiPhone,
   isValidPhoneNational,
   sanitizePhoneNational,
+  normalizeFijiPhone,
+  normalizeFijiPhoneInput,
 } from "./phone.js";
 
 describe("phone helpers", () => {
@@ -74,5 +79,45 @@ describe("phone helpers", () => {
         `${entry.iso} example must pass its own band`,
       );
     }
+  });
+});
+
+describe("Fiji-only phone helpers", () => {
+  it("normalizes typed and pasted Fiji formats to the 7 national digits", () => {
+    assert.equal(FIJI_COUNTRY_CODE, "679");
+    assert.equal(normalizeFijiPhone("9900000"), "9900000");
+    assert.equal(normalizeFijiPhone("990 0000"), "9900000");
+    assert.equal(normalizeFijiPhone("6799900000"), "9900000");
+    assert.equal(normalizeFijiPhone("+679 990 0000"), "9900000");
+    assert.equal(normalizeFijiPhone("+6799900000"), "9900000");
+  });
+
+  it("rejects other country codes and invalid lengths", () => {
+    assert.equal(normalizeFijiPhone("+61 412 345 678"), null);
+    assert.equal(normalizeFijiPhone("+1 212 555 1234"), null);
+    assert.equal(normalizeFijiPhone("990000"), null);
+    assert.equal(normalizeFijiPhone("99000000"), null);
+    assert.equal(normalizeFijiPhone("call me"), null);
+    assert.equal(normalizeFijiPhone(""), null);
+  });
+
+  it("validates a Fiji number", () => {
+    assert.equal(isValidFijiPhone("9900000"), true);
+    assert.equal(isValidFijiPhone("+679 990 0000"), true);
+    assert.equal(isValidFijiPhone("+679 99000"), false);
+    assert.equal(isValidFijiPhone(""), false);
+  });
+
+  it("collapses a recognisable paste for the live input, otherwise keeps digits", () => {
+    assert.equal(normalizeFijiPhoneInput("+679 990 0000"), "9900000");
+    assert.equal(normalizeFijiPhoneInput("6799900000"), "9900000");
+    assert.equal(normalizeFijiPhoneInput("99000"), "99000");
+    assert.equal(normalizeFijiPhoneInput("99000001"), "99000001");
+    assert.equal(normalizeFijiPhoneInput("+679 99000"), "99000");
+    assert.equal(normalizeFijiPhoneInput("+61 412 345 678"), "61412345678");
+  });
+
+  it("formats the canonical stored value", () => {
+    assert.equal(formatFijiPhone("9900000"), "+679 9900000");
   });
 });

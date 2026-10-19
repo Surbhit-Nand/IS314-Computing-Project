@@ -1,15 +1,15 @@
-import { SignInButton, SignUpButton, UserButton, useAuth, useUser } from "@clerk/react";
-import { useEffect, useState } from "react";
+import { SignInButton, SignUpButton, SignOutButton, UserButton, useAuth, useUser } from "@clerk/react";
+import { useState } from "react";
 import spcaLogo from "../assets/spca-logo.png";
 import { DonateModal } from "../features/donations/DonateModal";
-import {
-  fetchMyNotifications,
-  markAllNotificationsRead,
-  markNotificationRead,
-} from "../services/notificationsApi";
-import type { NotificationsInbox } from "../types/notification";
+import type { AppNotification } from "../types/notification";
+import { TAKEOVER_REVIEW_EVENT, TAKEOVER_REVIEW_STORAGE_KEY, takeoverReviewTarget } from "../utils/takeoverReview";
+import { NotificationBell } from "./NotificationBell";
+import { openVeterinaryEmergencyQueue } from "../utils/veterinaryEmergencyFocus";
 import { isDevBypassEnabled } from "../utils/devBypass";
 import { isDispatcherRole } from "../utils/roles";
+import "./NotificationBell.css";
+import { IconClipboard, IconActivity, IconClock, IconPawPrint, IconPlus, IconHeart } from "./MedicalIcons";
 
 export type SiteHeaderView =
   | "home"
@@ -29,6 +29,9 @@ export type SiteHeaderView =
   | "my-reports"
   | "adoption-apply"
   | "my-applications"
+  | "my-animals"
+  | "my-animal-record"
+  | "my-animal-booking"
   | "my-profile"
   | "manage-adoption-applications"
   | "register-animal"
@@ -48,7 +51,7 @@ type SiteHeaderProps = {
   currentPage: string;
   onNavigate: (view: SiteHeaderView) => void;
   // The veterinary module is a focused work screen: hide the public-site
-  // links (Home, About Us, Animals, Rescue Report, Adopt, Donate) so vets
+  // links (Home, About Us, Animals, Rescue Report, Donate) so vets
   // aren't shown navigation they don't use inside the module.
   hideSiteNav?: boolean;
 };
@@ -67,51 +70,6 @@ export function SiteHeader({
   const { getToken } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [donateOpen, setDonateOpen] = useState(false);
-  // Applicant inbox for the header bell. Fetched on sign-in and refreshed
-  // every minute so adoption status moves surface without a page reload.
-  // Failures stay silent - the bell just shows nothing rather than breaking
-  // the header when the API is down.
-  const [inbox, setInbox] = useState<NotificationsInbox | null>(null);
-  const [bellOpen, setBellOpen] = useState(false);
-
-  useEffect(() => {
-    // The bell only renders for signed-in sessions, so nothing needs clearing
-    // on sign-out - the next sign-in overwrites the inbox below.
-    if (!isLoaded || !isSignedIn) return;
-    let cancelled = false;
-    async function loadInbox() {
-      try {
-        const token = await getToken();
-        if (!token || cancelled) return;
-        const data = await fetchMyNotifications(token);
-        if (!cancelled) setInbox(data);
-      } catch {
-        if (!cancelled) setInbox(null);
-      }
-    }
-    void loadInbox();
-    const timer = window.setInterval(() => void loadInbox(), 60000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
-  }, [getToken, isLoaded, isSignedIn]);
-
-  async function handleMarkAllRead() {
-    try {
-      const token = await getToken();
-      if (!token) return;
-      await markAllNotificationsRead(token);
-      setInbox((previous) =>
-        previous
-          ? { items: previous.items.map((item) => ({ ...item, readAt: item.readAt ?? new Date().toISOString() })), unreadCount: 0 }
-          : previous,
-      );
-    } catch {
-      // Leave the bell as-is; the next poll retries.
-    }
-  }
-
   const userRole = user?.publicMetadata.role;
   const isAdmin = userRole === "manager" || userRole === "admin";
   const isDispatcher = isDispatcherRole(userRole);
@@ -127,35 +85,19 @@ export function SiteHeader({
   // notification can never route someone somewhere the API would reject.
   const canReviewAdoptions = isStaffModuleRole;
 
-  async function handleOpenNotification(id: string, entityType: string | null) {
-    setBellOpen(false);
-    try {
-      const token = await getToken();
-      if (!token) return;
-      await markNotificationRead(token, id);
-      setInbox((previous) =>
-        previous
-          ? {
-              items: previous.items.map((item) =>
-                item.id === id ? { ...item, readAt: item.readAt ?? new Date().toISOString() } : item,
-              ),
-              unreadCount: Math.max(0, previous.unreadCount - 1),
-            }
-          : previous,
-      );
-    } catch {
-      // Read state syncs on the next poll.
+  function handleNotificationNavigation(entityType: string | null, item?: AppNotification) {
+    const target = item ? takeoverReviewTarget(item) : null;
+    if (target && isDispatcher) {
+      sessionStorage.setItem(TAKEOVER_REVIEW_STORAGE_KEY, JSON.stringify(target));
+      window.dispatchEvent(new CustomEvent(TAKEOVER_REVIEW_EVENT, { detail: target }));
+      navigate("rescue-active");
+      return;
     }
-    if (entityType === "adoption_application") {
-      // Staff reviewers land on the all-users review queue; everyone else
-      // (applicants, dispatchers) lands on their own tracking page. The queue
-      // is staff-gated server-side, so sending a dispatcher there would 403.
-      navigate(canReviewAdoptions ? "manage-adoption-applications" : "my-applications");
-    }
+    if (entityType === "rescue_report") navigate(isDispatcher ? "rescue-active" : canReviewAdoptions ? "manage-rescue-reports" : "my-reports");
+    if (entityType === "adoption_application") navigate(canReviewAdoptions ? "manage-adoption-applications" : "my-applications");
+    if (entityType === "veterinary_emergency_alert" && isVeterinarian) openVeterinaryEmergencyQueue(navigate);
   }
-  // Internal screens rendered by account-type dashboards and staff forms swap
-  // the public prompts for team navigation; staff can still preview the
-  // public site through the "View public site" link.
+  // Internal screens use team navigation for account dashboards and staff forms.
   const internalPages = new Set([
     "dashboard",
     "staff-dashboard",
@@ -164,6 +106,8 @@ export function SiteHeader({
     "manage-animals",
     "edit-animal",
     "manage-rescue-reports",
+    "manage-adoption-applications",
+    "rescue-report-phone",
     "reports",
   ]);
   const isInternalPage = (isStaff || isAdmin) && internalPages.has(currentPage);
@@ -184,8 +128,11 @@ export function SiteHeader({
     onNavigate(view);
   }
 
+  const isWorkspace = isInternalPage || isRescuePage;
+  const workspaceName = isRescuePage && isDispatcher ? "Rescue operations" : isAdmin ? "Administration" : "Staff workspace";
+
   return (
-    <header className="site-header">
+    <header className={`site-header${isWorkspace ? " workspace-sidebar" : ""}`}>
       {!hideSiteNav ? (
         <button
           type="button"
@@ -206,7 +153,10 @@ export function SiteHeader({
         onClick={() => navigate("home")}
       >
         <img src={spcaLogo} alt="SPCA Fiji logo" className="brand-logo" />
+        {isWorkspace && <span className="workspace-brand-copy"><strong>SPCA Fiji</strong><small>{workspaceName}</small></span>}
       </button>
+
+      {isWorkspace && <p className="workspace-nav-label">Workspace</p>}
 
       {!hideSiteNav ? (
       <nav
@@ -215,14 +165,13 @@ export function SiteHeader({
       >
         {isRescuePage ? (
           <>
-            <button type="button" className={currentPage === "rescue-board" ? "nav-link active" : "nav-link"} onClick={() => navigate("rescue-board")}>Mission Board</button>
-            <button type="button" className={currentPage === "rescue-active" ? "nav-link active" : "nav-link"} onClick={() => navigate("rescue-active")}>Active Mission</button>
-            <button type="button" className={currentPage === "rescue-history" ? "nav-link active" : "nav-link"} onClick={() => navigate("rescue-history")}>Mission History</button>
+            <button type="button" className={currentPage === "rescue-board" ? "nav-link active" : "nav-link"} onClick={() => navigate("rescue-board")}><IconClipboard size={17} /><span>Mission Board<small>Incoming rescue cases</small></span></button>
+            <button type="button" className={currentPage === "rescue-active" ? "nav-link active" : "nav-link"} onClick={() => navigate("rescue-active")}><IconActivity size={17} /><span>Active Mission<small>Your current response</small></span></button>
+            <button type="button" className={currentPage === "rescue-history" ? "nav-link active" : "nav-link"} onClick={() => navigate("rescue-history")}><IconClock size={17} /><span>Mission History<small>Completed responses</small></span></button>
           </>
         ) : isInternalPage ? (
           <>
-            {/* Staff-first layout: signed-in staff see team navigation on
-                their internal screens, with the public site one click away. */}
+            {/* Internal screens share one focused workspace navigation. */}
             <button
               type="button"
               className={
@@ -230,7 +179,7 @@ export function SiteHeader({
               }
               onClick={() => navigate(dashboardView())}
             >
-              Dashboard
+              <IconActivity size={17} /><span>Dashboard<small>Your work at a glance</small></span>
             </button>
             <button
               type="button"
@@ -241,7 +190,7 @@ export function SiteHeader({
               }
               onClick={() => navigate("manage-rescue-reports")}
             >
-              Rescue queue
+              <IconClipboard size={17} /><span>Rescue queue<small>Alerts &amp; intake</small></span>
             </button>
             {isStaffModuleRole && (
               <button
@@ -253,7 +202,7 @@ export function SiteHeader({
                 }
                 onClick={() => navigate("manage-animals")}
               >
-                Animals
+                <IconPawPrint size={17} /><span>Animals<small>Profiles &amp; care</small></span>
               </button>
             )}
             {isStaffModuleRole && (
@@ -266,7 +215,7 @@ export function SiteHeader({
                 }
                 onClick={() => navigate("register-animal")}
               >
-                Register
+                <IconPlus size={17} /><span>Register<small>Welcome a new animal</small></span>
               </button>
             )}
             {isStaffModuleRole && (
@@ -279,7 +228,7 @@ export function SiteHeader({
                 }
                 onClick={() => navigate("manage-adoption-applications")}
               >
-                Adoptions
+                <IconHeart size={17} /><span>Adoptions<small>Applications &amp; reviews</small></span>
               </button>
             )}
             {isAdmin && (
@@ -290,16 +239,9 @@ export function SiteHeader({
                 }
                 onClick={() => navigate("reports")}
               >
-                Reports
+                <IconClipboard size={17} /><span>Reports<small>Insights &amp; summaries</small></span>
               </button>
             )}
-            <button
-              type="button"
-              className="nav-link"
-              onClick={() => navigate("home")}
-            >
-              View public site
-            </button>
           </>
         ) : (
           <>
@@ -336,24 +278,24 @@ export function SiteHeader({
               Rescue Alert
             </button>
             {/* Staff, vets, and managers run the rescue operation, so the
-                public adopt and donate prompts are hidden for their accounts. */}
-            {!isStaff && !isAdmin && (
+                public donate prompt is hidden for their accounts. */}
+            {isSignedIn && !isStaff && !isAdmin && (
               <button
                 type="button"
                 className={
-                  currentPage === "adoption-apply" || currentPage === "my-applications"
+                  currentPage === "user-dashboard" ||
+                  currentPage === "my-reports" ||
+                  currentPage === "my-applications" ||
+                  currentPage === "my-profile" ||
+                  currentPage === "my-animals" ||
+                  currentPage === "my-animal-record" ||
+                  currentPage === "my-animal-booking"
                     ? "nav-link active"
                     : "nav-link"
                 }
-                onClick={() => {
-                  navigate("animal-listings");
-                  // Adopt points at the listings page, so clicking it while
-                  // already there is a same-view no-op - scroll to top so it
-                  // still feels responsive.
-                  window.scrollTo({ top: 0, behavior: "smooth" });
-                }}
+                onClick={() => navigate("user-dashboard")}
               >
-                Adopt
+                My dashboard
               </button>
             )}
             {!isStaff && !isAdmin && (
@@ -373,64 +315,12 @@ export function SiteHeader({
       </nav>
       ) : null}
 
+      {isWorkspace && <div className="workspace-sidebar-note"><IconPawPrint size={44} className="workspace-note-paw" /><span className="workspace-note-icon"><IconHeart size={18} /></span><strong>Every animal. Every step.</strong><p>Keep rescue, care and adoption moving together.</p></div>}
       <div className="header-actions">
         {!isLoaded ? null : isSignedIn ? (
           <>
-            <div className="notification-bell-wrap">
-              <button
-                type="button"
-                className="notification-bell"
-                onClick={() => setBellOpen((open) => !open)}
-                aria-label={inbox && inbox.unreadCount > 0 ? `Notifications, ${inbox.unreadCount} unread` : "Notifications"}
-                aria-expanded={bellOpen}
-              >
-                <span aria-hidden="true">🔔</span>
-                {inbox && inbox.unreadCount > 0 && (
-                  <span className="notification-badge" aria-hidden="true">
-                    {inbox.unreadCount > 9 ? "9+" : inbox.unreadCount}
-                  </span>
-                )}
-              </button>
-              {bellOpen && (
-                <div className="notification-panel" role="dialog" aria-label="Notifications">
-                  <div className="notification-panel-head">
-                    <strong>Notifications</strong>
-                    {inbox && inbox.unreadCount > 0 && (
-                      <button type="button" className="mini-button" onClick={() => void handleMarkAllRead()}>
-                        Mark all read
-                      </button>
-                    )}
-                  </div>
-                  {!inbox || inbox.items.length === 0 ? (
-                    <p className="notification-empty">You are all caught up.</p>
-                  ) : (
-                    <ul className="notification-list">
-                      {inbox.items.slice(0, 10).map((item) => (
-                        <li key={item.id}>
-                          <button
-                            type="button"
-                            className={`notification-item${item.readAt ? "" : " unread"}`}
-                            onClick={() => void handleOpenNotification(item.id, item.entityType)}
-                          >
-                            <span className="notification-item-title">{item.title}</span>
-                            {item.body && <span className="notification-item-body">{item.body}</span>}
-                            <span className="notification-item-time">
-                              {new Date(item.createdAt).toLocaleString(undefined, {
-                                day: "numeric",
-                                month: "short",
-                                hour: "numeric",
-                                minute: "2-digit",
-                              })}
-                            </span>
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              )}
-            </div>
-            <button
+            <NotificationBell key={user?.id} isLoaded={isLoaded} isSignedIn={isSignedIn} getToken={getToken} isVeterinarian={isVeterinarian} onOpen={handleNotificationNavigation} />
+            {!isWorkspace && (isStaff || isAdmin || hideSiteNav) && <button
               type="button"
               className="teal-button dashboard-link"
               onClick={() =>
@@ -456,10 +346,11 @@ export function SiteHeader({
                     : isStaff
                       ? "Staff dashboard"
                       : "My dashboard"}
-            </button>
+            </button>}
             <div className="user-avatar-circle">
               <UserButton />
             </div>
+            {isWorkspace && <span className="workspace-user-name">{user?.firstName || "Team member"}<small>{workspaceName}</small></span>}
           </>
         ) : (
           <>
@@ -476,6 +367,7 @@ export function SiteHeader({
           </>
         )}
       </div>
+      {isWorkspace && isSignedIn && <SignOutButton redirectUrl="/"><button type="button" className="workspace-signout">Sign out</button></SignOutButton>}
 
       <DonateModal open={donateOpen} onClose={() => setDonateOpen(false)} />
     </header>

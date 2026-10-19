@@ -41,7 +41,7 @@ export function AnimalProfilePage({ animal, isLoaded, isSignedIn, currentPage, o
   }
 
   return (
-    <div className="home-page">
+    <div className="home-page animal-profile-public">
       <SiteHeader
         isLoaded={isLoaded}
         isSignedIn={isSignedIn}
@@ -63,10 +63,12 @@ export function AnimalProfilePage({ animal, isLoaded, isSignedIn, currentPage, o
             used the full page-shell width while the content below was
             narrower). */}
         <div className="profile-content">
-          {/* Name comes before the photo on every profile, regardless of
-              how many photos an animal has. */}
-          <h1 className="profile-name">{animal.name}</h1>
-          <AnimalTagChips tags={buildAnimalTags(animal)} />
+          <div className="profile-intro">
+            <span className="profile-overline">Adopt a companion</span>
+            <h1 className="profile-name">{animal.name}</h1>
+            {animal.description && <p className="profile-summary">{animal.description}</p>}
+            <AnimalTagChips tags={buildAnimalTags(animal)} />
+          </div>
 
           <section className="profile-hero">
             <div
@@ -89,7 +91,7 @@ export function AnimalProfilePage({ animal, isLoaded, isSignedIn, currentPage, o
                   <button
                     type="button"
                     className="profile-photo-nav prev"
-                    aria-label="Show previous photo"
+                    aria-label={`Show previous photo of ${animal.name}`}
                     onClick={showPreviousPhoto}
                   >
                     ‹
@@ -97,7 +99,7 @@ export function AnimalProfilePage({ animal, isLoaded, isSignedIn, currentPage, o
                   <button
                     type="button"
                     className="profile-photo-nav next"
-                    aria-label="Show next photo"
+                    aria-label={`Show next photo of ${animal.name}`}
                     onClick={showNextPhoto}
                   >
                     ›

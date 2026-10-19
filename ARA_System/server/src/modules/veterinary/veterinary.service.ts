@@ -1,7 +1,6 @@
 import { ensureMissingAnimalSearchEmbedding } from "../animals/animals.service.js";
 import {
 	clearAnimal,
-	createAppointment,
 	createCarePlanRequirements,
 	createExamination,
 	createTreatment,
@@ -10,7 +9,6 @@ import {
 	findCarePlanTreatment,
 	findExamination,
 	findMedicalRecord,
-	listAppointmentAnimals,
 	listDashboard,
 	listMedicalQueue,
 	listMedicalRecords,
@@ -32,7 +30,7 @@ const NON_CARE = ["Initial Examination", "Final Medical Clearance"];
 
 export async function getDashboard() { return listDashboard(); }
 export async function getQueue() { return listMedicalQueue(); }
-export async function getAppointmentAnimals() { return listAppointmentAnimals(); }
+export { bookAppointment, getAppointmentAnimals } from "./veterinary.booking.js";
 export async function getRecords() { return listMedicalRecords(); }
 export async function getRecord(animalId: string) { return findMedicalRecord(animalId); }
 
@@ -114,14 +112,6 @@ export async function addTreatment(animalId: string, input: Omit<Parameters<type
 	return createTreatment({ ...input, animalId, performedByClerkUserId: clerkUserId });
 }
 
-export async function bookAppointment(input: Parameters<typeof createAppointment>[0]) {
-	const record = await findMedicalRecord(input.animalId);
-	if (!record) throw new Error("Animal not found");
-	try { return await createAppointment(input); } catch (error) {
-		if (error instanceof Error && error.message.includes("vet_appointment_slot_unique")) throw new Error("That appointment slot is already booked", { cause: error });
-		throw error;
-	}
-}
 
 export async function completeAppointment(id: string, input: { visitDetails?: string; treatmentPerformed?: string }, clerkUserId: string) {
 	const appointment = await findAppointment(id);

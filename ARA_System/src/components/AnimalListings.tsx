@@ -8,6 +8,7 @@ import { AnimalTagChips } from "./AnimalTagChips";
 import { apiBaseUrl } from "../services/apiClient.js";
 import { SiteFooter } from "./SiteFooter";
 import { SiteHeader, type SiteHeaderView } from "./SiteHeader";
+import { IconArrowLeft, IconArrowRight } from "./MedicalIcons";
 
 type AnimalListingsProps = {
   isLoaded: boolean;
@@ -62,6 +63,7 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
   const [aiQuery, setAiQuery] = useState("");
   const [aiSearching, setAiSearching] = useState(false);
   const [aiSearchError, setAiSearchError] = useState("");
+  const [photoIndexes, setPhotoIndexes] = useState<Record<string, number>>({});
   // Guards against a slow earlier request overwriting a newer search's results.
   const searchRun = useRef(0);
 
@@ -71,7 +73,9 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
         if (!response.ok) throw new Error("Animal listings could not be loaded.");
         return (await response.json()) as Animal[];
       })
-      .then(setAnimals)
+      // Belt-and-braces with the API's own visibility predicate: adopted
+      // animals never belong in the public catalogue.
+      .then((data) => setAnimals(data.filter((animal) => animal.status !== "adopted")))
       .catch((error: unknown) =>
         setAnimalsError(
           error instanceof Error ? error.message : "Animal listings could not be loaded.",
@@ -219,7 +223,7 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
   }
 
   return (
-    <div className="home-page">
+    <div className="home-page animal-catalog-page">
       <SiteHeader
         isLoaded={isLoaded}
         isSignedIn={isSignedIn}
@@ -463,7 +467,18 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
                     : "No animals match your search. Try removing a filter or showing all animals."}
                 </p>
               )}
-              {visible.map((animal) => (
+              {visible.map((animal) => {
+                const activePhotoIndex = (photoIndexes[animal.id] ?? 0) % Math.max(1, animal.photoUrls.length);
+                const activePhoto = animal.photoUrls[activePhotoIndex];
+
+                function changePhoto(direction: -1 | 1) {
+                  setPhotoIndexes((previous) => ({
+                    ...previous,
+                    [animal.id]: (activePhotoIndex + direction + animal.photoUrls.length) % animal.photoUrls.length,
+                  }));
+                }
+
+                return (
                 <article
                   key={animal.id}
                   className="pet-card"
@@ -481,13 +496,41 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
                     className="pet-card-photo"
                     aria-label={`${animal.name} profile image`}
                     style={
-                      animal.photoUrls[0]
-                        ? { backgroundImage: `url(${animal.photoUrls[0]})` }
+                      activePhoto
+                        ? { backgroundImage: `url(${activePhoto})` }
                         : undefined
                     }
                   >
-                    {!animal.photoUrls[0] && (
+                    {!activePhoto && (
                       <span className="animal-image-label">{capitalize(animal.type)}</span>
+                    )}
+                    {animal.photoUrls.length > 1 && (
+                      <>
+                        <button
+                          type="button"
+                          className="pet-card-photo-nav prev"
+                          aria-label={`Show previous photo of ${animal.name}`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            changePhoto(-1);
+                          }}
+                          onKeyDown={(event) => event.stopPropagation()}
+                        >
+                          <IconArrowLeft size={18} />
+                        </button>
+                        <button
+                          type="button"
+                          className="pet-card-photo-nav next"
+                          aria-label={`Show next photo of ${animal.name}`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            changePhoto(1);
+                          }}
+                          onKeyDown={(event) => event.stopPropagation()}
+                        >
+                          <IconArrowRight size={18} />
+                        </button>
+                      </>
                     )}
                     <button
                       type="button"
@@ -521,7 +564,8 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
                     <p className="pet-card-check">✓ Available for adoption</p>
                   </div>
                 </article>
-              ))}
+                );
+              })}
             </div>
           </section>
         </div>

@@ -3,6 +3,11 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 import App from "./App.tsx";
+import "./visual-system.css";
+import "./workspace.css";
+import "./workspace-minimal.css";
+import "./rescue-workspace.css";
+import "./features/veterinary/veterinary-minimal.css";
 
 const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 

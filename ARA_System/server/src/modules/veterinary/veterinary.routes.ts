@@ -1,4 +1,6 @@
-import { Router } from "express";
+import { Router, type RequestHandler } from "express";
+import { VeterinaryBookingError } from "./veterinary.booking.js";
+import { createEmergencyRouter } from "./emergency.routes.js";
 import { z } from "zod";
 import { requireClerkSession } from "../../middleware/auth.js";
 import { requireVeterinaryAccess } from "../../middleware/rbac.js";
@@ -15,17 +17,38 @@ const visitSchema = z.object({ visitDetails: z.string().optional(), treatmentPer
 const clearanceSchema = z.object({ notes: z.string().trim().max(2000).optional() });
 
 function statusFor(error: unknown) {
+	if (error instanceof VeterinaryBookingError) return error.status;
 	return error instanceof Error && (/required|already|booked|Complete or|not found|at least one/.test(error.message)) ? 400 : 500;
 }
 
+export function createVeterinaryBookingRouter(dependencies = {
+	authenticate: requireClerkSession as RequestHandler,
+	list: getAppointmentAnimals,
+	book: bookAppointment,
+}) {
+	const router = Router();
+	router.get("/booking-animals", dependencies.authenticate, async (request, response) => {
+		try { response.json(await dependencies.list(request.clerkUserId as string)); }
+		catch (error) { response.status(statusFor(error)).json({ error: error instanceof Error ? error.message : "Booking access failed" }); }
+	});
+	router.post("/appointments", dependencies.authenticate, async (request, response) => {
+		const parsed = appointmentSchema.safeParse(request.body);
+		if (!parsed.success) { response.status(400).json({ error: "Invalid appointment details" }); return; }
+		try {
+			response.status(201).json(await dependencies.book({ ...parsed.data, appointmentDate: new Date(parsed.data.appointmentDate) }, request.clerkUserId as string));
+		} catch (error) { response.status(statusFor(error)).json({ error: error instanceof Error ? error.message : "Appointment booking failed" }); }
+	});
+	return router;
+}
+
 export const veterinaryRouter = Router();
+veterinaryRouter.use(createVeterinaryBookingRouter());
+veterinaryRouter.use("/emergency-responses", createEmergencyRouter());
 
 veterinaryRouter.get("/dashboard", requireClerkSession, requireVeterinaryAccess, async (_request, response, next) => { try { response.json(await getDashboard()); } catch (error) { next(error); } });
 veterinaryRouter.get("/queue", requireClerkSession, requireVeterinaryAccess, async (_request, response, next) => { try { response.json(await getQueue()); } catch (error) { next(error); } });
 veterinaryRouter.get("/records", requireClerkSession, requireVeterinaryAccess, async (_request, response, next) => { try { response.json(await getRecords()); } catch (error) { next(error); } });
-veterinaryRouter.get("/booking-animals", requireClerkSession, async (_request, response, next) => { try { response.json(await getAppointmentAnimals()); } catch (error) { next(error); } });
 veterinaryRouter.get("/appointments", requireClerkSession, requireVeterinaryAccess, async (_request, response, next) => { try { response.json(await (await import("./veterinary.repository.js")).listAppointments()); } catch (error) { next(error); } });
-veterinaryRouter.post("/appointments", requireClerkSession, async (request, response, next) => { const parsed = appointmentSchema.safeParse(request.body); if (!parsed.success) { response.status(400).json({ error: "Invalid appointment details" }); return; } try { response.status(201).json(await bookAppointment({ ...parsed.data, appointmentDate: new Date(parsed.data.appointmentDate), bookedByClerkUserId: request.clerkUserId as string })); } catch (error) { response.status(statusFor(error)).json({ error: error instanceof Error ? error.message : "Appointment booking failed" }); } void next; });
 veterinaryRouter.get("/animals/:animalId", requireClerkSession, requireVeterinaryAccess, async (request, response, next) => { try { const record = await getRecord(idParam(request.params.animalId)); if (!record) { response.status(404).json({ error: "Animal not found" }); return; } response.json(record); } catch (error) { next(error); } });
 veterinaryRouter.post("/animals/:animalId/examination", requireClerkSession, requireVeterinaryAccess, async (request, response) => { const parsed = examinationSchema.safeParse(request.body); if (!parsed.success) { response.status(400).json({ error: "Invalid examination details" }); return; } try { response.status(201).json(await recordInitialExamination(idParam(request.params.animalId), parsed.data, request.clerkUserId as string)); } catch (error) { response.status(statusFor(error)).json({ error: error instanceof Error ? error.message : "Examination failed" }); } });
 veterinaryRouter.post("/animals/:animalId/examinations", requireClerkSession, requireVeterinaryAccess, async (request, response) => { const parsed = examinationSchema.safeParse(request.body); if (!parsed.success) { response.status(400).json({ error: "Invalid examination details" }); return; } try { response.status(201).json(await recordFollowUpExamination(idParam(request.params.animalId), parsed.data, request.clerkUserId as string)); } catch (error) { response.status(statusFor(error)).json({ error: error instanceof Error ? error.message : "Follow-up examination failed" }); } });

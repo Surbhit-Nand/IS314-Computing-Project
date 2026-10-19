@@ -1,5 +1,6 @@
 import {
 	boolean,
+	check,
 	date,
 	doublePrecision,
 	integer,
@@ -229,6 +230,43 @@ export const rescueIntakeHandoffs = pgTable("rescue_intake_handoffs", {
 	receivedAt: timestamp("received_at", { withTimezone: true }),
 });
 
+// A dispatcher asking to take an Assigned mission over from the dispatcher
+// currently holding it. The mission stays with its owner while a request is
+// pending; only the owner can approve (which transfers the assignment) or
+// decline. Kept as its own table so every request and decision is an immutable
+// record of who asked, who transferred to whom, when, and why - the mission's
+// alert details, photos, and history are never touched by a takeover.
+export const rescueTakeoverRequests = pgTable(
+	"rescue_takeover_requests",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		reportId: uuid("report_id").notNull().references(() => rescueReports.id),
+		// The dispatcher requesting the takeover - becomes the new owner when
+		// the current owner approves.
+		requestedByClerkUserId: text("requested_by_clerk_user_id").notNull(),
+		// Display name denormalized like rescue_reports.assigned_to so the
+		// owner-facing list never needs a Clerk lookup.
+		requestedByName: text("requested_by_name"),
+		// The owner at request time (the only dispatcher who may decide).
+		assignedToClerkUserId: text("assigned_to_clerk_user_id").notNull(),
+		reason: text("reason").notNull(),
+		// 'pending' | 'approved' | 'declined' | 'withdrawn' | 'cancelled'
+		status: text("status").notNull().default("pending"),
+		decidedByClerkUserId: text("decided_by_clerk_user_id"),
+		decidedAt: timestamp("decided_at", { withTimezone: true }),
+		decisionNote: text("decision_note"),
+		createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+	},
+	(table) => [
+		// One pending request per dispatcher per mission - a dispatcher cannot
+		// spam duplicate requests. Enforced at the DB level so two concurrent
+		// submissions can never both land.
+		uniqueIndex("rescue_takeover_pending_unique")
+			.on(table.reportId, table.requestedByClerkUserId)
+			.where(sql`${table.status} = 'pending'`),
+	],
+);
+
 export const adoptionApplications = pgTable(
 	"adoption_applications",
 	{
@@ -349,7 +387,11 @@ export const vetAppointments = pgTable("vet_appointments", {
 	source: text("source").notNull().default("online"),
 	status: text("status").notNull().default("booked"),
 	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-}, (table) => [uniqueIndex("vet_appointment_slot_unique").on(table.appointmentDate)]);
+}, (table) => [
+	uniqueIndex("vet_appointment_slot_unique")
+		.on(table.appointmentDate)
+		.where(sql`${table.status} = 'booked'`),
+]);
 
 export const veterinaryExaminations = pgTable("veterinary_examinations", {
 	id: uuid("id").defaultRandom().primaryKey(),
@@ -392,6 +434,35 @@ export const veterinaryTreatmentHistory = pgTable("veterinary_treatment_history"
 	performedByClerkUserId: text("performed_by_clerk_user_id").notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// One row per emergency episode. Closing retains the episode; a future
+// emergency starts a new row with no attending veterinarian. Ownership and
+// support changes are coordination events in audit_logs.
+// Writers must check/increment version atomically and stamp updatedAt and
+// updatedByClerkUserId. Clerk identities remain text, as in medical records.
+export const veterinaryEmergencyResponses = pgTable(
+	"veterinary_emergency_responses",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		animalId: uuid("animal_id").notNull().references(() => animals.id),
+		attendingVeterinarianClerkUserId: text("attending_veterinarian_clerk_user_id"),
+		supportRequired: boolean("support_required").notNull().default(false),
+		coordinationNote: text("coordination_note"),
+		version: integer("version").notNull().default(1),
+		updatedByClerkUserId: text("updated_by_clerk_user_id").notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+		updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+		closedAt: timestamp("closed_at", { withTimezone: true }),
+	},
+	(table) => [
+		uniqueIndex("veterinary_emergency_responses_active_animal_idx")
+			.on(table.animalId).where(sql`${table.closedAt} IS NULL`),
+		check("veterinary_emergency_responses_version_positive", sql`${table.version} > 0`),
+		check("veterinary_emergency_responses_updated_after_created", sql`${table.updatedAt} >= ${table.createdAt}`),
+		check("veterinary_emergency_responses_closed_after_created", sql`${table.closedAt} IS NULL OR ${table.closedAt} >= ${table.createdAt}`),
+		check("veterinary_emergency_responses_closed_unassigned", sql`${table.closedAt} IS NULL OR (${table.attendingVeterinarianClerkUserId} IS NULL AND ${table.supportRequired} = false)`),
+	],
+);
 
 export const auditLogs = pgTable("audit_logs", {
 	id: uuid("id").defaultRandom().primaryKey(),
@@ -444,6 +515,7 @@ export const notifications = pgTable("notifications", {
 	body: text("body"),
 	entityType: text("entity_type"),
 	entityId: text("entity_id"),
+	actionId: text("action_id"),
 	readAt: timestamp("read_at", { withTimezone: true }),
 	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

@@ -1,5 +1,5 @@
 import { SignInButton, useAuth, useUser } from "@clerk/react";
-import { useState, type FormEvent } from "react";
+import { useState, type CSSProperties, type FormEvent } from "react";
 import { submitAdoptionApplication, uploadAdoptionIdDocument } from "../../services/adoptionsApi";
 import type { Animal } from "../../types/animal";
 import { clearPendingAdoption } from "../../utils/pendingAdoption";
@@ -311,7 +311,10 @@ export function AdoptionApplicationForm({
   }
 
   return (
-    <div className="home-page">
+    <div
+      className="home-page adoption-public-page"
+      style={animal?.photoUrls[0] ? ({ "--adoption-backdrop": `url("${animal.photoUrls[0]}")` } as CSSProperties) : undefined}
+    >
       <SiteHeader
         isLoaded={isLoaded}
         isSignedIn={isSignedIn}

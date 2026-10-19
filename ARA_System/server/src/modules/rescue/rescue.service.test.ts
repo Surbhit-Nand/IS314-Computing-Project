@@ -10,6 +10,8 @@ const deletedHistoryIds: string[] = [];
 const debriefRows: Record<string, unknown>[] = [];
 const handoffRows: Record<string, unknown>[] = [];
 const deletedDebriefIds: string[] = [];
+const notifications: Record<string, unknown>[] = [];
+const takeoverApprovals: Record<string, unknown>[] = [];
 
 function current(name: string) {
   const implementation = impls.get(name);
@@ -18,7 +20,7 @@ function current(name: string) {
 }
 
 function moduleMock(specifier: string, exports: Record<string, unknown>) {
-  mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
+  mock.module(specifier, { namedExports: exports });
 }
 
 moduleMock("./rescue.repository.js", {
@@ -59,6 +61,22 @@ moduleMock("./rescue.repository.js", {
   findPendingIntakeHandoffs: () => current("findPendingIntakeHandoffs")(),
   findIntakeHandoffById: (id: string) => current("findIntakeHandoffById")(id),
   markIntakeHandoffReceived: (id: string, receivedAt: Date) => current("markIntakeHandoffReceived")(id, receivedAt),
+  cancelPendingTakeoversForReport: (id: string, exceptRequestId?: string) =>
+    current("cancelPendingTakeoversForReport")(id, exceptRequestId),
+  createPendingTakeoverRequestIfEligible: (input: unknown) =>
+    current("createPendingTakeoverRequestIfEligible")(input),
+  approveMissionTakeoverAtomically: (input: unknown) => current("approveMissionTakeoverAtomically")(input),
+  isPendingTakeoverUniqueViolation: (error: unknown) => current("isPendingTakeoverUniqueViolation")(error),
+  decideTakeoverRequest: (id: string, userId: string, status: string, note: string | null) =>
+    current("decideTakeoverRequest")(id, userId, status, note),
+  findAssignedReportsByOtherDispatcher: (id: string) => current("findAssignedReportsByOtherDispatcher")(id),
+  findPendingTakeoverForReportAndRequester: (reportId: string, userId: string) =>
+    current("findPendingTakeoverForReportAndRequester")(reportId, userId),
+  findPendingTakeoversByReportIds: (ids: string[]) => current("findPendingTakeoversByReportIds")(ids),
+  findPendingTakeoversByRequester: (ids: string[], userId: string) =>
+    current("findPendingTakeoversByRequester")(ids, userId),
+  findTakeoverRequestById: (id: string) => current("findTakeoverRequestById")(id),
+  withdrawTakeoverRequest: (id: string, userId: string) => current("withdrawTakeoverRequest")(id, userId),
 });
 
 moduleMock("../../shared/audit/audit.service.js", {
@@ -70,6 +88,13 @@ moduleMock("../../shared/audit/audit.service.js", {
 moduleMock("../../services/cloudinaryClient.js", {
   cloudinary: {},
   isCloudinaryConfigured: () => false,
+});
+
+moduleMock("../notifications/notifications.repository.js", {
+  createNotification: (input: Record<string, unknown>) => {
+    notifications.push(input);
+    return input;
+  },
 });
 
 const {
@@ -87,8 +112,12 @@ const {
   listMissionBoard,
   listMissionHistory,
   listMyActiveMissions,
+  requestMissionTakeover,
+  decideMissionTakeover,
   listIntakeHandoffs,
   markIntakeHandoffReceived,
+  submitRescueReport,
+  getTakeoverRequestForViewer,
   RescueWorkflowError,
 } = await import("./rescue.service.js");
 
@@ -134,6 +163,8 @@ beforeEach(() => {
   debriefRows.length = 0;
   handoffRows.length = 0;
   deletedDebriefIds.length = 0;
+  notifications.length = 0;
+  takeoverApprovals.length = 0;
 
   impls.set("findReportById", async () => baseReport());
   impls.set("findAvailableReports", async () => []);
@@ -174,6 +205,26 @@ beforeEach(() => {
   });
   impls.set("findActiveReports", async () => []);
   impls.set("findResolvedReports", async () => []);
+  impls.set("findAssignedReportsByOtherDispatcher", async () => []);
+  impls.set("findPendingTakeoverForReportAndRequester", async () => undefined);
+  impls.set("findPendingTakeoversByReportIds", async () => []);
+  impls.set("findPendingTakeoversByRequester", async () => []);
+  impls.set("findTakeoverRequestById", async () => undefined);
+  impls.set("cancelPendingTakeoversForReport", async () => []);
+  impls.set("createPendingTakeoverRequestIfEligible", async (input: Record<string, unknown>) => ({
+    id: "takeover-1",
+    ...input,
+  }));
+  impls.set("decideTakeoverRequest", async (id: string, _userId: string, status: string) => ({
+    id,
+    status,
+  }));
+  impls.set("approveMissionTakeoverAtomically", async (input: Record<string, unknown>) => {
+    takeoverApprovals.push(input);
+    return { transferred: true, approvedRequestId: input.requestId ?? "takeover-1", closed: [] };
+  });
+  impls.set("isPendingTakeoverUniqueViolation", () => false);
+  impls.set("withdrawTakeoverRequest", async () => undefined);
   impls.set("findReportsByIds", async () => []);
   impls.set("findMissionUpdatesByReportIds", async () => []);
   impls.set("findDebriefByReportIds", async () => [...debriefRows]);
@@ -330,7 +381,7 @@ describe("Dispatcher rescue workflow", () => {
     );
   });
 
-  test("an 'other' outcome requires an explanation", async () => {
+  test("the 'other' outcome is rejected for new resolutions", async () => {
     impls.set("findReportById", async () =>
       baseReport({ status: "in_progress", assignedToClerkUserId: DISPATCHER_ID }),
     );
@@ -340,7 +391,7 @@ describe("Dispatcher rescue workflow", () => {
         outcome: "other",
         imageUrls: [],
       }),
-      (error: unknown) => error instanceof RescueWorkflowError && error.status === 400 && /explain/i.test(error.message),
+      (error: unknown) => error instanceof RescueWorkflowError && error.status === 400 && /no longer/i.test(error.message),
     );
   });
 
@@ -557,7 +608,7 @@ describe("Rescue mission workflow", () => {
   });
 
   test("released and handed-over alerts appear on the Mission Board", async () => {
-    impls.set("findAvailableReports", async () => [
+    impls.set("findActiveReports", async () => [
       baseReport({ status: "awaiting_reassignment", assignedToClerkUserId: null, assignedTo: null }),
     ]);
     const board = await listMissionBoard();
@@ -565,12 +616,17 @@ describe("Rescue mission workflow", () => {
     assert.equal(board[0].status, "awaiting_reassignment");
   });
 
-  test("an in-flight mission never leaks onto the Mission Board", async () => {
-    impls.set("findAvailableReports", async () => [
+  test("assigned and in-progress missions appear on the Mission Board", async () => {
+    impls.set("findActiveReports", async () => [
+      baseReport({ status: "assigned", assignedToClerkUserId: DISPATCHER_ID }),
       baseReport({ status: "in_progress", assignedToClerkUserId: DISPATCHER_ID }),
     ]);
     const board = await listMissionBoard();
-    assert.equal(board.length, 0);
+    assert.equal(board.length, 2);
+    assert.deepEqual(
+      board.map((mission) => mission.status).sort(),
+      ["assigned", "in_progress"],
+    );
   });
 
   test("Start Mission works without a note (no forced form)", async () => {
@@ -619,35 +675,20 @@ describe("Rescue mission workflow", () => {
     );
   });
 
-  test("a rescued debrief requires a veterinary priority", async () => {
-    impls.set("findReportById", async () => baseReport({ status: "in_progress", assignedToClerkUserId: DISPATCHER_ID }));
-    await assert.rejects(
-      completeRescueDebrief(REPORT_ID, DISPATCHER_ID, DISPATCHER_NAME, {
-        outcome: "rescued_handed_to_spca",
-        whatHappened: "Calmed the dog and transported it.",
-      }),
-      (error: unknown) => error instanceof RescueWorkflowError && error.status === 400,
-    );
-  });
-
-  test("a rescued debrief resolves the mission and creates one intake handoff", async () => {
+  test("a rescued debrief resolves without creating an intake handoff", async () => {
     impls.set("findReportById", async () => baseReport({ status: "in_progress", assignedToClerkUserId: DISPATCHER_ID }));
     const mission = await completeRescueDebrief(REPORT_ID, DISPATCHER_ID, DISPATCHER_NAME, {
       outcome: "rescued_handed_to_spca",
       whatHappened: "Calmed the dog and transported it to the clinic.",
-      veterinaryPriority: "high",
       animalCondition: "Limping but calm",
     });
     assert.equal(mission?.status, "resolved");
     assert.equal(historyEntries[0].toStatus, "resolved");
     assert.equal(historyEntries[0].outcome, "rescued_handed_to_spca");
     assert.equal(debriefRows[0].reportId, REPORT_ID);
-    assert.equal(debriefRows[0].veterinaryPriority, "high");
+    assert.equal(debriefRows[0].veterinaryPriority, undefined);
     assert.equal(debriefRows[0].destinationOrHandoff, null);
-    assert.equal(handoffRows.length, 1);
-    assert.equal(handoffRows[0].status, "pending");
-    assert.equal(handoffRows[0].reportId, REPORT_ID);
-    assert.equal(handoffRows[0].destination, "SPCA Fiji");
+    assert.equal(handoffRows.length, 0);
     assert.equal(auditEntries[0].action, "rescue.mission.resolved");
   });
 
@@ -661,6 +702,20 @@ describe("Rescue mission workflow", () => {
     assert.equal(mission?.status, "resolved");
     assert.equal(handoffRows.length, 0);
     assert.equal(debriefRows[0].outcome, "unsuccessful");
+  });
+
+  test("a debrief cannot resolve with the retired 'other' outcome", async () => {
+    impls.set("findReportById", async () => baseReport({ status: "in_progress", assignedToClerkUserId: DISPATCHER_ID }));
+    await assert.rejects(
+      completeRescueDebrief(REPORT_ID, DISPATCHER_ID, DISPATCHER_NAME, {
+        outcome: "other",
+        whatHappened: "Something outside the usual outcomes happened.",
+        unsuccessfulDetails: "An explanation.",
+      }),
+      (error: unknown) => error instanceof RescueWorkflowError && error.status === 400 && /no longer/i.test(error.message),
+    );
+    assert.equal(historyEntries.length, 0);
+    assert.equal(debriefRows.length, 0);
   });
 
   test("a lost debrief race cleans up the orphaned timeline and debrief rows", async () => {
@@ -682,23 +737,265 @@ describe("Rescue mission workflow", () => {
     const newerCritical = { ...baseReport({ urgency: "critical", createdAt: new Date("2026-09-22T08:00:00Z") }), id: "c2" };
     const high = { ...baseReport({ urgency: "high", createdAt: new Date("2026-09-23T08:00:00Z") }), id: "h1" };
     const low = { ...baseReport({ urgency: "low", createdAt: new Date("2026-09-23T08:00:00Z") }), id: "l1" };
-    impls.set("findAvailableReports", async () => [low, high, newerCritical, oldCritical]);
+    impls.set("findActiveReports", async () => [low, high, newerCritical, oldCritical]);
     const board = await listMissionBoard();
     assert.deepEqual(board.map((mission) => mission.id), ["c1", "c2", "h1", "l1"]);
   });
 
-  test("mission board shows only unassigned submitted alerts", async () => {
-    const available = [
+  test("mission board shows all unresolved alerts and excludes resolved alerts", async () => {
+    const active = [
       { ...baseReport(), id: "open-alert" },
       { ...baseReport({ status: "assigned", assignedToClerkUserId: DISPATCHER_ID, assignedTo: DISPATCHER_NAME }), id: "claimed" },
       { ...baseReport({ status: "in_progress", assignedToClerkUserId: DISPATCHER_ID, assignedTo: DISPATCHER_NAME }), id: "working" },
       { ...baseReport({ status: "resolved", assignedToClerkUserId: DISPATCHER_ID, assignedTo: DISPATCHER_NAME }), id: "done" },
     ];
-    impls.set("findAvailableReports", async () => available);
+    impls.set("findActiveReports", async () => active.filter((report) => report.status !== "resolved"));
     const board = await listMissionBoard();
-    assert.deepEqual(board.map((mission) => mission.id), ["open-alert"]);
-    assert.equal(board[0].status, "submitted");
-    assert.equal(board[0].assignedToClerkUserId, null);
+    assert.deepEqual(board.map((mission) => mission.id), ["open-alert", "claimed", "working"]);
+    assert.equal(board.find((mission) => mission.id === "claimed")?.status, "assigned");
+    assert.equal(board.find((mission) => mission.id === "working")?.status, "in_progress");
+  });
+
+  test("takeover request notifies the current dispatcher and approval transfers the assigned mission", async () => {
+    const assigned = baseReport({
+      status: "assigned",
+      assignedTo: "Dispatcher B",
+      assignedToClerkUserId: OTHER_DISPATCHER_ID,
+    });
+    impls.set("findReportById", async () => assigned);
+    const request = await requestMissionTakeover(REPORT_ID, DISPATCHER_ID, "Dispatcher A", {
+      reason: "I am closer to the rescue location.",
+    });
+
+    assert.equal(request?.status, "assigned");
+    assert.deepEqual(notifications[0], {
+      recipientClerkUserId: OTHER_DISPATCHER_ID,
+      type: "rescue.takeover_requested",
+      title: `Takeover requested for ${assigned.reference}`,
+      body: 'Dispatcher A asked to take this mission over: "I am closer to the rescue location."',
+      entityType: "rescue_report",
+      entityId: REPORT_ID,
+      actionId: "takeover-1",
+    });
+
+    impls.set("findTakeoverRequestById", async () => ({
+      id: "takeover-1",
+      reportId: REPORT_ID,
+      requestedByClerkUserId: DISPATCHER_ID,
+      requestedByName: "Dispatcher A",
+      assignedToClerkUserId: OTHER_DISPATCHER_ID,
+      reason: "I am closer to the rescue location.",
+      status: "pending",
+    }));
+    const transferred = await decideMissionTakeover("takeover-1", OTHER_DISPATCHER_ID, "approved");
+
+    assert.equal(transferred?.status, "assigned");
+    assert.equal(transferred?.assignedToClerkUserId, DISPATCHER_ID);
+    // Transfer, approval and the handover timeline entry are one atomic
+    // repository call now, so the service asserts the call it made.
+    assert.equal(takeoverApprovals.length, 1);
+    assert.equal(takeoverApprovals[0].requesterClerkUserId, DISPATCHER_ID);
+    assert.equal(takeoverApprovals[0].deciderClerkUserId, OTHER_DISPATCHER_ID);
+    assert.match(String(takeoverApprovals[0].historyNotes), /Dispatcher B to Dispatcher A/);
+    assert.equal(notifications.at(-1)?.type, "rescue.takeover_approved");
+    assert.equal((notifications.at(-1) as Record<string, unknown>).recipientClerkUserId, DISPATCHER_ID);
+    assert.equal(auditEntries.at(-1)?.action, "rescue.mission.takeover_approved");
+  });
+
+  test("only the current assignee can decide and rejection preserves assignment", async () => {
+    const assigned = baseReport({
+      status: "assigned",
+      assignedTo: "Dispatcher B",
+      assignedToClerkUserId: OTHER_DISPATCHER_ID,
+    });
+    const request = {
+      id: "takeover-2",
+      reportId: REPORT_ID,
+      requestedByClerkUserId: DISPATCHER_ID,
+      requestedByName: "Dispatcher A",
+      assignedToClerkUserId: OTHER_DISPATCHER_ID,
+      reason: "Please let me handle this.",
+      status: "pending",
+    };
+    impls.set("findReportById", async () => assigned);
+    impls.set("findTakeoverRequestById", async () => request);
+
+    await assert.rejects(
+      decideMissionTakeover(request.id, DISPATCHER_ID, "approved"),
+      (error: unknown) => error instanceof RescueWorkflowError && error.status === 403,
+    );
+
+    const rejected = await decideMissionTakeover(request.id, OTHER_DISPATCHER_ID, "declined", {
+      decisionNote: "I can complete this mission.",
+    });
+    assert.equal(rejected?.assignedToClerkUserId, OTHER_DISPATCHER_ID);
+    assert.equal(rejected?.status, "assigned");
+    assert.equal(notifications.at(-1)?.type, "rescue.takeover_declined");
+  });
+
+  test("declining one request does not close another pending request", async () => {
+    const assigned = baseReport({
+      status: "assigned",
+      assignedTo: "Dispatcher B",
+      assignedToClerkUserId: OTHER_DISPATCHER_ID,
+    });
+    const request = {
+      id: "takeover-decline-one",
+      reportId: REPORT_ID,
+      requestedByClerkUserId: DISPATCHER_ID,
+      requestedByName: "Dispatcher A",
+      assignedToClerkUserId: OTHER_DISPATCHER_ID,
+      reason: "I am closer.",
+      status: "pending",
+    };
+    let declinedRequestId: string | undefined;
+    impls.set("findReportById", async () => assigned);
+    impls.set("findTakeoverRequestById", async () => request);
+    impls.set("decideTakeoverRequest", async (id: string, _userId: string, status: string) => {
+      declinedRequestId = id;
+      return { ...request, status };
+    });
+
+    await decideMissionTakeover(request.id, OTHER_DISPATCHER_ID, "declined");
+
+    assert.equal(declinedRequestId, request.id);
+    assert.equal(takeoverApprovals.length, 0);
+    assert.equal(notifications.filter((item) => item.type === "rescue.takeover_cancelled").length, 0);
+  });
+
+  test("stale or terminal approval cannot transfer or notify anyone", async () => {
+    const request = {
+      id: "takeover-stale",
+      reportId: REPORT_ID,
+      requestedByClerkUserId: DISPATCHER_ID,
+      requestedByName: "Dispatcher A",
+      assignedToClerkUserId: OTHER_DISPATCHER_ID,
+      reason: "I am closer.",
+      status: "withdrawn",
+    };
+    impls.set("findTakeoverRequestById", async () => request);
+    impls.set("findReportById", async () =>
+      baseReport({
+        status: "assigned",
+        assignedTo: "Dispatcher B",
+        assignedToClerkUserId: OTHER_DISPATCHER_ID,
+      }),
+    );
+
+    await assert.rejects(
+      decideMissionTakeover(request.id, OTHER_DISPATCHER_ID, "approved"),
+      (error: unknown) => error instanceof RescueWorkflowError && error.status === 409,
+    );
+    assert.equal(takeoverApprovals.length, 0);
+    assert.equal(notifications.length, 0);
+    assert.equal(auditEntries.length, 0);
+  });
+
+  test("approval losing the database guard makes no partial change or notification", async () => {
+    const request = {
+      id: "takeover-lost-race",
+      reportId: REPORT_ID,
+      requestedByClerkUserId: DISPATCHER_ID,
+      requestedByName: "Dispatcher A",
+      assignedToClerkUserId: OTHER_DISPATCHER_ID,
+      reason: "I am closer.",
+      status: "pending",
+    };
+    impls.set("findTakeoverRequestById", async () => request);
+    impls.set("findReportById", async () =>
+      baseReport({
+        status: "assigned",
+        assignedTo: "Dispatcher B",
+        assignedToClerkUserId: OTHER_DISPATCHER_ID,
+      }),
+    );
+    impls.set("approveMissionTakeoverAtomically", async () => ({
+      transferred: false,
+      approvedRequestId: null,
+      closed: [],
+    }));
+
+    await assert.rejects(
+      decideMissionTakeover(request.id, OTHER_DISPATCHER_ID, "approved"),
+      (error: unknown) => error instanceof RescueWorkflowError && error.status === 409,
+    );
+    assert.equal(notifications.length, 0);
+    assert.equal(auditEntries.length, 0);
+  });
+
+  test("a notification deep-link reader returns the request to its owner and requester only", async () => {
+    const request = {
+      id: "takeover-read",
+      reportId: REPORT_ID,
+      requestedByClerkUserId: DISPATCHER_ID,
+      requestedByName: "Dispatcher A",
+      assignedToClerkUserId: OTHER_DISPATCHER_ID,
+      reason: "I am closer.",
+      status: "declined",
+      decidedByClerkUserId: OTHER_DISPATCHER_ID,
+      decidedAt: null,
+      decisionNote: "I can complete this mission.",
+      createdAt: new Date("2026-09-23T10:30:00.000Z"),
+    };
+    impls.set("findTakeoverRequestById", async () => request);
+
+    const asOwner = await getTakeoverRequestForViewer(request.id, OTHER_DISPATCHER_ID);
+    const asRequester = await getTakeoverRequestForViewer(request.id, DISPATCHER_ID);
+    const asOutsider = await getTakeoverRequestForViewer(request.id, "user-outsider");
+    assert.equal(asOwner?.status, "declined");
+    assert.equal(asRequester?.id, request.id);
+    assert.equal(asOutsider, undefined);
+  });
+
+  test("a notification deep-link reader returns undefined for a missing request", async () => {
+    impls.set("findTakeoverRequestById", async () => undefined);
+    assert.equal(await getTakeoverRequestForViewer("gone", DISPATCHER_ID), undefined);
+  });
+
+  test("starting a mission closes pending takeover requests", async () => {
+    impls.set("findReportById", async () =>
+      baseReport({
+        status: "assigned",
+        assignedTo: DISPATCHER_NAME,
+        assignedToClerkUserId: DISPATCHER_ID,
+      }),
+    );
+    impls.set("cancelPendingTakeoversForReport", async () => [
+      {
+        reportId: REPORT_ID,
+        requestedByClerkUserId: OTHER_DISPATCHER_ID,
+      },
+    ]);
+
+    const mission = await startRescueMission(REPORT_ID, DISPATCHER_ID, DISPATCHER_NAME);
+
+    assert.equal(mission?.status, "in_progress");
+    assert.equal(notifications.at(-1)?.type, "rescue.takeover_cancelled");
+    assert.equal((notifications.at(-1) as Record<string, unknown>).recipientClerkUserId, OTHER_DISPATCHER_ID);
+  });
+
+  test("releasing a mission closes pending takeover requests", async () => {
+    impls.set("findReportById", async () =>
+      baseReport({
+        status: "assigned",
+        assignedTo: DISPATCHER_NAME,
+        assignedToClerkUserId: DISPATCHER_ID,
+      }),
+    );
+    impls.set("cancelPendingTakeoversForReport", async () => [
+      {
+        reportId: REPORT_ID,
+        requestedByClerkUserId: OTHER_DISPATCHER_ID,
+      },
+    ]);
+
+    const mission = await releaseRescueMission(REPORT_ID, DISPATCHER_ID, DISPATCHER_NAME, {
+      reason: "Unable to reach the site.",
+    });
+
+    assert.equal(mission?.status, "awaiting_reassignment");
+    assert.equal(notifications.at(-1)?.type, "rescue.takeover_cancelled");
+    assert.equal((notifications.at(-1) as Record<string, unknown>).recipientClerkUserId, OTHER_DISPATCHER_ID);
   });
 
   test("a claimed case leaves the board for the accepting dispatcher's Assigned group", async () => {
@@ -771,5 +1068,57 @@ describe("Rescue mission workflow", () => {
     assert.equal(received.status, "received");
     assert.ok(received.receivedAt instanceof Date);
     assert.equal(auditEntries[0].action, "rescue.intake.received");
+  });
+});
+
+describe("submitRescueReport Fiji location gate", () => {
+  const baseInput = {
+    reporterName: "Mere Tui",
+    reporterPhone: null,
+    reporterEmail: null,
+    location: "Lot 7, Kadavu St, Suva",
+    latitude: -18.1416,
+    longitude: 178.4419,
+    animalType: "dog" as const,
+    animalBreed: "labrador",
+    conditionDescription: "Stray dog limping near the market.",
+    urgency: "high" as const,
+    photoUrls: [],
+    source: "online" as const,
+  };
+
+  test("rejects coordinates outside Fiji", async () => {
+    impls.set("findReportByReference", async () => null);
+    impls.set("createRescueReport", async () => {
+      throw new Error("createRescueReport must not run for out-of-Fiji coordinates");
+    });
+    await assert.rejects(
+      submitRescueReport({ ...baseInput, latitude: 39.9042, longitude: 116.4074 }),
+      (error: unknown) =>
+        error instanceof RescueWorkflowError &&
+        error.message ===
+          "Please select a location within Fiji. Rescue alerts are only available for animals located in Fiji.",
+    );
+  });
+
+  test("requires both coordinates to be present", async () => {
+    await assert.rejects(
+      submitRescueReport({ ...baseInput, latitude: null, longitude: null }),
+      (error: unknown) =>
+        error instanceof RescueWorkflowError &&
+        error.message === "Both latitude and longitude must be provided together",
+    );
+  });
+
+  test("accepts a valid Fiji location and stores the report", async () => {
+    impls.set("findReportByReference", async () => null);
+    impls.set("createRescueReport", async (input: Record<string, unknown>) => ({
+      ...baseReport(),
+      ...input,
+      id: "report-new",
+    }));
+    const created = await submitRescueReport(baseInput);
+    assert.equal(created.id, "report-new");
+    assert.equal(created.status, "submitted");
   });
 });

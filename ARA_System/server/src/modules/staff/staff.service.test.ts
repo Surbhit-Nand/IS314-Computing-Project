@@ -17,12 +17,9 @@ import { join } from "node:path";
 
 // The stubs are backed by the `users`/state variables below rather than a
 // per-test impl map, so there is no forwarder to declare here.
-// node:test's mock.module takes an options object. The installed @types/node
-// still types it with the older `namedExports` key, but the runtime prefers
-// `exports` (passing `namedExports` prints a deprecation warning on every
-// run), so the options are cast through unknown to use the current shape.
+// Use the namedExports option supported by the installed Node runtime.
 function moduleMock(specifier: string | URL, exports: Record<string, unknown>) {
-	mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
+	mock.module(specifier, { namedExports: exports });
 }
 
 type StoredUser = {

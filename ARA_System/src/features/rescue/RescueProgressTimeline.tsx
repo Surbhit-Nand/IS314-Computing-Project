@@ -4,6 +4,7 @@ import {
   rescueProgressPhaseLabel,
   rescueStatusClass,
 } from "../../types/rescue";
+import { formatDateTime } from "../../utils/format";
 
 type RescueProgressTimelineProps = {
   report: RescueReport;
@@ -28,16 +29,6 @@ const STATUS_BADGE_LABEL: Record<RescueReportStatus, string> = {
   awaiting_reassignment: "Needs Dispatcher",
   resolved: "Resolved",
 };
-
-function formatDateTime(value: string): string {
-  return new Date(value).toLocaleString(undefined, {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
 
 // Shared, read-only Rescue Progress timeline. Rendered inside the expanded
 // dispatch case details (available to dispatchers and staff) and inside the

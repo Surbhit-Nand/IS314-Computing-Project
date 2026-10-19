@@ -13,10 +13,13 @@ import { MedicalHistoryScene } from "./MedicalHistoryScene";
 import { InitialAssessmentStage } from "./InitialAssessmentStage";
 import { RequiredTreatmentsStage } from "./RequiredTreatmentsStage";
 import { MedicalClearanceStage } from "./MedicalClearanceStage";
+import { VeterinaryNavbar } from "../components/VeterinaryNavbar";
+import type { VeterinaryView } from "../vetTypes";
 
 const NON_CARE = ["Initial Examination", "Final Medical Clearance"];
 
 type Props = {
+  onNavigate: (view: VeterinaryView) => void;
   record: MedicalRecord;
   getToken: () => Promise<string | null>;
   onBack: () => void;
@@ -26,7 +29,7 @@ type Props = {
   onChangeScene: (scene: CareScene, replace?: boolean) => void;
 };
 
-export function VeterinaryCarePage({ record, getToken, onBack, onRefresh, onViewProfile, scene, onChangeScene }: Props) {
+export function VeterinaryCarePage({ record, getToken, onBack, onRefresh, onViewProfile, scene, onChangeScene, onNavigate }: Props) {
   const animal = record.animal;
   const assessmentDone = record.examinations.length > 0;
   const treatments = record.carePlan.filter((plan) => !NON_CARE.includes(plan.requirementType));
@@ -98,6 +101,7 @@ export function VeterinaryCarePage({ record, getToken, onBack, onRefresh, onView
 
   return (
     <main className="vm-page">
+      <VeterinaryNavbar currentView="veterinary-record" onNavigate={onNavigate} />
       <div className="vm-container">
         <div className="vm-record-top">
           <button type="button" className="ghost-button compact-action" onClick={onBack}><IconArrowLeft size={13} /> Veterinary dashboard</button>

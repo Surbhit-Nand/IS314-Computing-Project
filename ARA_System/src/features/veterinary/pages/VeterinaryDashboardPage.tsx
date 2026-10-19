@@ -1,6 +1,10 @@
-import { IconActivity, IconCalendar, IconCalendarPlus, IconCheck, IconClipboard, IconNotes, IconShieldCheck, IconSyringe, IconUser } from "../../../components/MedicalIcons";
+import { emergencyQueueFocusEvent, focusPendingVeterinaryEmergency } from "../../../utils/veterinaryEmergencyFocus";
+import { useEffect } from "react";
+import { EmergencyResponseActions } from "../components/EmergencyResponseActions";
+import type { VeterinaryEmergencyResponse } from "../../../types/veterinary";
+import { IconActivity, IconCalendar, IconCalendarPlus, IconCheck, IconClipboard, IconNotes, IconShieldCheck, IconSyringe, IconPawPrint, IconHeart } from "../../../components/MedicalIcons";
 import type { MedicalQueueAnimal, VeterinaryAppointment, VeterinaryDashboard as DashboardStats } from "../../../types/veterinary";
-import { AnimalThumb, Badge, Card, Chip, EmptyState, Progress, Stat } from "../components/VetUi";
+import { AnimalThumb, Badge, Card, Chip, EmptyState, Stat } from "../components/VetUi";
 import { fmtDate, fmtTime, label, priorityFor, priorityRank } from "../components/vetHelpers";
 
 const stageMeta: Record<string, { tone: "blue" | "green" | "amber" | "red"; copy: string; action: string }> = {
@@ -17,6 +21,10 @@ function queueStage(animal: MedicalQueueAnimal) {
 }
 
 type Props = {
+  emergencyResponses?: VeterinaryEmergencyResponse[];
+  coordinationUnavailable?: boolean;
+  currentVetId?: string;
+  onCoordinationChanged?: () => Promise<void>;
   stats: DashboardStats | null;
   queue: MedicalQueueAnimal[];
   appointments: VeterinaryAppointment[];
@@ -25,9 +33,17 @@ type Props = {
   onSelectAnimal: (id: string) => void;
   onSelectAppointment: (appointment: VeterinaryAppointment) => void;
   onBookAppointment: () => void;
+  getToken: () => Promise<string | null>;
 };
 
-export function VeterinaryDashboardPage({ stats, queue, appointments, loading, error, onSelectAnimal, onSelectAppointment, onBookAppointment }: Props) {
+export function VeterinaryDashboardPage({ emergencyResponses = [], coordinationUnavailable = true, currentVetId, onCoordinationChanged, stats, queue, appointments, loading, error, onSelectAnimal, onSelectAppointment, onBookAppointment, getToken }: Props) {
+  useEffect(() => {
+    if (loading) return;
+    focusPendingVeterinaryEmergency();
+    const focus = () => focusPendingVeterinaryEmergency(true);
+    window.addEventListener(emergencyQueueFocusEvent, focus);
+    return () => window.removeEventListener(emergencyQueueFocusEvent, focus);
+  }, [loading, queue]);
   const needsAssessment = queue.filter((animal) => animal.veterinaryStatus === "needs_initial_examination").length;
   const underTreatment = queue.filter((animal) => !animal.medicallyCleared && animal.veterinaryStatus !== "needs_initial_examination" && animal.veterinaryStatus !== "awaiting_medical_clearance").length;
   const readyForClearance = queue.filter((animal) => !animal.medicallyCleared && animal.veterinaryStatus === "awaiting_medical_clearance").length;
@@ -37,20 +53,24 @@ export function VeterinaryDashboardPage({ stats, queue, appointments, loading, e
     .filter((animal) => !animal.medicallyCleared)
     .sort((a, b) => priorityRank(a.veterinaryPriority) - priorityRank(b.veterinaryPriority))
     .slice(0, 5);
+  const orderedQueue = [...queue].sort((a, b) => priorityRank(a.veterinaryPriority) - priorityRank(b.veterinaryPriority));
 
   return (
     <div className="vm-content">
       <header className="vm-page-head">
         <div>
-          <p className="vm-eyebrow">SPCA Fiji operations</p>
-          <h1>Veterinary &amp; Health Management</h1>
+          <p className="vm-eyebrow">Clinical operations <span aria-hidden="true">/</span> Overview</p>
+          <h1>Veterinary care, <span>all in one place.</span></h1>
           <p className="vm-subtitle">Assess, treat and clear registered animals on their journey to adoption.</p>
         </div>
         <div className="vm-page-head-actions">
           <button type="button" className="teal-button" onClick={onBookAppointment}><IconCalendarPlus size={15} /> Book follow-up</button>
 
         </div>
+        <div className="workspace-hero-art" aria-hidden="true"><IconPawPrint size={44} /><IconHeart size={22} /></div>
       </header>
+
+      <div className="workspace-journey" aria-label="Veterinary care journey"><strong>The care journey</strong><span>01 · Initial assessment</span><span aria-hidden="true">→</span><span>02 · Required treatments</span><span aria-hidden="true">→</span><span>03 · Medical clearance</span></div>
 
       {error ? <p className="form-error">{error}</p> : null}
 
@@ -69,25 +89,25 @@ export function VeterinaryDashboardPage({ stats, queue, appointments, loading, e
             ) : queue.length === 0 ? (
               <EmptyState icon={<IconCheck size={20} />} title="No animals in the queue" detail="Every registered animal is either adopted or has completed its medical journey." />
             ) : (
-              <div className="vm-table-wrap">
-                <div className="vm-table vm-queue-table">
-                  <div className="vm-table-head vm-table-row">
-                    <span className="vm-th">Animal</span>
-                    <span className="vm-th">Species</span>
-                    <span className="vm-th">Priority</span>
-                    <span className="vm-th">Status</span>
-                    <span className="vm-th">Care progress</span>
-                    <span className="vm-th">Next step</span>
+              <>
+                <div id="veterinary-medical-queue" className="vm-table-wrap" tabIndex={-1}>
+                  <div className="vm-table vm-queue-table">
+                    <div className="vm-table-head vm-table-row">
+                      <span className="vm-th">Animal</span>
+                      <span className="vm-th">Priority</span>
+                      <span className="vm-th">Care Stage</span>
+                      <span className="vm-th">Actions</span>
+                    </div>
+                    {orderedQueue.map((animal) => (
+                      <QueueRow key={animal.id} animal={animal} onSelect={onSelectAnimal} response={emergencyResponses.find((entry) => entry.animalId === animal.id)} currentVetId={currentVetId} unavailable={coordinationUnavailable} getToken={getToken} onChanged={onCoordinationChanged ?? (async () => undefined)} />
+                    ))}
                   </div>
-                  {queue.map((animal) => (
-                    <QueueRow key={animal.id} animal={animal} onSelect={onSelectAnimal} />
-                  ))}
                 </div>
-              </div>
+              </>
             )}
           </Card>
 
-          <Card title="Upcoming appointments" detail="Follow-up visits booked across the shelter." action={appointments.length ? <button type="button" className="ghost-button" onClick={onBookAppointment}>Book follow-up</button> : undefined}>
+          <Card title="Upcoming appointments" detail="Follow-up visits and adopter bookings across the shelter." action={appointments.length ? <button type="button" className="ghost-button" onClick={onBookAppointment}>Book follow-up</button> : undefined}>
             {loading ? (
               <ApptSkeleton />
             ) : appointments.length === 0 ? (
@@ -101,8 +121,8 @@ export function VeterinaryDashboardPage({ stats, queue, appointments, loading, e
                     <span className="vm-th">When</span>
                     <span className="vm-th">Action</span>
                   </div>
-                  {appointments.map(({ appointment, animal }) => (
-                    <AppointmentRow key={appointment.id} appointment={appointment} animal={animal} onSelect={() => onSelectAppointment({ appointment, animal })} />
+                  {appointments.map(({ appointment, animal, adopterName }) => (
+                    <AppointmentRow key={appointment.id} appointment={appointment} animal={animal} adopterName={adopterName} onSelect={() => onSelectAppointment({ appointment, animal, adopterName })} />
                   ))}
                 </div>
               </div>
@@ -147,46 +167,34 @@ export function VeterinaryDashboardPage({ stats, queue, appointments, loading, e
   );
 }
 
-function QueueRow({ animal, onSelect }: { animal: MedicalQueueAnimal; onSelect: (id: string) => void }) {
+function QueueRow({ animal, onSelect, response, currentVetId, unavailable, getToken, onChanged }: {
+  animal: MedicalQueueAnimal; onSelect: (id: string) => void; response?: VeterinaryEmergencyResponse;
+  currentVetId?: string; unavailable: boolean; getToken: () => Promise<string | null>; onChanged: () => Promise<void>;
+}) {
   const meta = queueStage(animal);
   const priority = priorityFor(animal.veterinaryPriority);
-  const total = animal.careTotal ?? 0;
-  const done = animal.careCompleted ?? 0;
+  const attending = response?.attendingVeterinarianClerkUserId;
+  const medicalAction = <button type="button" className="vm-queue-action vm-medical-action" onClick={() => onSelect(animal.id)}>{meta.action}</button>;
   return (
-    <div className="vm-table-row">
-      <div className="vm-td vm-animal-cell">
+    <div className={`vm-table-row${animal.veterinaryPriority === "critical" && !unavailable && !attending ? " vm-awaiting-critical" : ""}`}>
+      <div className="vm-td vm-animal-cell" data-label="Animal">
         <AnimalThumb photoUrl={animal.photoUrls?.[0]} name={animal.name} />
         <span className="vm-copy">
           <strong>{animal.name}</strong>
-          <small>{animal.publicId}</small>
+          <small className="vm-queue-attendance">{unavailable ? "Attendance unavailable" : attending ? `Attending: ${response?.attendingVeterinarianName || "Veterinarian (name unavailable)"}` : "Awaiting veterinarian"}</small>
+          <small>{animal.publicId} ? {label(animal.type)}{animal.breed ? ` ? ${animal.breed}` : ""}{animal.gender ? ` ? ${label(animal.gender)}` : ""}</small>
         </span>
       </div>
-      <div className="vm-td">
-        <strong>{label(animal.type)}</strong>
-        <small>{animal.breed ?? "Breed not recorded"}</small>
-        <small><IconUser size={11} /> {animal.gender ? label(animal.gender) : "Unknown sex"}</small>
-      </div>
-      <div className="vm-td vm-priority-cell">
-        <Badge tone={priority.tone}>{priority.text}</Badge>
-      </div>
-      <div className="vm-td">
-        <Badge tone={meta.tone}>{meta.copy}</Badge>
-      </div>
-      <div className="vm-td">
-        {total > 0 ? (
-          <Progress value={(done / total) * 100} labelText={`${done}/${total} done`} green={done === total} />
-        ) : (
-          <span className="muted">—</span>
-        )}
-      </div>
-      <div className="vm-td vm-td-actions">
-        <button type="button" className="vm-queue-action" onClick={() => onSelect(animal.id)}>{meta.action}</button>
+      <div className="vm-td vm-priority-cell" data-label="Priority"><Badge tone={priority.tone}>{priority.text}</Badge></div>
+      <div className="vm-td" data-label="Care Stage"><Badge tone={meta.tone}>{meta.copy}</Badge></div>
+      <div className="vm-td vm-td-actions" data-label="Actions">
+        {animal.veterinaryPriority === "critical" ? <EmergencyResponseActions animal={animal} response={response} currentVetId={currentVetId} unavailable={unavailable} getToken={getToken} onChanged={onChanged} medicalActionLabel={meta.action} onBeginCare={() => onSelect(animal.id)} /> : <div className="vm-response-standalone">{medicalAction}</div>}
       </div>
     </div>
   );
 }
 
-function AppointmentRow({ appointment, animal, onSelect }: { appointment: VeterinaryAppointment["appointment"]; animal: MedicalQueueAnimal; onSelect: () => void }) {
+function AppointmentRow({ appointment, animal, adopterName, onSelect }: { appointment: VeterinaryAppointment["appointment"]; animal: MedicalQueueAnimal; adopterName?: string | null; onSelect: () => void }) {
   return (
     <div className="vm-table-row">
       <div className="vm-td vm-animal-cell">
@@ -198,7 +206,8 @@ function AppointmentRow({ appointment, animal, onSelect }: { appointment: Veteri
       </div>
       <div className="vm-td">
         <strong>{appointment.purpose}</strong>
-        <small><IconNotes size={11} /> {appointment.notes ?? "Follow-up visit"}</small>
+        <small><IconNotes size={11} /> {appointment.source === "owner_booked" ? `Owner booking · ${adopterName ?? "Adopter"}` : appointment.notes ?? "Follow-up visit"}</small>
+        {appointment.notes && appointment.source === "owner_booked" ? <small>{appointment.notes}</small> : null}
       </div>
       <div className="vm-td">
         <strong>{fmtDate(appointment.appointmentDate)}</strong>
@@ -250,11 +259,9 @@ function QueueSkeleton() {
       <div className="vm-table vm-queue-table">
         <div className="vm-table-head vm-table-row">
           <span className="vm-th">Animal</span>
-          <span className="vm-th">Species</span>
           <span className="vm-th">Priority</span>
-          <span className="vm-th">Status</span>
-          <span className="vm-th">Care progress</span>
-          <span className="vm-th">Next step</span>
+          <span className="vm-th">Care Stage</span>
+          <span className="vm-th">Actions</span>
         </div>
         {SKELETON_ROWS.map((row) => (
           <div className="vm-table-row" key={row}>
@@ -265,10 +272,8 @@ function QueueSkeleton() {
                 <span className="vm-skeleton vm-skeleton-line short" />
               </span>
             </div>
-            <div className="vm-td"><span className="vm-skeleton-stack"><span className="vm-skeleton vm-skeleton-line" /><span className="vm-skeleton vm-skeleton-line short" /></span></div>
             <div className="vm-td"><span className="vm-skeleton vm-skeleton-badge" /></div>
             <div className="vm-td"><span className="vm-skeleton vm-skeleton-badge" /></div>
-            <div className="vm-td"><span className="vm-skeleton vm-skeleton-line" /></div>
             <div className="vm-td vm-td-actions"><span className="vm-skeleton vm-skeleton-button" /></div>
           </div>
         ))}

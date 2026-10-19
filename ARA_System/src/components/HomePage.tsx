@@ -1,78 +1,190 @@
 import { useEffect, useState } from "react";
-import type { Animal } from "../types/animal";
-import { capitalize } from "../utils/format";
-import { useFavoriteAnimals } from "../utils/favorites";
-import { buildAnimalTags } from "../utils/animalTags";
-import { AnimalTagChips } from "./AnimalTagChips";
-import { DonateModal } from "../features/donations/DonateModal";
+import spcaHero from "../assets/spca-hero.webp";
+import rescueJourney from "../assets/Puppy+in+Suva-5855.webp";
 import { apiBaseUrl } from "../services/apiClient.js";
+import type { Animal } from "../types/animal";
+import { useFavoriteAnimals } from "../utils/favorites";
+import {
+  IconArrowLeft,
+  IconArrowRight,
+  IconClipboard,
+  IconHeart,
+  IconPawPrint,
+} from "./MedicalIcons";
 import { SiteFooter } from "./SiteFooter";
 import { SiteHeader, type SiteHeaderView } from "./SiteHeader";
+import "./HomePage.css";
 
 type HomePageProps = {
   isLoaded: boolean;
   isSignedIn: boolean | undefined;
   currentPage: string;
   onNavigate: (view: SiteHeaderView) => void;
+  onNavigateToStory: () => void;
   onViewAnimal: (animal: Animal) => void;
 };
 
-// Homepage hero slideshow images (rotating full-bleed backgrounds).
-const HERO_SLIDES = [
-  "https://images.squarespace-cdn.com/content/v1/66aa641d27420a233354078c/ebc79d4b-d939-4cfc-957f-617327910148/TOM_3732.jpg",
-  "https://images.squarespace-cdn.com/content/v1/66aa641d27420a233354078c/53b69e63-47f1-43c8-b985-c4ebc296edc2/SPCA+Fiji+Islands-03532.jpg",
-  "https://images.squarespace-cdn.com/content/v1/66aa641d27420a233354078c/0b4e7858-1444-46cc-8a33-75ffe2bddece/SPCA+Fiji+Islands-5836.jpg",
-  "https://images.squarespace-cdn.com/content/v1/66aa641d27420a233354078c/260cc2c2-578c-4da8-be5f-0f395225d786/SPCA+Fiji_Tom+Vierus-80929.jpg",
-  "https://images.squarespace-cdn.com/content/v1/66aa641d27420a233354078c/ddacfc9d-701c-4827-b913-394995b72b7a/SPCA+Fiji+Islands-826131.jpg",
-  "https://images.squarespace-cdn.com/content/v1/66aa641d27420a233354078c/545a02d7-50b1-45d4-82c7-124d132a4338/Puppy+in+Suva-03646.jpg",
-  "https://images.squarespace-cdn.com/content/v1/66aa641d27420a233354078c/b55b2c5c-c8fa-4177-971f-373c0eced0d1/SPCA+Fiji+Islands-03654.jpg",
-  "https://images.squarespace-cdn.com/content/v1/66aa641d27420a233354078c/fec17ca8-40bb-4601-b965-b8210c03cafe/SPCA+Fiji_Tom+Vierus-820517.jpg",
-];
+type QuickActionProps = {
+  title: string;
+  detail: string;
+  icon: React.ReactNode;
+  onClick: () => void;
+  featured?: boolean;
+};
 
-export function HomePage({ isLoaded, isSignedIn, currentPage, onNavigate, onViewAnimal }: HomePageProps) {
+function QuickAction({ title, detail, icon, onClick, featured = false }: QuickActionProps) {
+  return (
+    <button
+      type="button"
+      className={`ara2-action${featured ? " ara2-action-featured" : ""}`}
+      onClick={onClick}
+    >
+      <span className="ara2-action-icon" aria-hidden="true">{icon}</span>
+      <span className="ara2-action-body">
+        <strong>{title}</strong>
+        <small>{detail}</small>
+      </span>
+      <IconArrowRight className="ara2-action-arrow" size={21} aria-hidden="true" />
+    </button>
+  );
+}
+
+function PetCard({
+  animal,
+  isFavorite,
+  toggleFavorite,
+  onViewAnimal,
+}: {
+  animal: Animal;
+  isFavorite: (id: string) => boolean;
+  toggleFavorite: (id: string) => void;
+  onViewAnimal: (animal: Animal) => void;
+}) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const [activePhotoIndex, setActivePhotoIndex] = useState(0);
+  const photos = animal.photoUrls ?? [];
+  const image = photos[activePhotoIndex];
+  const saved = isFavorite(animal.id);
+  const meta = [animal.breed, animal.estimatedAge].filter(Boolean).join(" · ");
+
+  function changePhoto(direction: -1 | 1) {
+    setImageFailed(false);
+    setActivePhotoIndex((index) => (index + direction + photos.length) % photos.length);
+  }
+
+  return (
+    <article className="ara2-pet">
+      <div className="ara2-pet-media">
+        <button
+          type="button"
+          className="ara2-pet-photo-button"
+          onClick={() => onViewAnimal(animal)}
+          aria-label={`View ${animal.name}'s adoption profile`}
+        >
+          {image && !imageFailed ? (
+            <img
+              src={image}
+              alt={`${animal.name}, a ${animal.type} available for adoption`}
+              loading="lazy"
+              onError={() => setImageFailed(true)}
+            />
+          ) : (
+            <span className="ara2-photo-empty" aria-hidden="true"><IconPawPrint size={45} /></span>
+          )}
+          <span className="ara2-photo-reveal" aria-hidden="true">Meet {animal.name} <IconArrowRight size={17} /></span>
+        </button>
+        {photos.length > 1 && (
+          <>
+            <button
+              type="button"
+              className="ara2-pet-photo-nav prev"
+              aria-label={`Show previous photo of ${animal.name}`}
+              onClick={() => changePhoto(-1)}
+            >
+              <IconArrowLeft size={18} />
+            </button>
+            <button
+              type="button"
+              className="ara2-pet-photo-nav next"
+              aria-label={`Show next photo of ${animal.name}`}
+              onClick={() => changePhoto(1)}
+            >
+              <IconArrowRight size={18} />
+            </button>
+          </>
+        )}
+        <button
+          type="button"
+          className={`ara2-save${saved ? " is-saved" : ""}`}
+          aria-label={saved ? `Remove ${animal.name} from saved animals` : `Save ${animal.name}`}
+          aria-pressed={saved}
+          onClick={() => toggleFavorite(animal.id)}
+        >
+          <IconHeart size={19} aria-hidden="true" />
+        </button>
+      </div>
+      <div className="ara2-pet-meta">
+        <div>
+          <button className="ara2-pet-title" type="button" onClick={() => onViewAnimal(animal)}>{animal.name}</button>
+          <p>{meta || "Ready to meet someone special"}</p>
+        </div>
+        <span className="ara2-pet-species">{animal.type}</span>
+      </div>
+    </article>
+  );
+}
+
+export function HomePage({
+  isLoaded,
+  isSignedIn,
+  currentPage,
+  onNavigate,
+  onNavigateToStory,
+  onViewAnimal,
+}: HomePageProps) {
   const [animals, setAnimals] = useState<Animal[]>([]);
-  const [animalsLoading, setAnimalsLoading] = useState(true);
-  const [animalsError, setAnimalsError] = useState("");
-  const [heroSlide, setHeroSlide] = useState(0);
-  const [donateOpen, setDonateOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [retry, setRetry] = useState(0);
   const { isFavorite, toggle } = useFavoriteAnimals();
 
   useEffect(() => {
-    void fetch(`${apiBaseUrl}/api/animals`)
+    const controller = new AbortController();
+    // The existing public endpoint returns animals eligible for adoption.
+    void fetch(`${apiBaseUrl}/api/animals`, { signal: controller.signal })
       .then(async (response) => {
-        if (!response.ok)
-          throw new Error("Animal listings could not be loaded.");
+        if (!response.ok) throw new Error("We couldn't load the animals right now.");
         return (await response.json()) as Animal[];
       })
-      .then(setAnimals)
-      .catch((error: unknown) =>
-        setAnimalsError(
-          error instanceof Error
-            ? error.message
-            : "Animal listings could not be loaded.",
-        ),
-      )
-      .finally(() => setAnimalsLoading(false));
-  }, []);
+      .then((result) => {
+        if (!controller.signal.aborted) {
+          setAnimals(result);
+          setError("");
+        }
+      })
+      .catch((reason: unknown) => {
+        if (!controller.signal.aborted) {
+          setError(reason instanceof Error ? reason.message : "We couldn't load the animals right now.");
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
 
-  useEffect(() => {
-    const timer = setInterval(
-      () => setHeroSlide((current) => (current + 1) % HERO_SLIDES.length),
-      5000,
-    );
-    return () => clearInterval(timer);
-  }, []);
+    return () => controller.abort();
+  }, [retry]);
 
-  const availableDogs = animals.filter(
-    (animal) => animal.type === "dog",
-  ).length;
-  const availableCats = animals.filter(
-    (animal) => animal.type === "cat",
-  ).length;
-  const availableOther = animals.length - availableDogs - availableCats;
+  const featuredAnimals = animals.slice(0, 8);
+  const calloutPhoto = animals.find((animal) => animal.photoUrls?.[0])?.photoUrls?.[0] ?? spcaHero;
+
+  function retryAnimals() {
+    setLoading(true);
+    setError("");
+    setRetry((count) => count + 1);
+  }
 
   return (
-    <div className="home-page">
+    <div className="ara2-home">
       <SiteHeader
         isLoaded={isLoaded}
         isSignedIn={isSignedIn}
@@ -80,225 +192,152 @@ export function HomePage({ isLoaded, isSignedIn, currentPage, onNavigate, onView
         onNavigate={onNavigate}
       />
 
-      <main className="page-shell">
-        <section
-          className="hero-section slideshow-hero"
-          aria-label="Featured rescue animals"
-        >
-          <div className="slideshow-window" aria-hidden="true">
-            {HERO_SLIDES.map((src, index) => (
-              <div
-                key={src}
-                className={`slideshow-slide${index === heroSlide ? " active" : ""}`}
-                style={{ backgroundImage: `url(${src})` }}
-              />
-            ))}
-          </div>
-          <div className="slideshow-overlay" aria-hidden="true" />
-          <div className="slideshow-copy">
-            <p className="eyebrow">Fiji Islands • Est. 1964</p>
-            <h1>
-              Every animal deserves a <span>home</span>.
-            </h1>
-            <p className="lead-copy">
-              We rescue, care for, and rehome animals across Fiji with a simple,
-              compassionate system that brings together medical care, adoption,
-              and community support.
-            </p>
-            <div className="hero-actions">
-              <button
-                type="button"
-                className="teal-button"
-                onClick={() => onNavigate("animal-listings")}
-              >
-                Meet the animals
-              </button>
-              <button
-                type="button"
-                className="teal-button donate-button"
-                onClick={() => setDonateOpen(true)}
-              >
-                Donate & support
-              </button>
-            </div>
-          </div>
-        </section>
-
-        <section className="stats-strip" aria-label="Available animal counts">
-          {[
-            [String(animals.length), "Available animals"],
-            [String(availableDogs), "Dogs available"],
-            [String(availableCats), "Cats available"],
-            [String(availableOther), "Other pets available"],
-          ].map(([value, label]) => (
-            <div key={label} className="stat-item">
-              <strong>{animalsLoading ? "..." : value}</strong>
-              <span>{label}</span>
-            </div>
-          ))}
-        </section>
-        <section className="animals-section" id="adopt">
-          <p className="eyebrow adopt-eyebrow">Adopt a friend</p>
-          <div className="section-head">
-            <div className="section-head-copy">
-              <h2>Animals looking for homes</h2>
-            </div>
-            <button
-              type="button"
-              className="teal-button"
-              onClick={() => onNavigate("animal-listings")}
-            >
-              Browse all animals
-            </button>
-          </div>
-          <div className="animals-summary">
-            {animalsLoading ? (
-              <span
-                className="skeleton-bar skeleton-width-3"
-                aria-hidden="true"
-              />
-            ) : (
-              `${animals.length} animals currently available for adoption`
-            )}
-          </div>
-          <div className="filter-row" aria-label="Animal categories">
-            <button type="button" className="chip active">
-              All
-            </button>
-            <button type="button" className="chip">
-              Dogs
-            </button>
-            <button type="button" className="chip">
-              Cats
-            </button>
-            <button type="button" className="chip">
-              Small pets
-            </button>
-          </div>
-          <div className="animal-grid">
-            {animalsError && (
-              <p className="dashboard-data-state error">{animalsError}</p>
-            )}
-            {!animalsLoading && !animalsError && animals.length === 0 && (
-              <p className="dashboard-data-state">
-                No animals are currently listed for adoption.
-              </p>
-            )}
-            {animals.map((animal) => (
-              <article
-                key={animal.id}
-                className="pet-card"
-                role="link"
-                tabIndex={0}
-                onClick={() => onViewAnimal(animal)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    onViewAnimal(animal);
-                  }
-                }}
-              >
-                <div
-                  className="pet-card-photo"
-                  aria-label={`${animal.name} profile image`}
-                  style={
-                    animal.photoUrls[0]
-                      ? { backgroundImage: `url(${animal.photoUrls[0]})` }
-                      : undefined
-                  }
-                >
-                  {!animal.photoUrls[0] && (
-                    <span className="animal-image-label">{capitalize(animal.type)}</span>
-                  )}
+      <main id="main-content" className="ara2-main">
+        <section className="ara2-hero" aria-labelledby="ara2-hero-heading">
+          <div className="ara2-hero-scene">
+            <img
+              className="ara2-hero-background"
+              src={spcaHero}
+              alt="A dog at SPCA Fiji, waiting for a loving home"
+              fetchPriority="high"
+            />
+            <div className="ara2-hero-shade" aria-hidden="true" />
+            <div className="ara2-hero-content ara2-wrap">
+              <div className="ara2-hero-copy">
+                <h1 id="ara2-hero-heading">Say hello to <span>your new buddy.</span></h1>
+                <p>
+                  Every animal deserves a place to belong. Meet the wonderful
+                  companions waiting for their forever homes, or help an animal
+                  in need of rescue.
+                </p>
+                <div className="ara2-hero-buttons">
                   <button
                     type="button"
-                    className={isFavorite(animal.id) ? "favorite-button active" : "favorite-button"}
-                    aria-label={
-                      isFavorite(animal.id)
-                        ? `Remove ${animal.name} from saved`
-                        : `Save ${animal.name}`
-                    }
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      toggle(animal.id);
-                    }}
+                    className="ara2-button ara2-button-blue"
+                    onClick={() => onNavigate("animal-listings")}
                   >
-                    {isFavorite(animal.id) ? "♥" : "♡"}
+                    Adopt a pet <IconArrowRight size={19} aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    className="ara2-button ara2-button-outlined"
+                    onClick={() => onNavigate("rescue-report")}
+                  >
+                    Report a rescue
                   </button>
                 </div>
-                <div className="pet-card-body">
-                  <h3 className="pet-card-name">{animal.name}</h3>
-                  <p className="pet-card-breed">{animal.breed ?? "Breed not recorded"}</p>
-                  <AnimalTagChips tags={buildAnimalTags(animal)} />
-                  <p className="pet-card-line">
-                    <span aria-hidden="true">🐾</span>
-                    {animal.gender ?? "Gender unknown"} • {animal.estimatedAge ?? "Age unknown"}
-                  </p>
-                  <p className="pet-card-check">✓ Available for adoption</p>
-                </div>
-              </article>
-            ))}
+              </div>
+            </div>
+            <div className="ara2-hero-fade" aria-hidden="true" />
           </div>
         </section>
 
-        <section className="process-section" id="stories">
-          <div className="section-head center">
-            <div>
-              <p className="eyebrow">How it works</p>
-              <h2>Simple care, clear adoption steps</h2>
+        <section className="ara2-shortcuts ara2-wrap" aria-label="Ways to get involved">
+          <QuickAction
+            featured
+            icon={<IconPawPrint size={28} />}
+            title="Find your companion"
+            detail="Discover animals looking for a home"
+            onClick={() => onNavigate("animal-listings")}
+          />
+          <QuickAction
+            icon={<IconHeart size={28} />}
+            title="Help an animal in need"
+            detail="Send a rescue alert to SPCA Fiji"
+            onClick={() => onNavigate("rescue-report")}
+          />
+          <QuickAction
+            icon={<IconClipboard size={28} />}
+            title="Follow your rescue"
+            detail={isSignedIn ? "Check your submitted rescue alerts" : "Sign in to see your rescue alerts"}
+            onClick={() => onNavigate(isSignedIn ? "my-reports" : "login")}
+          />
+        </section>
+
+        <section className="ara2-gallery" aria-labelledby="ara2-adopt-heading">
+          <div className="ara2-wrap">
+            <div className="ara2-gallery-head">
+              <div className="ara2-gallery-heading">
+                <span className="ara2-overline">LOOKING FOR A LITTLE LOVE?</span>
+                <h2 id="ara2-adopt-heading">There's someone <span>waiting for you.</span></h2>
+                <p>Real faces, new beginnings. Get to know the animals waiting to find their people.</p>
+              </div>
+              <button type="button" className="ara2-view-all" onClick={() => onNavigate("animal-listings")}>Meet all animals <IconArrowRight size={19} aria-hidden="true" /></button>
+            </div>
+
+            {loading ? (
+              <div className="ara2-pet-grid" aria-label="Loading adoptable animals" aria-busy="true">
+                {Array.from({ length: 8 }, (_, index) => <div className="ara2-pet-skeleton" key={index}><div /><span /><small /></div>)}
+              </div>
+            ) : error ? (
+              <div className="ara2-empty" role="alert"><IconPawPrint size={34} /><h3>We'll be right back</h3><p>{error}</p><button type="button" className="ara2-button ara2-button-blue" onClick={retryAnimals}>Try again <IconArrowRight size={18} /></button></div>
+            ) : featuredAnimals.length === 0 ? (
+              <div className="ara2-empty" role="status"><IconPawPrint size={34} /><h3>No animals to show just yet</h3><p>New companions may be available soon. Please check again later.</p><button type="button" className="ara2-button ara2-button-blue" onClick={() => onNavigate("animal-listings")}>Browse animals <IconArrowRight size={18} /></button></div>
+            ) : (
+              <div className={`ara2-pet-grid ara2-count-${featuredAnimals.length}`}>
+                {featuredAnimals.map((animal) => (
+                  <PetCard
+                    key={animal.id}
+                    animal={animal}
+                    onViewAnimal={onViewAnimal}
+                    isFavorite={isFavorite}
+                    toggleFavorite={toggle}
+                  />
+                ))}
+              </div>
+            )}
+            <div className="ara2-gallery-bottom">
+              <button className="ara2-view-all" type="button" onClick={() => onNavigate("animal-listings")}>Explore the animals <IconArrowRight size={19} aria-hidden="true" /></button>
             </div>
           </div>
-          <div className="process-grid">
-            {[
-              [
-                "01",
-                "Browse animals",
-                "Explore profiles for calm, friendly companions ready for adoption.",
-              ],
-              [
-                "02",
-                "Apply to adopt",
-                "Share your home details and family preferences through a simple form.",
-              ],
-              [
-                "03",
-                "Bring them home",
-                "Meet your new companion and complete the final approval process.",
-              ],
-            ].map(([number, title, text]) => (
-              <div key={number} className="process-card">
-                <span className="step-number">{number}</span>
-                <h3>{title}</h3>
-                <p>{text}</p>
-              </div>
-            ))}
+        </section>
+
+        <section className="ara2-story" aria-labelledby="ara2-story-heading">
+          <div className="ara2-story-media">
+            <img src={rescueJourney} alt="A rescued dog receiving compassionate veterinary care" loading="lazy" />
+          </div>
+          <div className="ara2-story-wash" aria-hidden="true" />
+          <div className="ara2-wrap ara2-story-content">
+            <div className="ara2-story-copy">
+              <span className="ara2-overline">A SECOND CHANCE STARTS SOMEWHERE</span>
+              <h2 id="ara2-story-heading">A little kindness.<br /><em>A whole new life.</em></h2>
+              <p>From the first rescue alert to the care that follows, small actions make a real difference. Together, we can help animals find safety, comfort and a place to belong.</p>
+              <button className="ara2-story-link" type="button" onClick={onNavigateToStory}>Our story <IconArrowRight size={19} aria-hidden="true" /></button>
+            </div>
           </div>
         </section>
-        <section className="cta-strip" id="rescue">
-          <div>
-            <p className="eyebrow">Need help?</p>
-            <h2>Report a rescue and give an animal a second chance.</h2>
+
+        <section className="ara2-journey" aria-labelledby="ara2-journey-heading">
+          <div className="ara2-wrap">
+            <div className="ara2-journey-heading">
+              <span className="ara2-overline">A JOURNEY WORTH TAKING</span>
+              <h2 id="ara2-journey-heading">From first hello to <span>forever home.</span></h2>
+              <p>Finding the right companion is a little journey of its own. Here's how it begins.</p>
+            </div>
+            <div className="ara2-journey-grid">
+              <div className="ara2-journey-step"><span className="ara2-journey-number">01</span><span className="ara2-journey-line" aria-hidden="true" /><h3>Meet the animals</h3><p>Explore real profiles and find a companion you connect with.</p></div>
+              <div className="ara2-journey-step"><span className="ara2-journey-number">02</span><span className="ara2-journey-line" aria-hidden="true" /><h3>Share your interest</h3><p>Submit an application and tell the team a little about yourself.</p></div>
+              <div className="ara2-journey-step"><span className="ara2-journey-number">03</span><span className="ara2-journey-line" aria-hidden="true" /><h3>Stay connected</h3><p>Follow your application while SPCA reviews the next steps.</p></div>
+            </div>
           </div>
-          <div className="cta-actions">
-            <button
-              type="button"
-              className="teal-button"
-              onClick={() => onNavigate("rescue-report")}
-            >
-              Submit rescue alert
-            </button>
-            <button
-              type="button"
-              className="ghost-button light"
-              onClick={() => setDonateOpen(true)}
-            >
-              Donate
-            </button>
+        </section>
+
+        <section className="ara2-final" aria-labelledby="ara2-final-heading">
+          <img className="ara2-final-image" src={calloutPhoto} alt="" loading="lazy" />
+          <div className="ara2-final-tint" aria-hidden="true" />
+          <div className="ara2-wrap ara2-final-inner">
+            <div className="ara2-final-copy">
+              <span className="ara2-overline">EVERY LIFE MATTERS</span>
+              <h2 id="ara2-final-heading">Be the reason<br /><em>they get another chance.</em></h2>
+              <p>See an animal in need? Your rescue alert can help start the journey to safety and care.</p>
+              <button className="ara2-button ara2-button-white" type="button" onClick={() => onNavigate("rescue-report")}>Report an animal <IconArrowRight size={19} aria-hidden="true" /></button>
+            </div>
           </div>
+          <div className="ara2-final-fade" aria-hidden="true" />
         </section>
       </main>
-      <DonateModal open={donateOpen} onClose={() => setDonateOpen(false)} />
-      <SiteFooter />
+
+      <SiteFooter onNavigate={onNavigate} isSignedIn={isSignedIn} />
     </div>
   );
 }

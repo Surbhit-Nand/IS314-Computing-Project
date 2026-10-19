@@ -1,5 +1,5 @@
 import { useAuth, useUser } from "@clerk/react";
-import { Suspense, lazy, useCallback, useEffect, useRef } from "react";
+import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import spcaLogo from "./assets/spca-logo.png";
 import "./App.css";
 import "./features/veterinary/veterinary.css";
@@ -91,6 +91,9 @@ const VeterinaryUpcomingAppointments = lazy(() =>
     default: m.VeterinaryUpcomingAppointments,
   })),
 );
+const MyAnimals = lazy(() =>
+  import("./features/veterinary/MyAnimals").then((m) => ({ default: m.MyAnimals })),
+);
 import type { VeterinaryAppointment } from "./types/veterinary";
 import type { Animal } from "./types/animal";
 import { clearPendingAdoption, readPendingAdoption } from "./utils/pendingAdoption";
@@ -130,6 +133,9 @@ function App() {
     devBypass: isDevBypassEnabled,
   });
   const { view: activeView, selectedAnimalId, viewedAnimal } = navigation;
+  const selectedMyAnimalId = useRef<string | null>(selectedAnimalId ?? null);
+  const pendingAboutStoryScroll = useRef(false);
+  const previousView = useRef<View | null>(null);
   const veterinaryParent = navigation.veterinaryParent ?? "veterinary-dashboard";
   const invalidVeterinaryContext = useCallback(() => {
     navigateTo({ view: veterinaryParent }, true);
@@ -137,6 +143,43 @@ function App() {
   const invalidEditContext = useCallback(() => {
     navigateTo({ view: "manage-animals" }, true);
   }, [navigateTo]);
+
+  useLayoutEffect(() => {
+    if (!authReady || !historyReady) return;
+
+    const previous = previousView.current;
+    previousView.current = activeView;
+    if (previous === null || previous === activeView) return;
+
+    const root = document.getElementById("root");
+    if (!root || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    root.classList.remove("ara-route-transition");
+    void root.offsetWidth;
+    root.classList.add("ara-route-transition");
+
+    const finishTransition = (event: AnimationEvent) => {
+      if (event.target === root) root.classList.remove("ara-route-transition");
+    };
+    root.addEventListener("animationend", finishTransition);
+
+    return () => {
+      root.removeEventListener("animationend", finishTransition);
+      root.classList.remove("ara-route-transition");
+    };
+  }, [activeView, authReady, historyReady]);
+
+  useEffect(() => {
+    if (activeView !== "about" || !pendingAboutStoryScroll.current) return;
+    pendingAboutStoryScroll.current = false;
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById("about-our-story")?.scrollIntoView({
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+        block: "start",
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeView]);
 
   // Resumes a pending adoption across the sign-in/register round trip: if an
   // anonymous visitor clicked Adopt, the animal id was stashed in
@@ -158,6 +201,8 @@ function App() {
         if (cancelled || !Array.isArray(list)) return;
         const found = list.find((item) => item.id === pendingAnimalId);
         if (found) {
+          // The sign-in intent has been fulfilled; history now owns the form.
+          clearPendingAdoption();
           navigateTo({ view: "adoption-apply", viewedAnimal: found });
         } else {
           // Adopted, removed, or otherwise gone: drop the stash so it can
@@ -215,10 +260,24 @@ function App() {
   if (!authReady || !historyReady) return <PageLoadingFallback />;
 
   function navigate(nextView: View) {
+    // An explicit Home click abandons any saved sign-in adoption intent.
+    if (nextView === "home") clearPendingAdoption();
     // Profile <-> application carries this entry's animal, never a global last selection.
     navigateTo(nextView === "animal-profile" || nextView === "adoption-apply"
       ? { view: nextView, viewedAnimal }
+      : nextView === "my-animal-record" || nextView === "my-animal-booking"
+        ? { view: nextView, selectedAnimalId: selectedAnimalId ?? selectedMyAnimalId.current ?? undefined }
       : { view: nextView });
+  }
+
+  function navigateToAboutStory() {
+    pendingAboutStoryScroll.current = true;
+    navigate("about");
+  }
+
+  function selectMyAnimal(animalId: string) {
+    selectedMyAnimalId.current = animalId;
+    navigateTo({ view: "my-animal-record", selectedAnimalId: animalId });
   }
 
   function handleViewAnimal(animal: Animal) {
@@ -489,6 +548,23 @@ function App() {
     );
   }
 
+  if (
+    activeView === "my-animals" ||
+    activeView === "my-animal-record" ||
+    activeView === "my-animal-booking"
+  ) {
+    return (
+      <Suspense fallback={<PageLoadingFallback />}>
+        <MyAnimals
+          currentView={activeView}
+          animalId={selectedAnimalId ?? null}
+          onNavigate={navigate}
+          onSelectAnimal={selectMyAnimal}
+        />
+      </Suspense>
+    );
+  }
+
   if (activeView === "my-profile") {
     return (
       <Suspense fallback={<PageLoadingFallback />}>
@@ -515,6 +591,7 @@ function App() {
       isSignedIn={isSignedIn}
       currentPage="home"
       onNavigate={navigate}
+      onNavigateToStory={navigateToAboutStory}
       onViewAnimal={handleViewAnimal}
     />
   );
