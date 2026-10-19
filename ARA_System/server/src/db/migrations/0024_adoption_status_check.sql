@@ -1,0 +1,1 @@
+ALTER TABLE "adoption_applications" ADD CONSTRAINT "adoption_status_valid" CHECK ("adoption_applications"."status" IN ('submitted', 'under_review', 'approved', 'completed', 'rejected', 'withdrawn'));--> statement-breakpoint

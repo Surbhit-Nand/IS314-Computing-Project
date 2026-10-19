@@ -1,5 +1,5 @@
 import { useAuth, useUser } from "@clerk/react";
-import { Suspense, lazy, useCallback, useEffect } from "react";
+import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import spcaLogo from "./assets/spca-logo.png";
 import "./App.css";
 import "./features/veterinary/veterinary.css";
@@ -91,14 +91,18 @@ const VeterinaryUpcomingAppointments = lazy(() =>
     default: m.VeterinaryUpcomingAppointments,
   })),
 );
+const MyAnimals = lazy(() =>
+  import("./features/veterinary/MyAnimals").then((m) => ({ default: m.MyAnimals })),
+);
 import type { VeterinaryAppointment } from "./types/veterinary";
 import type { Animal } from "./types/animal";
+import { clearPendingAdoption, readPendingAdoption } from "./utils/pendingAdoption";
+import { apiBaseUrl, authHeaders } from "./services/apiClient.js";
+import { getFreshClerkToken } from "./utils/clerkToken";
 import { isDevBypassEnabled } from "./utils/devBypass";
 import { useAraNavigation } from "./navigation/useAraNavigation";
 import type { View, VeterinaryParent, CareScene } from "./navigation/araNavigation";
 export type { View } from "./navigation/araNavigation";
-import { clearPendingAdoption, readPendingAdoption } from "./utils/pendingAdoption";
-import { apiBaseUrl } from "./services/apiClient.js";
 
 function PageLoadingFallback() {
   return (
@@ -120,7 +124,7 @@ function PageLoadingFallback() {
 }
 
 function App() {
-  const { isLoaded, isSignedIn } = useAuth();
+  const { isLoaded, isSignedIn, getToken } = useAuth();
   const { user } = useUser();
   const authReady = isLoaded && (!isSignedIn || !!user);
   const { navigation, navigateTo, historyReady } = useAraNavigation(authReady, {
@@ -129,6 +133,9 @@ function App() {
     devBypass: isDevBypassEnabled,
   });
   const { view: activeView, selectedAnimalId, viewedAnimal } = navigation;
+  const selectedMyAnimalId = useRef<string | null>(selectedAnimalId ?? null);
+  const pendingAboutStoryScroll = useRef(false);
+  const previousView = useRef<View | null>(null);
   const veterinaryParent = navigation.veterinaryParent ?? "veterinary-dashboard";
   const invalidVeterinaryContext = useCallback(() => {
     navigateTo({ view: veterinaryParent }, true);
@@ -137,15 +144,54 @@ function App() {
     navigateTo({ view: "manage-animals" }, true);
   }, [navigateTo]);
 
+  useLayoutEffect(() => {
+    if (!authReady || !historyReady) return;
+
+    const previous = previousView.current;
+    previousView.current = activeView;
+    if (previous === null || previous === activeView) return;
+
+    const root = document.getElementById("root");
+    if (!root || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    root.classList.remove("ara-route-transition");
+    void root.offsetWidth;
+    root.classList.add("ara-route-transition");
+
+    const finishTransition = (event: AnimationEvent) => {
+      if (event.target === root) root.classList.remove("ara-route-transition");
+    };
+    root.addEventListener("animationend", finishTransition);
+
+    return () => {
+      root.removeEventListener("animationend", finishTransition);
+      root.classList.remove("ara-route-transition");
+    };
+  }, [activeView, authReady, historyReady]);
+
+  useEffect(() => {
+    if (activeView !== "about" || !pendingAboutStoryScroll.current) return;
+    pendingAboutStoryScroll.current = false;
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById("about-our-story")?.scrollIntoView({
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+        block: "start",
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeView]);
+
   // Resumes a pending adoption across the sign-in/register round trip: if an
   // anonymous visitor clicked Adopt, the animal id was stashed in
-  // localStorage (see AnimalProfilePage). Once a session exists and the
-  // visitor is on the public Home landing, reload that animal from the public
-  // listing so the form survives auth and reloads. Staff-first landing wins -
-  // staff accounts land on their own dashboard (not the public Home), so they
-  // are never pulled into the form.
+  // localStorage (see AnimalProfilePage). Once a session exists and no animal
+  // is in memory, reload that animal from the public listing so the form
+  // survives auth and reloads. Staff-first landing wins - staff accounts keep
+  // their dashboard instead of being pulled into the form.
   useEffect(() => {
-    if (!isLoaded || !isSignedIn || !user || viewedAnimal || activeView !== "home") return;
+    if (!authReady || !historyReady || !isSignedIn || !user || viewedAnimal) return;
+    if (activeView !== "home") return;
+    // Any staff-type role lands on its dashboard, never the adoption form.
+    if (user.publicMetadata.role) return;
     const pendingAnimalId = readPendingAdoption();
     if (!pendingAnimalId) return;
     let cancelled = false;
@@ -153,28 +199,88 @@ function App() {
       .then((response) => (response.ok ? (response.json() as Promise<Animal[]>) : []))
       .then((list) => {
         if (cancelled || !Array.isArray(list)) return;
+        // Single-use stash: consume it as soon as the listing (the evidence we
+        // need) comes back, so it can never be replayed. The animal then lives
+        // in the navigation state, and a reload/back-forward still lands on the
+        // form without it. A failed fetch keeps the stash for a later retry.
+        clearPendingAdoption();
         const found = list.find((item) => item.id === pendingAnimalId);
         if (found) {
-          navigateTo({ view: "adoption-apply", viewedAnimal: found });
-        } else {
-          // Adopted, removed, or otherwise gone: drop the stash so it can
-          // never resurface, and leave the visitor where they are.
+          // The sign-in intent has been fulfilled; history now owns the form.
           clearPendingAdoption();
+          navigateTo({ view: "adoption-apply", viewedAnimal: found });
         }
+        // Not found (adopted, removed, or otherwise gone): the stash is already
+        // dropped above, so leave the visitor where they are.
       })
       .catch(() => undefined);
     return () => {
       cancelled = true;
     };
-  }, [isLoaded, isSignedIn, user, viewedAnimal, activeView, navigateTo]);
+  }, [authReady, historyReady, isSignedIn, user, viewedAnimal, activeView, navigateTo]);
+
+  // Invitation role reconcile: the Clerk user.created webhook normally stamps
+  // publicMetadata.role from the staff invitation, but in local dev Clerk can't
+  // POST to localhost (no public URL), and an EXISTING account accepting an
+  // invitation only fires user.updated - which may also never arrive. Without
+  // a role the invitee is 403'd everywhere, so on session load ask our own
+  // API to self-reconcile: if a pending/accepted invitation matches this
+  // user's email and they have no role yet, it stamps one. Runs once per
+  // user per page load and only for role-less accounts; a successful stamp
+  // reloads the Clerk user so the navigation session below picks the new
+  // role up (landingView routes them to their dashboard) without a refresh.
+  const reconcileAttemptedForUserId = useRef<string | null>(null);
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn || !user) return;
+    if (user.publicMetadata.role) return;
+    if (reconcileAttemptedForUserId.current === user.id) return;
+    reconcileAttemptedForUserId.current = user.id;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const token = await getFreshClerkToken(getToken);
+        if (!token || cancelled) return;
+        const response = await fetch(`${apiBaseUrl}/api/admin/invitations/reconcile`, {
+          method: "POST",
+          headers: authHeaders(token),
+        });
+        if (!response.ok || cancelled) return;
+        const result = (await response.json()) as { role: string | null; stamped: boolean };
+        if (result.stamped && !cancelled) {
+          await user.reload();
+        }
+      } catch {
+        // Best-effort fallback only - the webhook path still applies where
+        // it works (e.g. production), so a failure here must not block the UI.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoaded, isSignedIn, user, getToken]);
 
   if (!authReady || !historyReady) return <PageLoadingFallback />;
 
   function navigate(nextView: View) {
+    // An explicit Home click abandons any saved sign-in adoption intent.
+    if (nextView === "home") clearPendingAdoption();
     // Profile <-> application carries this entry's animal, never a global last selection.
     navigateTo(nextView === "animal-profile" || nextView === "adoption-apply"
       ? { view: nextView, viewedAnimal }
+      : nextView === "my-animal-record" || nextView === "my-animal-booking"
+        ? { view: nextView, selectedAnimalId: selectedAnimalId ?? selectedMyAnimalId.current ?? undefined }
       : { view: nextView });
+  }
+
+  function navigateToAboutStory() {
+    pendingAboutStoryScroll.current = true;
+    navigate("about");
+  }
+
+  function selectMyAnimal(animalId: string) {
+    selectedMyAnimalId.current = animalId;
+    navigateTo({ view: "my-animal-record", selectedAnimalId: animalId });
   }
 
   function handleViewAnimal(animal: Animal) {
@@ -445,6 +551,23 @@ function App() {
     );
   }
 
+  if (
+    activeView === "my-animals" ||
+    activeView === "my-animal-record" ||
+    activeView === "my-animal-booking"
+  ) {
+    return (
+      <Suspense fallback={<PageLoadingFallback />}>
+        <MyAnimals
+          currentView={activeView}
+          animalId={selectedAnimalId ?? null}
+          onNavigate={navigate}
+          onSelectAnimal={selectMyAnimal}
+        />
+      </Suspense>
+    );
+  }
+
   if (activeView === "my-profile") {
     return (
       <Suspense fallback={<PageLoadingFallback />}>
@@ -471,6 +594,7 @@ function App() {
       isSignedIn={isSignedIn}
       currentPage="home"
       onNavigate={navigate}
+      onNavigateToStory={navigateToAboutStory}
       onViewAnimal={handleViewAnimal}
     />
   );

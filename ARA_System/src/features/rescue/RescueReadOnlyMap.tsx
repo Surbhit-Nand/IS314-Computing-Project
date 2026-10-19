@@ -21,7 +21,14 @@ export function RescueReadOnlyMap({ latitude, longitude }: RescueReadOnlyMapProp
     addOsmTileLayer(map);
     L.marker([latitude, longitude], { icon: RESCUE_MARKER_ICON }).addTo(map);
     map.scrollWheelZoom.disable();
+    // Grid and tab layouts can resize after Leaflet measures the initial map.
+    const observer = new ResizeObserver(() => {
+      map.invalidateSize({ pan: false });
+      map.setView([latitude, longitude], map.getZoom(), { animate: false });
+    });
+    observer.observe(container);
     return () => {
+      observer.disconnect();
       map.remove();
     };
   }, [latitude, longitude]);

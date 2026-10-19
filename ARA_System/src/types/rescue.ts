@@ -4,6 +4,18 @@ export type RescueUrgency = "low" | "moderate" | "high" | "critical";
 
 export type RescueReportSource = "online" | "phone";
 
+export type RescueAlertAnimalType = "dog" | "cat" | "other";
+
+export const RESCUE_ALERT_ANIMAL_TYPE_OPTIONS: {
+  value: RescueAlertAnimalType | "";
+  label: string;
+}[] = [
+  { value: "", label: "Not sure" },
+  { value: "dog", label: "Dog" },
+  { value: "cat", label: "Cat" },
+  { value: "other", label: "Other" },
+];
+
 export type RescueReportStatus =
   | "submitted"
   | "assigned"
@@ -124,6 +136,36 @@ export type RescueMission = RescueReport & {
   debrief: RescueDebrief | null;
   intakeHandoff: RescueIntakeHandoff | null;
   summary: string;
+  // Takeover-request context, attached by the dispatcher-facing mission
+  // endpoints. `takeoverRequests` are pending requests on a mission the viewer
+  // owns (owner view); `myTakeoverRequest` is the viewer's own pending request
+  // on someone else's Assigned mission. Optional because not every mission
+  // response carries them.
+  takeoverRequests?: RescueTakeoverRequest[];
+  myTakeoverRequest?: RescueTakeoverRequest | null;
+};
+
+// A dispatcher's request to take an Assigned mission over from the dispatcher
+// currently holding it. Backed by the rescue_takeover_requests table.
+export type RescueTakeoverRequestStatus =
+  | "pending"
+  | "approved"
+  | "declined"
+  | "withdrawn"
+  | "cancelled";
+
+export type RescueTakeoverRequest = {
+  id: string;
+  reportId: string;
+  requestedByClerkUserId: string;
+  requestedByName: string | null;
+  assignedToClerkUserId: string;
+  reason: string;
+  status: RescueTakeoverRequestStatus;
+  decidedByClerkUserId: string | null;
+  decidedAt: string | null;
+  decisionNote: string | null;
+  createdAt: string;
 };
 
 // An intake handoff with its original alert attached for the intake team.
@@ -140,7 +182,7 @@ export type RescueReportFormInput = {
   location: string;
   latitude: number | null;
   longitude: number | null;
-  animalType: string;
+  animalType: RescueAlertAnimalType | "";
   animalBreed: string;
   conditionDescription: string;
   urgency: RescueUrgency;

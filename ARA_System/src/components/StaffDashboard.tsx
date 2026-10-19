@@ -2,6 +2,12 @@ import { SignInButton, useAuth, useUser } from "@clerk/react";
 import spcaLogo from "../assets/spca-logo.png";
 import { isDevBypassEnabled } from "../utils/devBypass";
 import { SiteHeader, type SiteHeaderView } from "./SiteHeader";
+import { useCallback, useEffect, useState } from "react";
+import { fetchStaffAnimals } from "../services/animalsApi";
+import { fetchAllAdoptionApplications } from "../services/adoptionsApi";
+import { fetchAllRescueReports } from "../services/rescueApi";
+import { useAccountRefresh } from "../utils/useAccountRefresh";
+import { IconPawPrint, IconClipboard, IconHeart, IconMedical } from "./MedicalIcons";
 
 type StaffDashboardProps = {
   onNavigate: (
@@ -11,15 +17,8 @@ type StaffDashboardProps = {
 
 type StaffRole = "staff" | "veterinarian";
 
-const queueItems = [
-  ["Rescue alerts", "6 alerts need an initial review", "urgent"],
-  ["Animals awaiting intake", "4 animals need profile details", "active"],
-  ["Adoption applications", "8 applications are ready for review", "pending"],
-  ["Medical follow-ups", "3 appointments are scheduled today", "medical"],
-];
-
 export function StaffDashboard({ onNavigate }: StaffDashboardProps) {
-  const { isLoaded, isSignedIn } = useAuth();
+  const { isLoaded, isSignedIn, getToken } = useAuth();
   const { user } = useUser();
   const role = user?.publicMetadata.role;
   const hasStaffAccess = isDevBypassEnabled || role === "staff" || role === "veterinarian";
@@ -28,6 +27,45 @@ export function StaffDashboard({ onNavigate }: StaffDashboardProps) {
     veterinarian: "Veterinarian",
   };
   const currentRole = roleLabel[role as StaffRole] ?? "Staff";
+  const [counts, setCounts] = useState<{ rescue: number | null; intake: number | null; applications: number | null; care: number | null } | null>(null);
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  const refresh = useCallback(async () => {
+    try {
+      const token = await getToken();
+      if (!token) return;
+      const [animals, applications, reports] = await Promise.allSettled([
+        fetchStaffAnimals(token), fetchAllAdoptionApplications(token), fetchAllRescueReports(token),
+      ]);
+      setCounts({
+        rescue: reports.status === "fulfilled" ? reports.value.filter((entry) => entry.status === "submitted").length : null,
+        intake: animals.status === "fulfilled" ? animals.value.filter((entry) => entry.status === "intake").length : null,
+        care: animals.status === "fulfilled" ? animals.value.filter((entry) => entry.status === "in_treatment").length : null,
+        applications: applications.status === "fulfilled" ? applications.value.filter((entry) => ["submitted", "under_review"].includes(entry.status)).length : null,
+      });
+      setError([animals, applications, reports].some((entry) => entry.status === "rejected") ? "Some work queue information is unavailable. Counts shown as — could not be loaded." : "");
+      setUpdatedAt(new Date().toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit", timeZone: "Pacific/Fiji" }));
+    } catch { setCounts(null); setError("Work queue information could not be loaded."); }
+  }, [getToken]);
+  useEffect(() => {
+    if (!isSignedIn || !hasStaffAccess) return;
+    const timer = window.setTimeout(() => { void refresh(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [isSignedIn, hasStaffAccess, refresh]);
+  const backgroundRefresh = useCallback(() => { void refresh(); }, [refresh]);
+  useAccountRefresh(Boolean(isSignedIn && hasStaffAccess), backgroundRefresh);
+  // Work-queue rows double as shortcuts to the screen that resolves them.
+  const queueItems: Array<{
+    title: string;
+    detail: string;
+    status: string;
+    view: SiteHeaderView;
+  }> = [
+    { title: "Rescue alerts", detail: counts?.rescue == null ? "Unavailable" : `${counts.rescue} awaiting initial review`, status: "urgent", view: "manage-rescue-reports" },
+    { title: "Animals awaiting intake", detail: counts?.intake == null ? "Unavailable" : `${counts.intake} animals at intake`, status: "active", view: "manage-animals" },
+    { title: "Adoption applications", detail: counts?.applications == null ? "Unavailable" : `${counts.applications} awaiting review`, status: "pending", view: "manage-adoption-applications" },
+    { title: "Animals in treatment", detail: counts?.care == null ? "Unavailable" : `${counts.care} animals receiving care`, status: "medical", view: "veterinary-dashboard" },
+  ];
 
   if (!isLoaded || !isSignedIn) {
     return (
@@ -85,82 +123,40 @@ export function StaffDashboard({ onNavigate }: StaffDashboardProps) {
         onNavigate={onNavigate}
       />
 
-      <section className="dashboard-welcome">
+      <section className="staff-overview-header">
         <div>
-          <span className="role-pill teal-pill">{currentRole}</span>
-          <p className="eyebrow">Today&apos;s priorities</p>
-          <h2>Keep every animal moving toward care.</h2>
-          <p>
-            Welcome back, {user?.firstName ?? "team member"}. Review the queue
-            and keep rescue, intake, adoption, and medical records up to date.
-          </p>
-          <button
-            type="button"
-            className="text-button"
-            onClick={() => onNavigate("my-profile")}
-          >
-            Edit my profile
-          </button>
+          <p className="eyebrow">Staff overview</p>
+          <h1>Welcome back, {user?.firstName ?? "team member"}.</h1>
+          <p>Your rescue, intake and adoption queues at a glance.</p>
         </div>
-        <div className="dashboard-actions">
-          <button
-            type="button"
-            className="dashboard-action-button"
-            onClick={() => onNavigate("manage-rescue-reports")}
-          >
-            Rescue Alerts
-          </button>
-          <button
-            type="button"
-            className="dashboard-action-button"
-            onClick={() => onNavigate("manage-adoption-applications")}
-          >
-            Adoption Applications
-          </button>
-          <button
-            type="button"
-            className="dashboard-action-button"
-            onClick={() => onNavigate("register-animal")}
-          >
-            Register Animal
-          </button>
-          <button
-            type="button"
-            className="dashboard-action-button"
-            onClick={() => onNavigate("manage-animals")}
-          >
-            Manage Animal Profiles
-          </button>
-          <button
-            type="button"
-            className="dashboard-action-button"
-            onClick={() => onNavigate("home")}
-          >
-            View Public Listings
-          </button>
-        </div>
+        <span className="staff-overview-role">{currentRole}</span>
       </section>
 
+      {error && <p className="form-error" role="alert">{error}</p>}
       <section className="dashboard-metrics" aria-label="Staff work summary">
         <article>
+          <span className="workspace-metric-icon"><IconClipboard size={18} /></span>
           <span>Rescue alerts</span>
-          <strong>6</strong>
+          <strong>{counts?.rescue ?? "—"}</strong>
           <small>Awaiting initial review</small>
         </article>
         <article>
+          <span className="workspace-metric-icon"><IconPawPrint size={18} /></span>
           <span>Animals to intake</span>
-          <strong>4</strong>
+          <strong>{counts?.intake ?? "—"}</strong>
           <small>Profiles need attention</small>
         </article>
         <article>
+          <span className="workspace-metric-icon"><IconHeart size={18} /></span>
           <span>Applications</span>
-          <strong>8</strong>
+          <strong>{counts?.applications ?? "—"}</strong>
           <small>Ready for review</small>
         </article>
         <article>
-          <span>Appointments today</span>
-          <strong>3</strong>
-          <small>Scheduled follow-ups</small>
+          <span className="workspace-metric-icon"><IconMedical size={18} /></span>
+          <span>Animals in treatment</span>
+          <strong>{counts?.care ?? "—"}</strong>
+          <small>Currently receiving care</small>
         </article>
       </section>
 
@@ -170,17 +166,23 @@ export function StaffDashboard({ onNavigate }: StaffDashboardProps) {
             <p className="eyebrow">Work queue</p>
             <h2>Items needing attention</h2>
           </div>
-          <span className="panel-note">Updated just now</span>
+          <span className="panel-note">{updatedAt ? `Last checked ${updatedAt} Fiji time` : "Loading work queue…"}</span>
         </div>
         <div className="activity-list">
-          {queueItems.map(([title, detail, status]) => (
+          {queueItems.map(({ title, detail, status, view }) => (
             <div key={title}>
               <span className={`activity-dot ${status}`} />
               <p>
                 <strong>{title}</strong>
                 <span>{detail}</span>
               </p>
-              <span className="role-pill muted">Open queue</span>
+              <button
+                type="button"
+                className="mini-button"
+                onClick={() => onNavigate(view)}
+              >
+                Open queue
+              </button>
             </div>
           ))}
         </div>

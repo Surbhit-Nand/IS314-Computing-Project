@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { IconArrowLeft, IconCalendar, IconCheck, IconClock, IconNotes, IconUser } from "../../components/MedicalIcons";
-import { SiteHeader } from "../../components/SiteHeader";
+import { VeterinaryNavbar } from "./components/VeterinaryNavbar";
 import { completeAppointment, fetchMedicalRecord } from "../../services/veterinaryApi";
 import type { MedicalRecord, VeterinaryAppointment } from "../../types/veterinary";
 import type { VeterinaryView } from "./vetTypes";
@@ -18,7 +18,7 @@ type Props = {
 };
 
 export function FollowUpAppointmentPage({ appointment: entry, getToken, onNavigate, onRefresh, parentView = "veterinary-dashboard" }: Props) {
-  const { appointment, animal } = entry;
+ const { appointment, animal, adopterName } = entry;
   const [record, setRecord] = useState<MedicalRecord | null>(null);
   const [status, setStatus] = useState(appointment.status);
   const [error, setError] = useState("");
@@ -73,7 +73,7 @@ export function FollowUpAppointmentPage({ appointment: entry, getToken, onNaviga
 
   return (
     <main className="vm-page">
-      <SiteHeader isLoaded isSignedIn currentPage="user-dashboard" onNavigate={onNavigate} hideSiteNav />
+      <VeterinaryNavbar currentView="vet-appointment-details" onNavigate={onNavigate} />
       <div className="vm-container">
         <div className="vm-record-top" style={{ marginBottom: 14 }}>
           <button type="button" className="ghost-button compact-action" onClick={() => onNavigate(parentView)}><IconArrowLeft size={13} /> Back to {parentView === "vet-appointments" ? "appointments" : "dashboard"}</button>
@@ -98,7 +98,12 @@ export function FollowUpAppointmentPage({ appointment: entry, getToken, onNaviga
 
         <div className="vm-layout" style={{ marginTop: 20 }}>
           <div className="vm-main">
-            <Card title="Appointment details" detail="Follow-up veterinary visit booked for this animal.">
+            <Card
+              title="Appointment details"
+              detail={appointment.source === "owner_booked"
+                ? "Appointment booked by this animal's adopter."
+                : "Follow-up veterinary visit booked for this animal."}
+            >
               <div className="vm-detail-grid">
                 <div className="vm-detail-item">
                   <span><IconCalendar size={12} /> Date</span>
@@ -115,7 +120,7 @@ export function FollowUpAppointmentPage({ appointment: entry, getToken, onNaviga
                 </div>
                 <div className="vm-detail-item">
                   <span><IconUser size={12} /> Booked by</span>
-                  <strong>{appointment.notes ? appointment.notes.replace(/^Booked by\s*/i, "") : "SPCA account holder"}</strong>
+                  <strong>{adopterName ?? (appointment.notes ? appointment.notes.replace(/^Booked by\s*/i, "") : "SPCA account holder")}</strong>
                 </div>
               </div>
               {appointment.visitDetails ? <p className="vm-quote" style={{ marginTop: 14 }}>{appointment.visitDetails}</p> : null}

@@ -3,7 +3,11 @@ import type { animals } from "../../db/schema.js";
 type AnimalRow = typeof animals.$inferSelect;
 
 export type AnimalSearchFilters = {
-	type?: Exclude<AnimalRow["type"], "other">;
+	// Dog and cat only. Rabbits, hamsters etc. are species "other" with the
+	// animal type in `breed` (migration 0015), so a word like "rabbit" is left
+	// to the semantic match on "Breed: Holland Lop Rabbit" rather than becoming
+	// a hard type filter that would match nothing.
+	type?: Exclude<AnimalRow["type"], "other" | "rabbit">;
 	size?: NonNullable<AnimalRow["size"]>;
 	// Gender is free text in the database; these are the registration form values.
 	gender?: "Male" | "Female";
@@ -50,11 +54,11 @@ export function parseAnimalSearchIntent(semanticQuery: string): AnimalSearchInte
 
 	// Longest phrases first: "extra large" must never also count as "large",
 	// and "not vaccinated" must never also count as "vaccinated".
-	const tokens = /\b(?:not[ -]+vaccinated|extra[ -]+large|dogs?|cats?|rabbits?|small|medium|large|male|female|vaccinated)\b/g;
+	const tokens = /\b(?:not[ -]+vaccinated|extra[ -]+large|dogs?|cats?|small|medium|large|male|female|vaccinated)\b/g;
 	for (const match of text.matchAll(tokens)) {
 		const token = match[0].replace(/-/g, " ").replace(/\s+/g, " ");
 		let field: keyof AnimalSearchFilters;
-		if (/^(dog|cat|rabbit)s?$/.test(token)) {
+		if (/^(dog|cat)s?$/.test(token)) {
 			field = "type";
 			types.push(token.replace(/s$/, "") as NonNullable<AnimalSearchFilters["type"]>);
 		} else if (["small", "medium", "large", "extra large"].includes(token)) {

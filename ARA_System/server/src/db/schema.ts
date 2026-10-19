@@ -1,5 +1,6 @@
 import {
 	boolean,
+	check,
 	date,
 	doublePrecision,
 	integer,
@@ -51,6 +52,13 @@ export const animals = pgTable("animals", {
 	publicId: text("public_id").notNull().unique(),
 	name: text("name").notNull(),
 	type: animalType("type").notNull(),
+	// The species staff typed for an animal whose `type` is "other" (e.g.
+	// "Rabbit", "Guinea Pig"), capitalised. Always null for dogs and cats -
+	// their species is `type`. Added by migration 0016, which split it out of
+	// `breed` (where Other animals used to keep it) for existing rows.
+	speciesName: text("species_name"),
+	// A listed `breeds` name for dogs/cats, or a typed breed validated by
+	// validateTypedBreedName (e.g. "Russian Blue Mix", "Holland Lop", "Unknown").
 	breed: text("breed"),
 	estimatedAge: text("estimated_age"),
 	gender: text("gender"),
@@ -94,6 +102,39 @@ export const animals = pgTable("animals", {
 	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 	updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// The listed breeds per species - dogs and cats, and typed "other" species
+// such as Rabbit (species "other" + species_name). The Breed dropdown is
+// loaded from here, and a listed breed is stored in this table's spelling. A
+// breed that isn't listed (typed via the dropdown's "Other" option, a legacy
+// value like "Russian Blue Mix", or any breed of a species with no list such
+// as Snake) is accepted only if it passes validateTypedBreedName, and is never
+// added here automatically. Seeded by `npm run db:seed:breeds` (safe to
+// re-run). Animals store the breed as plain text rather than a foreign key,
+// which is what makes typed breeds possible.
+export const breeds = pgTable(
+	"breeds",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		species: animalType("species").notNull(),
+		// For species "other": the typed species this breed belongs to
+		// ("Rabbit"), matched case-insensitively. Null for dog/cat rows.
+		// Added by migration 0017.
+		speciesName: text("species_name"),
+		name: text("name").notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+	},
+	// One row per (species, species name, breed), ignoring case - so "Mixed
+	// breed" or "Rex" can exist for each species. COALESCE makes dog/cat rows'
+	// null species_name compare equal.
+	(table) => [
+		uniqueIndex("breeds_species_species_name_name_unique").on(
+			table.species,
+			sql`lower(coalesce(${table.speciesName}, ''))`,
+			sql`lower(${table.name})`,
+		),
+	],
+);
 
 export const rescueReports = pgTable("rescue_reports", {
 	id: uuid("id").defaultRandom().primaryKey(),
@@ -229,6 +270,43 @@ export const rescueIntakeHandoffs = pgTable("rescue_intake_handoffs", {
 	receivedAt: timestamp("received_at", { withTimezone: true }),
 });
 
+// A dispatcher asking to take an Assigned mission over from the dispatcher
+// currently holding it. The mission stays with its owner while a request is
+// pending; only the owner can approve (which transfers the assignment) or
+// decline. Kept as its own table so every request and decision is an immutable
+// record of who asked, who transferred to whom, when, and why - the mission's
+// alert details, photos, and history are never touched by a takeover.
+export const rescueTakeoverRequests = pgTable(
+	"rescue_takeover_requests",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		reportId: uuid("report_id").notNull().references(() => rescueReports.id),
+		// The dispatcher requesting the takeover - becomes the new owner when
+		// the current owner approves.
+		requestedByClerkUserId: text("requested_by_clerk_user_id").notNull(),
+		// Display name denormalized like rescue_reports.assigned_to so the
+		// owner-facing list never needs a Clerk lookup.
+		requestedByName: text("requested_by_name"),
+		// The owner at request time (the only dispatcher who may decide).
+		assignedToClerkUserId: text("assigned_to_clerk_user_id").notNull(),
+		reason: text("reason").notNull(),
+		// 'pending' | 'approved' | 'declined' | 'withdrawn' | 'cancelled'
+		status: text("status").notNull().default("pending"),
+		decidedByClerkUserId: text("decided_by_clerk_user_id"),
+		decidedAt: timestamp("decided_at", { withTimezone: true }),
+		decisionNote: text("decision_note"),
+		createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+	},
+	(table) => [
+		// One pending request per dispatcher per mission - a dispatcher cannot
+		// spam duplicate requests. Enforced at the DB level so two concurrent
+		// submissions can never both land.
+		uniqueIndex("rescue_takeover_pending_unique")
+			.on(table.reportId, table.requestedByClerkUserId)
+			.where(sql`${table.status} = 'pending'`),
+	],
+);
+
 export const adoptionApplications = pgTable(
 	"adoption_applications",
 	{
@@ -321,6 +399,13 @@ export const adoptionApplications = pgTable(
 		uniqueIndex("adoption_animal_unique_active")
 			.on(table.animalId)
 			.where(sql`${table.status} IN ('approved', 'completed')`),
+		// The lifecycle code keeps status as free text, so constrain it at the
+		// database too: no code path (or manual edit) can store an unknown
+		// status. Requires a migration to take effect on the live DB.
+		check(
+			"adoption_status_valid",
+			sql`${table.status} IN ('submitted', 'under_review', 'approved', 'completed', 'rejected', 'withdrawn')`,
+		),
 	],
 );
 
@@ -349,7 +434,11 @@ export const vetAppointments = pgTable("vet_appointments", {
 	source: text("source").notNull().default("online"),
 	status: text("status").notNull().default("booked"),
 	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-}, (table) => [uniqueIndex("vet_appointment_slot_unique").on(table.appointmentDate)]);
+}, (table) => [
+	uniqueIndex("vet_appointment_slot_unique")
+		.on(table.appointmentDate)
+		.where(sql`${table.status} = 'booked'`),
+]);
 
 export const veterinaryExaminations = pgTable("veterinary_examinations", {
 	id: uuid("id").defaultRandom().primaryKey(),
@@ -392,6 +481,35 @@ export const veterinaryTreatmentHistory = pgTable("veterinary_treatment_history"
 	performedByClerkUserId: text("performed_by_clerk_user_id").notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// One row per emergency episode. Closing retains the episode; a future
+// emergency starts a new row with no attending veterinarian. Ownership and
+// support changes are coordination events in audit_logs.
+// Writers must check/increment version atomically and stamp updatedAt and
+// updatedByClerkUserId. Clerk identities remain text, as in medical records.
+export const veterinaryEmergencyResponses = pgTable(
+	"veterinary_emergency_responses",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		animalId: uuid("animal_id").notNull().references(() => animals.id),
+		attendingVeterinarianClerkUserId: text("attending_veterinarian_clerk_user_id"),
+		supportRequired: boolean("support_required").notNull().default(false),
+		coordinationNote: text("coordination_note"),
+		version: integer("version").notNull().default(1),
+		updatedByClerkUserId: text("updated_by_clerk_user_id").notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+		updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+		closedAt: timestamp("closed_at", { withTimezone: true }),
+	},
+	(table) => [
+		uniqueIndex("veterinary_emergency_responses_active_animal_idx")
+			.on(table.animalId).where(sql`${table.closedAt} IS NULL`),
+		check("veterinary_emergency_responses_version_positive", sql`${table.version} > 0`),
+		check("veterinary_emergency_responses_updated_after_created", sql`${table.updatedAt} >= ${table.createdAt}`),
+		check("veterinary_emergency_responses_closed_after_created", sql`${table.closedAt} IS NULL OR ${table.closedAt} >= ${table.createdAt}`),
+		check("veterinary_emergency_responses_closed_unassigned", sql`${table.closedAt} IS NULL OR (${table.attendingVeterinarianClerkUserId} IS NULL AND ${table.supportRequired} = false)`),
+	],
+);
 
 export const auditLogs = pgTable("audit_logs", {
 	id: uuid("id").defaultRandom().primaryKey(),
@@ -444,6 +562,7 @@ export const notifications = pgTable("notifications", {
 	body: text("body"),
 	entityType: text("entity_type"),
 	entityId: text("entity_id"),
+	actionId: text("action_id"),
 	readAt: timestamp("read_at", { withTimezone: true }),
 	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

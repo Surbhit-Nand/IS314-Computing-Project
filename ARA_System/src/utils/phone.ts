@@ -68,7 +68,69 @@ export function expectedLengthLabel(code: string = DEFAULT_DIAL_CODE): string {
     : `${band.minLength}–${band.maxLength} digits`;
 }
 
+// Live-typing guard for the national number input. Desktop keyboards,
+// autofill and paste can all insert letters despite inputMode="numeric", so
+// the input strips anything that isn't a digit or a common phone separator
+// on every keystroke. Mirrors the charset isValidPhoneNational accepts, so
+// anything reaching state is submittable (length is still checked on submit).
+export function sanitizePhoneNational(value: string): string {
+	return value.replace(/[^0-9\s+\-()]/g, "");
+}
+
 // Digit count of the typed national part (for the live counter).
 export function countPhoneDigits(national: string): number {
   return national.replace(/\D/g, "").length;
+}
+
+// ---- Fiji-only helpers ----------------------------------------------------
+// The public rescue alert form drops the country picker, so every reporter
+// number is +679 with a 7-digit national part. These helpers normalize what
+// the reporter types or pastes and produce the one stored shape.
+
+export const FIJI_COUNTRY_CODE = "679";
+export const FIJI_PHONE_DIGITS = 7;
+export const FIJI_PHONE_ERROR = "Enter a valid 7-digit Fiji phone number.";
+
+// Returns the 7 national digits for any Fiji number, or null when it is a
+// different country's code or the wrong length. Accepts "9900000",
+// "990 0000", "6799900000" and "+679 990 0000".
+export function normalizeFijiPhone(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const compact = trimmed.replace(/[\s\-().]/g, "");
+  let digits: string;
+  if (compact.startsWith("+")) {
+    if (!compact.startsWith(`+${FIJI_COUNTRY_CODE}`)) return null;
+    digits = compact.slice(FIJI_COUNTRY_CODE.length + 1);
+  } else {
+    digits = compact;
+    if (digits.length > FIJI_PHONE_DIGITS && digits.startsWith(FIJI_COUNTRY_CODE)) {
+      digits = digits.slice(FIJI_COUNTRY_CODE.length);
+    }
+  }
+  digits = digits.replace(/\D/g, "");
+  return digits.length === FIJI_PHONE_DIGITS ? digits : null;
+}
+
+export function isValidFijiPhone(raw: string): boolean {
+  return normalizeFijiPhone(raw) !== null;
+}
+
+// Live input pass: collapse a recognisable Fiji number to its 7 digits (so a
+// pasted "+679 990 0000" lands as "9900000"), otherwise keep the digits the
+// reporter typed - minus a leading country code - so submit validation can
+// still flag a bad length or another nation's number.
+export function normalizeFijiPhoneInput(raw: string): string {
+  const digits = normalizeFijiPhone(raw);
+  if (digits) return digits;
+  let fallback = raw.replace(/\D/g, "");
+  if (fallback.length > FIJI_PHONE_DIGITS && fallback.startsWith(FIJI_COUNTRY_CODE)) {
+    fallback = fallback.slice(FIJI_COUNTRY_CODE.length);
+  }
+  return fallback;
+}
+
+// Canonical stored form, e.g. "+679 9900000".
+export function formatFijiPhone(nationalDigits: string): string {
+  return formatPhone(FIJI_COUNTRY_CODE, nationalDigits);
 }

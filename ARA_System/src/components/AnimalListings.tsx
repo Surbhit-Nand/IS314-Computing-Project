@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Animal, AnimalSize } from "../types/animal";
-import { capitalize } from "../utils/format";
+import { breedLineLabel, capitalize, speciesLabel } from "../utils/format";
 import { useFavoriteAnimals } from "../utils/favorites";
 import { searchAnimalsWithAI } from "../services/animalsApi";
 import { ANIMAL_TRAITS, buildAnimalTags, extractTraits, type TraitGroup } from "../utils/animalTags";
@@ -8,6 +8,7 @@ import { AnimalTagChips } from "./AnimalTagChips";
 import { apiBaseUrl } from "../services/apiClient.js";
 import { SiteFooter } from "./SiteFooter";
 import { SiteHeader, type SiteHeaderView } from "./SiteHeader";
+import { IconArrowLeft, IconArrowRight } from "./MedicalIcons";
 
 type AnimalListingsProps = {
   isLoaded: boolean;
@@ -62,6 +63,7 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
   const [aiQuery, setAiQuery] = useState("");
   const [aiSearching, setAiSearching] = useState(false);
   const [aiSearchError, setAiSearchError] = useState("");
+  const [photoIndexes, setPhotoIndexes] = useState<Record<string, number>>({});
   // Guards against a slow earlier request overwriting a newer search's results.
   const searchRun = useRef(0);
 
@@ -71,7 +73,9 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
         if (!response.ok) throw new Error("Animal listings could not be loaded.");
         return (await response.json()) as Animal[];
       })
-      .then(setAnimals)
+      // Belt-and-braces with the API's own visibility predicate: adopted
+      // animals never belong in the public catalogue.
+      .then((data) => setAnimals(data.filter((animal) => animal.status !== "adopted")))
       .catch((error: unknown) =>
         setAnimalsError(
           error instanceof Error ? error.message : "Animal listings could not be loaded.",
@@ -88,6 +92,16 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
       if (animal.breed && animal.breed.trim()) set.add(animal.breed.trim());
     }
     return ["all", ...[...set].sort()];
+  }, [animals]);
+
+  // Typed species of the loaded "other" animals (Rabbit, Guinea Pig...), so
+  // the Species filter can offer each one by name, same idea as breeds.
+  const otherSpecies = useMemo(() => {
+    const set = new Set<string>();
+    for (const animal of animals) {
+      if (animal.type === "other" || animal.type === "rabbit") set.add(speciesLabel(animal));
+    }
+    return [...set].sort();
   }, [animals]);
 
   // Unique colour list derived from the loaded animals, same idea as breeds.
@@ -175,10 +189,16 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
     () =>
       ranked.filter((animal) => {
         if (filters.type !== "all") {
-          // "Other" groups anything that isn't a dog or cat (rabbits, birds,
-          // etc.) so those profiles show under a single species option.
-          const isOther = filters.type === "other" && animal.type !== "dog" && animal.type !== "cat";
-          if (!isOther && animal.type !== filters.type) return false;
+          const isOtherPet = animal.type !== "dog" && animal.type !== "cat";
+          if (filters.type.startsWith("species:")) {
+            // One typed species, e.g. "species:Rabbit".
+            if (!isOtherPet || speciesLabel(animal) !== filters.type.slice("species:".length)) return false;
+          } else if (filters.type === "other") {
+            // "All other pets" groups everything that isn't a dog or cat.
+            if (!isOtherPet) return false;
+          } else if (animal.type !== filters.type) {
+            return false;
+          }
         }
         if (filters.gender !== "all" && (animal.gender ?? "").toLowerCase() !== filters.gender)
           return false;
@@ -219,7 +239,7 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
   }
 
   return (
-    <div className="home-page">
+    <div className="home-page animal-catalog-page">
       <SiteHeader
         isLoaded={isLoaded}
         isSignedIn={isSignedIn}
@@ -287,7 +307,10 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
                 ["all", "All"],
                 ["dog", "Dogs"],
                 ["cat", "Cats"],
-                ["other", "Other Pets"],
+                // Each typed species of the "other" animals listed by name...
+                ...otherSpecies.map((species) => [`species:${species}`, species]),
+                // ...plus one option covering all of them.
+                ...(otherSpecies.length > 0 ? [["other", "All other pets"]] : []),
               ].map(([value, label]) => (
                 <label key={value} className="filter-option">
                   <input
@@ -463,7 +486,18 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
                     : "No animals match your search. Try removing a filter or showing all animals."}
                 </p>
               )}
-              {visible.map((animal) => (
+              {visible.map((animal) => {
+                const activePhotoIndex = (photoIndexes[animal.id] ?? 0) % Math.max(1, animal.photoUrls.length);
+                const activePhoto = animal.photoUrls[activePhotoIndex];
+
+                function changePhoto(direction: -1 | 1) {
+                  setPhotoIndexes((previous) => ({
+                    ...previous,
+                    [animal.id]: (activePhotoIndex + direction + animal.photoUrls.length) % animal.photoUrls.length,
+                  }));
+                }
+
+                return (
                 <article
                   key={animal.id}
                   className="pet-card"
@@ -481,13 +515,41 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
                     className="pet-card-photo"
                     aria-label={`${animal.name} profile image`}
                     style={
-                      animal.photoUrls[0]
-                        ? { backgroundImage: `url(${animal.photoUrls[0]})` }
+                      activePhoto
+                        ? { backgroundImage: `url(${activePhoto})` }
                         : undefined
                     }
                   >
-                    {!animal.photoUrls[0] && (
-                      <span className="animal-image-label">{capitalize(animal.type)}</span>
+                    {!activePhoto && (
+                      <span className="animal-image-label">{speciesLabel(animal)}</span>
+                    )}
+                    {animal.photoUrls.length > 1 && (
+                      <>
+                        <button
+                          type="button"
+                          className="pet-card-photo-nav prev"
+                          aria-label={`Show previous photo of ${animal.name}`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            changePhoto(-1);
+                          }}
+                          onKeyDown={(event) => event.stopPropagation()}
+                        >
+                          <IconArrowLeft size={18} />
+                        </button>
+                        <button
+                          type="button"
+                          className="pet-card-photo-nav next"
+                          aria-label={`Show next photo of ${animal.name}`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            changePhoto(1);
+                          }}
+                          onKeyDown={(event) => event.stopPropagation()}
+                        >
+                          <IconArrowRight size={18} />
+                        </button>
+                      </>
                     )}
                     <button
                       type="button"
@@ -507,7 +569,7 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
                   </div>
                   <div className="pet-card-body">
                     <h3 className="pet-card-name">{animal.name}</h3>
-                    <p className="pet-card-breed">{animal.breed ?? "Breed not recorded"}</p>
+                    <p className="pet-card-breed">{breedLineLabel(animal)}</p>
                     <AnimalTagChips
                       tags={buildAnimalTags(animal)}
                       onSelectTag={(tag) =>
@@ -521,7 +583,8 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
                     <p className="pet-card-check">✓ Available for adoption</p>
                   </div>
                 </article>
-              ))}
+                );
+              })}
             </div>
           </section>
         </div>

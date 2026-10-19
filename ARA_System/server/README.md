@@ -26,7 +26,7 @@ show an error and use normal listing; it is not reported as zero matches.
 
 | Field | Parser output values |
 |---|---|
-| Type | `dog`, `cat`, `rabbit` |
+| Type | `dog`, `cat` |
 | Size | `small`, `medium`, `large`, `extra_large` |
 | Gender | `Male`, `Female` |
 | Vaccination | `vaccinated`, `not_vaccinated` |
@@ -34,9 +34,11 @@ show an error and use normal listing; it is not reported as zero matches.
 Only confidently detected, explicit whole-word values become hard filters.
 Conflicting, uncertain, or negated mentions do not become positive constraints;
 `not vaccinated` maps to its explicit negative enum. Gender matching normalizes
-legacy database case and whitespace. Although the database supports `other`,
-the current parser deliberately does not infer that type, including from
-`other pet`. There is currently no explicit `other` recognition rule.
+legacy database case and whitespace. Only `dog` and `cat` are inferred as types:
+rabbits, hamsters and every other species are stored as `type = 'other'` with the
+species in `animals.species_name`, so a species word like `rabbit` stays in the
+embedding text and is matched semantically rather than becoming a `type` filter
+that could never match. There is no explicit `other` recognition rule.
 
 `small calm dog` filters dog + small while embedding the entire phrase.
 `small calm pet` filters only size. `good with cats` does not force type=cat;

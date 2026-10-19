@@ -1,0 +1,506 @@
+/* ARA public homepage — full replacement styles.
+   The existing hero / transparent navigation / original SPCA logo are kept.
+   Styles remain scoped to .ara2-home and do not touch staff, dispatch or vet pages. */
+.ara2-home {
+  --ara2-blue: #115cba;
+  --ara2-deep: #133f6b;
+  --ara2-ink: #18364d;
+  --ara2-muted: #607387;
+  --ara2-border: #e2eaf2;
+  min-height: 100vh;
+  background: #fff;
+  color: var(--ara2-ink);
+  font-family: "Segoe UI Variable", "Avenir Next", "Segoe UI", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.ara2-home *, .ara2-home *::before, .ara2-home *::after { box-sizing: border-box; }
+.ara2-home button { font-family: inherit; }
+.ara2-home button:focus-visible, .ara2-home a:focus-visible { outline: 3px solid #83bcfa; outline-offset: 4px; }
+.ara2-home .site-header { position: relative; z-index: 10; }
+.ara2-wrap { width: min(1220px, calc(100% - 84px)); margin-inline: auto; }
+.ara2-main { padding-bottom: 0; overflow: clip; }
+.ara2-overline { display: inline-block; color: #2269a7; font-size: .73rem; font-weight: 750; letter-spacing: .13em; }
+.ara2-button { display: inline-flex; justify-content: center; align-items: center; gap: 14px; min-height: 50px; padding: 12px 22px; border: 1px solid transparent; border-radius: 9px; cursor: pointer; font-size: .92rem; font-weight: 690; line-height: 1.25; transition: transform .2s ease, background .2s ease, border-color .2s ease; }
+.ara2-button:hover { transform: translateY(-2px); }
+.ara2-button-blue { color: #fff; background: var(--ara2-blue); }
+.ara2-button-blue:hover { background: #064c9d; }
+.ara2-button-outlined { color: #174b76; background: #fff; border-color: #bbd0df; }
+.ara2-button-white { background: #fff; color: #125184; box-shadow: 0 9px 22px rgba(3,22,38,.1); }
+.ara2-button-white:hover { background: #edf6ff; }
+
+/* The three actions grow directly from the hero's soft white fade. */
+.ara2-shortcuts { position: relative; z-index: 7; width: min(1120px, calc(100% - 84px)); margin-top: -93px; padding-top: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px; }
+.ara2-action { width: 100%; min-width: 0; min-height: 166px; border: 1px solid rgba(212,227,240,.88); border-radius: 16px; padding: 28px 23px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; cursor: pointer; background: rgba(255,255,255,.96); color: #1c3c57; text-align: center; box-shadow: 0 15px 35px rgba(20,62,104,.11), 0 2px 7px rgba(20,62,104,.035); transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease; }
+.ara2-action:hover { transform: translateY(-6px); border-color: #9bc6ed; box-shadow: 0 23px 46px rgba(20,62,104,.15); }
+.ara2-action-featured { background: #fff; }
+.ara2-action-icon { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 50%; background: #e8f4ff; color: #1267b1; flex: 0 0 auto; }
+.ara2-action-body { display: flex; flex-direction: column; gap: 5px; align-items: center; }
+.ara2-action-body strong { color: #173f64; font-size: 1.12rem; font-weight: 720; }
+.ara2-action-body small { color: #6b7b89; font-size: .81rem; line-height: 1.5; font-weight: 450; }
+.ara2-action-arrow { display: none; }
+
+/* Featured animals — photographs flow into darkness like the hero image. */
+.ara2-gallery { position: relative; isolation: isolate; padding: 117px 0 105px; background: linear-gradient(180deg,#fff 0%,#fff 68%,#f3f8fc 100%); }
+.ara2-gallery-head { display: flex; justify-content: space-between; align-items: end; gap: 28px; margin-bottom: 33px; }
+.ara2-gallery-heading { max-width: 750px; }
+.ara2-gallery h2 { margin: 12px 0 13px; font-size: clamp(2.2rem, 4.2vw, 3.7rem); letter-spacing: -.051em; line-height: 1.12; font-weight: 650; color: #1d3446; text-wrap: balance; }
+.ara2-gallery h2 span { color: #1d6ab1; }
+.ara2-gallery-heading p { margin: 0; color: #657889; font-size: 1rem; line-height: 1.65; }
+.ara2-view-all { display: inline-flex; align-items: center; justify-content: center; gap: 10px; border: 0; border-bottom: 1px solid currentColor; padding: 9px 0; background: transparent; color: #115cba; font-size: .92rem; font-weight: 700; white-space: nowrap; cursor: pointer; }
+.ara2-view-all:hover { color: #083e7c; }
+.ara2-pet-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: 260px; gap: 16px; }
+.ara2-pet-grid.ara2-count-1 { grid-template-columns: minmax(0, 360px); }
+.ara2-pet-grid.ara2-count-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.ara2-pet-grid.ara2-count-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.ara2-pet-grid.ara2-count-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.ara2-pet { position: relative; min-width: 0; height: 100%; border-radius: 16px; overflow: hidden; isolation: isolate; background: #cfdeea; box-shadow: 0 3px 13px rgba(14,53,89,.045); }
+.ara2-pet-media, .ara2-pet-photo-button { width: 100%; height: 100%; }
+.ara2-pet-media { position: relative; }
+.ara2-pet-photo-button { display: block; border: 0; padding: 0; background: transparent; cursor: pointer; overflow: hidden; }
+.ara2-pet-photo-button img { display: block; width: 100%; height: 100%; object-fit: cover; transition: transform .55s cubic-bezier(.22,.75,.2,1); }
+.ara2-pet:hover .ara2-pet-photo-button img { transform: scale(1.055); }
+.ara2-photo-empty { display: grid; place-items: center; width: 100%; height: 100%; background: #e4eff8; color: #82aaca; }
+.ara2-pet-media::after { content: ""; position: absolute; inset: 38% 0 0; background: linear-gradient(180deg, transparent, rgba(3,20,31,.7)); pointer-events: none; }
+.ara2-pet-photo-nav { position:absolute;z-index:8;top:50%;display:grid;place-items:center;width:36px;height:36px;padding:0;border:1px solid rgba(255,255,255,.85);border-radius:50%;background:rgba(255,255,255,.92);color:#174b76;box-shadow:0 2px 9px rgba(8,30,49,.2);cursor:pointer;transform:translateY(-50%);transition:background .2s ease,color .2s ease,transform .2s ease; }
+.ara2-pet-photo-nav.prev { left:12px; }
+.ara2-pet-photo-nav.next { right:12px; }
+.ara2-pet-photo-nav:hover { background:#fff;color:#0d68b7;transform:translateY(-50%) scale(1.05); }
+.ara2-pet-photo-nav:focus-visible { outline:3px solid #83bcfa;outline-offset:3px; }
+.ara2-photo-reveal { display: inline-flex; align-items: center; gap: 8px; position: absolute; top: 20px; left: 20px; z-index: 6; padding: 9px 12px; border: 1px solid rgba(255,255,255,.68); border-radius: 999px; background: rgba(16,45,68,.76); color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.28); box-shadow: 0 3px 12px rgba(3,20,31,.2); opacity: 0; font-size: .8rem; font-weight: 650; transform: translateY(-8px); transition: opacity .2s ease, transform .2s ease, background .2s ease; }
+.ara2-pet:hover .ara2-photo-reveal, .ara2-pet-photo-button:focus-visible .ara2-photo-reveal { opacity: 1; transform: translateY(0); }
+.ara2-photo-reveal:hover { background: rgba(16,45,68,.9); }
+.ara2-save { position: absolute; z-index: 7; top: 16px; right: 16px; display: grid; place-items: center; width: 39px; height: 39px; border: 1px solid rgba(255,255,255,.72); border-radius: 50%; background: rgba(255,255,255,.92); color: #185386; cursor: pointer; transition: background .2s ease, transform .2s ease; }
+.ara2-save:hover { transform: scale(1.06); }
+.ara2-save.is-saved { color: #fff; background: #145eae; border-color: #145eae; }
+.ara2-pet-meta { position: absolute; z-index: 4; bottom: 0; left: 0; right: 0; padding: 23px 23px 20px; display: flex; align-items: flex-end; justify-content: space-between; gap: 15px; color: #fff; pointer-events: none; }
+.ara2-pet-title { color: #fff; border: 0; background: transparent; text-align: left; padding: 0; font-size: 1.3rem; font-weight: 700; letter-spacing: -.02em; cursor: pointer; pointer-events: auto; }
+.ara2-pet-title:hover { text-decoration: underline; }
+.ara2-pet-meta p { margin: 4px 0 0; font-size: .81rem; color: rgba(255,255,255,.85); line-height: 1.5; }
+.ara2-pet-species { color: #183c5b; background: rgba(255,255,255,.92); border-radius: 20px; padding: 6px 10px; font-size: .69rem; font-weight: 700; text-transform: capitalize; white-space: nowrap; }
+.ara2-gallery-bottom { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding-top: 27px; color: #778899; font-size: .9rem; }
+.ara2-gallery-bottom .ara2-view-all { display: none; }
+.ara2-pet-skeleton { height: 100%; border-radius: 16px; overflow: hidden; }
+.ara2-pet-skeleton > div { height: 100%; background: #e1ecf5; animation: ara2-pulse 1.45s ease-in-out infinite; }
+.ara2-pet-skeleton > span, .ara2-pet-skeleton > small { display: none; }
+@keyframes ara2-pulse { 50% { opacity: .48; } }
+.ara2-empty { min-height: 340px; padding: 40px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 11px; border: 1px solid #dceaf5; border-radius: 16px; background: #f4f9fd; color: #135c9c; text-align: center; }
+.ara2-empty h3 { margin: 5px 0 0; font-size: 1.3rem; color: #1d3b53; }
+.ara2-empty p { margin: 0 0 10px; color: #677b89; max-width: 400px; }
+
+/* Rescue story — large soft edge-to-edge illustration dissolving into white.
+   The image remains separate from the copy rather than inside a boxed card. */
+.ara2-story { position: relative; width: 100%; min-height: 560px; background: #fff; overflow: hidden; isolation: isolate; }
+.ara2-story-media { position: absolute; inset: 0 0 0 42%; z-index: 0; }
+.ara2-story-media img { position: absolute; width: 100%; height: 100%; inset: 0; object-fit: cover; object-position: center 48%; }
+.ara2-story-wash { position: absolute; inset: 0; z-index: 1; background: linear-gradient(90deg,#fff 0%,#fff 32%,rgba(255,255,255,.94) 45%,rgba(255,255,255,.48) 64%,rgba(255,255,255,0) 86%), linear-gradient(180deg,transparent 0%,transparent 78%,#fff 100%); }
+.ara2-story-content { position: relative; z-index: 2; min-height: 560px; display: flex; align-items: center; }
+.ara2-story-copy { width: min(520px, 49%); padding: 75px 0 90px; }
+.ara2-story h2 { margin: 15px 0 24px; font-size: clamp(2.35rem,4.25vw,4rem); line-height: 1.12; letter-spacing: -.047em; color: #1b405d; font-weight: 660; }
+.ara2-story h2 em { color: #116ab2; font-style: normal; }
+.ara2-story p { color: #506b7b; max-width: 440px; font-size: 1.03rem; line-height: 1.82; margin: 0 0 30px; }
+.ara2-story-link { display: inline-flex; align-items: center; gap: 15px; color: #125a9d; background: transparent; border: none; border-bottom: 1px solid #125a9d; padding: 0 0 9px; font-size: .96rem; font-weight: 750; cursor: pointer; }
+.ara2-story-link:hover { color: #073766; }
+
+/* Adoption journey — unboxed editorial timeline. */
+.ara2-journey { padding: 110px 0 130px; background: #fff; }
+.ara2-journey-heading { text-align: center; margin: 0 auto 60px; max-width: 760px; }
+.ara2-journey h2 { margin: 15px auto 12px; font-size: clamp(2.25rem,4.1vw,3.8rem); line-height: 1.12; letter-spacing: -.049em; font-weight: 660; color: #1b3449; }
+.ara2-journey h2 span { color: #1768ad; }
+.ara2-journey-heading p { font-size: 1rem; color: #61788a; line-height: 1.65; margin: 0; }
+.ara2-journey-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 50px; }
+.ara2-journey-step { display: flex; flex-direction: column; align-items: flex-start; }
+.ara2-journey-number { display: block; margin: 0 0 17px; font-size: 2.7rem; font-weight: 500; line-height: 1; color: #7cadd5; letter-spacing: -.06em; }
+.ara2-journey-line { display: block; width: 100%; height: 2px; margin-bottom: 25px; background: linear-gradient(to right,#2775b9 0 48px, #e0eaf3 48px 100%); }
+.ara2-journey-step h3 { margin: 0 0 11px; font-size: 1.22rem; font-weight: 700; color: #20405b; }
+.ara2-journey-step p { margin: 0; font-size: .96rem; max-width: 295px; line-height: 1.72; color: #657989; }
+
+/* Final rescue invitation uses a real listed-animal photograph when possible.
+   Blue shaded at left; photographic right edge gently fades to white below. */
+.ara2-final { position: relative; min-height: 510px; isolation: isolate; overflow: hidden; background: #164d79; }
+.ara2-final-image { position: absolute; z-index: 0; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: right 38%; }
+.ara2-final-tint { position: absolute; z-index: 1; inset: 0; background: linear-gradient(90deg,rgba(12,48,81,.94) 0%,rgba(13,53,89,.87) 37%,rgba(13,53,89,.22) 73%,rgba(13,53,89,.04) 100%), linear-gradient(0deg,rgba(9,38,62,.28),transparent 58%); }
+.ara2-final-inner { position: relative; z-index: 2; min-height: 510px; display: flex; align-items: center; padding: 70px 0 105px; }
+.ara2-final-copy { width: min(585px, 58%); }
+.ara2-final .ara2-overline { color: #b1daf7; }
+.ara2-final h2 { color: #fff; font-size: clamp(2.4rem,4.45vw,4.35rem); letter-spacing: -.045em; line-height: 1.1; font-weight: 640; margin: 16px 0 20px; }
+.ara2-final h2 em { color: #c9e7ff; font-style: normal; }
+.ara2-final p { color: rgba(255,255,255,.9); line-height: 1.7; font-size: 1rem; max-width: 420px; margin: 0 0 27px; }
+.ara2-final-fade { position: absolute; z-index: 4; bottom: -18px; left: -2%; right: -2%; height: 112px; background: linear-gradient(180deg,transparent,rgba(255,255,255,.8) 76%,#fff); filter: blur(8px); pointer-events: none; }
+
+/* Keep the original real SPCA footer content and links, but match the hero's palette. */
+.ara2-home .spca-footer { width: 100%; margin: 0; padding: 77px max(40px, calc((100% - 1220px)/2)) 78px; background: #fff; border: 0; }
+.ara2-home .spca-footer-inner { grid-template-columns: 1.2fr .77fr .88fr .85fr 1.38fr; gap: 33px; border: none; padding: 0; }
+.ara2-home .spca-footer-col h4 { font-size: .91rem; color: #1a3f5c; font-weight: 750; }
+.ara2-home .spca-footer-col p, .ara2-home .spca-footer-nav button { color: #5c7080; font-size: .82rem; line-height: 1.75; }
+.ara2-home .spca-footer-col a { color: #125c9e; overflow-wrap: anywhere; }
+.ara2-home .spca-footer-nav { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.ara2-home .spca-footer-nav button { cursor: pointer; background: none; border: none; padding: 0; text-align: left; }
+.ara2-home .spca-footer-nav button:hover { color: #115cba; }
+.ara2-home .spca-social a { background: #eaf3fa; color: #145a96; }
+.ara2-home .spca-social a:hover { background: #145fa7; color: #fff; }
+.ara2-home .footer-logo { height: 49px; width: auto; filter: none; }
+.ara2-home .spca-footer-follow { color: #1c4765!important; font-weight: 700; }
+
+/* Responsive composition for all sections BELOW the hero. */
+@media(max-width:1130px){
+  .ara2-home .spca-footer-inner { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .ara2-action { padding:21px 14px; }
+  .ara2-story-copy { width:51%; }
+  .ara2-pet-grid { grid-auto-rows:245px; }
+}
+@media(max-width:900px){
+  .ara2-wrap { width:calc(100% - 48px); }
+  .ara2-shortcuts { width:calc(100% - 48px); gap:12px; }
+  .ara2-action { min-height:144px; }
+  .ara2-action-body small { font-size:.76rem; }
+  .ara2-pet-grid { grid-auto-rows:222px; }
+  .ara2-story-media { inset:0 0 0 38%; }
+  .ara2-story-copy { width:55%; }
+  .ara2-story-wash { background:linear-gradient(90deg,#fff 0%,#fff 28%,rgba(255,255,255,.94) 43%,rgba(255,255,255,.24) 75%,transparent 92%),linear-gradient(180deg,#fff 0%,transparent 20%,transparent 76%,#fff 100%); }
+  .ara2-journey-grid { gap:23px; }
+}
+@media(max-width:700px){
+  .ara2-wrap { width:calc(100% - 36px); }
+  .ara2-shortcuts { width:calc(100% - 36px); margin-top:-70px; grid-template-columns:1fr; max-width:520px; }
+  .ara2-action { min-height:99px; flex-direction:row; text-align:left; justify-content:flex-start; gap:17px; padding:17px 22px; }
+  .ara2-action-body { align-items:flex-start; }
+  .ara2-action-icon { width:49px; height:49px; }
+  .ara2-gallery { padding:80px 0 74px; }
+  .ara2-gallery-head { flex-direction:column; align-items:flex-start; gap:17px; }
+  .ara2-gallery-head > .ara2-view-all { display:none; }
+  .ara2-gallery-bottom { flex-wrap:wrap; }
+  .ara2-gallery-bottom .ara2-view-all { display:inline-flex; }
+  .ara2-pet-grid, .ara2-pet-grid.ara2-count-3, .ara2-pet-grid.ara2-count-4 { grid-template-columns:repeat(2,minmax(0,1fr)); grid-auto-rows:255px; gap:11px; }
+  .ara2-pet-grid.ara2-count-1 { grid-template-columns:1fr; }
+  .ara2-pet-media::after { inset:30% 0 0; }
+  .ara2-pet-meta { padding:18px 13px 13px; }
+  .ara2-pet-title { font-size:1.08rem; }
+  .ara2-pet-species { display:none; }
+  .ara2-save { width:34px; height:34px; right:10px; top:10px; }
+  .ara2-story { min-height:700px; }
+  .ara2-story-content { min-height:700px; align-items:flex-start; }
+  .ara2-story-copy { width:100%; padding:67px 0 360px; }
+  .ara2-story-media { inset:43% 0 0 0; }
+  .ara2-story-media img { object-position:center 44%; }
+  .ara2-story-wash { background:linear-gradient(to bottom,transparent 0%,transparent 34%,rgba(255,255,255,.3) 53%,transparent 75%,#fff 100%); }
+  .ara2-journey { padding:75px 0 94px; }
+  .ara2-journey-heading { margin-bottom:45px; text-align:left; }
+  .ara2-journey-grid { grid-template-columns:1fr; gap:34px; }
+  .ara2-journey-step { display:grid; grid-template-columns:52px minmax(0,1fr); column-gap:17px; }
+  .ara2-journey-number { grid-row:span 2; font-size:2rem; margin:3px 0 0; }
+  .ara2-journey-line { grid-column:2; grid-row:1; margin:0 0 15px; }
+  .ara2-journey-step h3,.ara2-journey-step p { grid-column:2; }
+  .ara2-final, .ara2-final-inner { min-height:560px; }
+  .ara2-final-copy { width:100%; max-width:455px; }
+  .ara2-final-tint { background:linear-gradient(90deg,rgba(10,45,75,.89),rgba(10,45,75,.52)),linear-gradient(0deg,rgba(10,45,75,.35),transparent); }
+  .ara2-home .spca-footer { padding:60px 22px; }
+  .ara2-home .spca-footer-inner { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .ara2-home .spca-footer-brand-col { grid-column:1/-1; }
+}
+@media(max-width:420px){
+  .ara2-gallery h2,.ara2-journey h2 { font-size:2.35rem; }
+  .ara2-pet-grid,.ara2-pet-grid.ara2-count-2,.ara2-pet-grid.ara2-count-3,.ara2-pet-grid.ara2-count-4 { grid-auto-rows:218px; }
+  .ara2-pet-meta p { font-size:.69rem; }
+  .ara2-final h2 { font-size:2.5rem; }
+  .ara2-home .spca-footer-inner { grid-template-columns:1fr; }
+  .ara2-home .spca-footer-brand-col { grid-column:auto; }
+}
+@media(prefers-reduced-motion:reduce){ .ara2-home *, .ara2-home *::before, .ara2-home *::after { animation:none!important; transition:none!important; scroll-behavior:auto!important; } }
+
+/* ==============================================================
+   HERO + NAV — continuous edge-to-edge photograph
+   These overrides are scoped to the public homepage only.
+   SiteHeader.tsx, Clerk, navigation, and internal modules unchanged.
+   ============================================================== */
+.ara2-home {
+  position: relative;
+  background: #fff;
+}
+
+/* The transparent header floats ABOVE the same photo as the hero.
+   No white bar, frosted white panel, shadow, or rounded header background. */
+.ara2-home > .site-header {
+  position: absolute;
+  inset: 0 0 auto;
+  transform: none;
+  z-index: 40;
+  width: min(1280px, calc(100% - 96px));
+  min-height: 108px;
+  margin-inline: auto;
+  padding: 19px 0;
+  gap: 22px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* Keep the original SPCA logo colours and its white image background. */
+.ara2-home > .site-header .brand-logo {
+  height: 56px;
+  width: auto;
+  filter: none;
+  mix-blend-mode: normal;
+}
+
+/* White navigation with just enough shadow to stay legible over leaves. */
+.ara2-home > .site-header .main-nav {
+  gap: clamp(12px, 1.65vw, 25px);
+  margin-left: auto;
+}
+.ara2-home > .site-header .main-nav .nav-link {
+  color: #fff;
+  font-size: .87rem;
+  font-weight: 650;
+  letter-spacing: .003em;
+  padding: 12px 0;
+  text-shadow: 0 1px 8px rgba(0,0,0,.4);
+}
+.ara2-home > .site-header .main-nav .nav-link:hover,
+.ara2-home > .site-header .main-nav .nav-link.active {
+  color: #f6fbff;
+}
+.ara2-home > .site-header .main-nav .nav-link::after {
+  background: #fff;
+  height: 2px;
+  bottom: 1px;
+}
+.ara2-home > .site-header .header-actions { gap: 10px; }
+.ara2-home > .site-header .header-actions .ghost-button {
+  color: #fff;
+  background: rgba(7, 36, 55, .24);
+  border: 1px solid rgba(255, 255, 255, .75);
+  border-radius: 9px;
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+}
+.ara2-home > .site-header .header-actions .ghost-button:hover {
+  background: rgba(255, 255, 255, .15);
+}
+.ara2-home > .site-header .header-actions .teal-button {
+  color: #fff;
+  background: #1169c6;
+  border-radius: 9px;
+  box-shadow: 0 7px 20px rgba(3, 22, 41, .17);
+}
+.ara2-home > .site-header .header-actions .teal-button:hover { background: #0758a8; }
+.ara2-home > .site-header .notification-bell {
+  background: rgba(7, 36, 55, .3);
+  border-color: rgba(255, 255, 255, .6);
+  color: #fff;
+}
+.ara2-home > .site-header .nav-toggle {
+  background: rgba(8, 45, 73, .72);
+  border: 1px solid rgba(255,255,255,.58);
+}
+
+.ara2-main { overflow: clip; padding-bottom: 88px; }
+.ara2-hero {
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  margin: 0;
+  background: #fff;
+}
+.ara2-hero-scene {
+  position: relative;
+  width: 100%;
+  min-height: 700px;
+  overflow: hidden;
+  background: #142a2e;
+}
+.ara2-hero-background {
+  display: block;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 42%;
+  filter: saturate(1.02);
+}
+
+/* Top-to-bottom scrim keeps navbar readable; left-to-right scrim leaves
+   the dog's face bright while protecting the title and paragraph. */
+.ara2-hero-shade {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(to bottom, rgba(1, 18, 25, .59) 0%, rgba(1, 18, 25, .13) 22%, transparent 46%),
+    linear-gradient(90deg, rgba(1, 23, 32, .77) 0%, rgba(1, 23, 32, .56) 31%, rgba(1, 23, 32, .12) 59%, transparent 82%);
+}
+.ara2-hero-content {
+  position: relative;
+  z-index: 2;
+  min-height: 700px;
+  display: flex;
+  align-items: center;
+  padding-top: 148px;
+  padding-bottom: 178px;
+}
+.ara2-hero-copy {
+  width: min(550px, 53%);
+  max-width: 550px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  color: #fff;
+}
+.ara2-hero h1 {
+  max-width: 570px;
+  margin: 0 0 22px;
+  font-size: clamp(2.8rem, 4.4vw, 4.4rem);
+  font-weight: 670;
+  line-height: 1.095;
+  letter-spacing: -.038em;
+  color: #fff;
+  text-wrap: balance;
+  text-shadow: 0 3px 21px rgba(0, 13, 22, .25);
+}
+.ara2-hero h1 span { color: #d6ecff; }
+.ara2-hero-copy > p {
+  max-width: 420px;
+  margin: 0;
+  font-size: clamp(.99rem, 1.17vw, 1.11rem);
+  line-height: 1.65;
+  color: rgba(255,255,255,.95);
+  text-shadow: 0 2px 12px rgba(0,0,0,.24);
+}
+.ara2-hero-buttons {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 29px;
+  gap: 14px;
+}
+.ara2-hero .ara2-button { min-height: 51px; border-radius: 10px; }
+.ara2-hero .ara2-button-blue {
+  background: #fff;
+  color: #154b80;
+  box-shadow: 0 8px 20px rgba(0, 16, 28, .18);
+}
+.ara2-hero .ara2-button-blue:hover { background: #eaf4ff; }
+.ara2-hero .ara2-button-outlined {
+  color: #fff;
+  border: 1px solid rgba(255,255,255,.84);
+  background: rgba(8,34,49,.19);
+}
+.ara2-hero .ara2-button-outlined:hover { background: rgba(255,255,255,.12); }
+.ara2-hero-fade {
+  position: absolute;
+  z-index: 3;
+  inset: auto 0 -1px;
+  height: 195px;
+  pointer-events: none;
+  background: linear-gradient(180deg, transparent 0%, rgba(255,255,255,.15) 27%, rgba(255,255,255,.82) 71%, #fff 100%);
+}
+
+/* Cards rest across the softened photographic edge. */
+.ara2-shortcuts {
+  position: relative;
+  z-index: 6;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  margin-top: -86px;
+  padding-top: 0;
+}
+.ara2-action {
+  min-height: 138px;
+  background: #fff;
+  border-color: #e2eaf3;
+  box-shadow: 0 14px 32px rgba(23,64,105,.11);
+}
+.ara2-action-featured,
+.ara2-action-featured:hover { color: #183650; background: #fff; }
+.ara2-action-featured:hover { border-color: #91bce7; }
+.ara2-action-featured .ara2-action-icon { background: #e5f1ff; color: var(--ara2-blue); }
+.ara2-action-featured .ara2-action-body small { color: #65768a; }
+.ara2-action-featured .ara2-action-arrow { color: var(--ara2-blue); }
+
+@media (max-width: 1120px) {
+  .ara2-home > .site-header { width: calc(100% - 56px); gap: 15px; }
+  .ara2-home > .site-header .brand-logo { height: 51px; }
+  .ara2-home > .site-header .main-nav { gap: 14px; }
+  .ara2-hero-copy { width: min(480px, 55%); }
+}
+
+@media (max-width: 980px) {
+  .ara2-home > .site-header { min-height: 86px; }
+  .ara2-home > .site-header .main-nav.open {
+    top: calc(100% + 4px);
+    background: #fff;
+    border: 1px solid #dce8f2;
+    box-shadow: 0 16px 40px rgba(14,45,67,.19);
+    border-radius: 14px;
+  }
+  .ara2-home > .site-header .main-nav.open .nav-link,
+  .ara2-home > .site-header .main-nav.open .nav-link:hover {
+    color: #284861;
+    text-shadow: none;
+    padding: 11px 13px;
+  }
+  .ara2-home > .site-header .main-nav.open .nav-link.active { color: var(--ara2-blue); }
+  .ara2-home > .site-header .main-nav.open .nav-link::after { background: var(--ara2-blue); }
+  .ara2-hero-scene, .ara2-hero-content { min-height: 680px; }
+  .ara2-hero-content { padding-top: 140px; padding-bottom: 165px; }
+  .ara2-hero h1 { font-size: clamp(2.7rem, 5.2vw, 4.1rem); }
+  .ara2-hero-copy { width: min(465px, 62%); }
+  .ara2-shortcuts { gap: 12px; }
+}
+
+@media (max-width: 760px) {
+  .ara2-home > .site-header { min-height: 76px; width: calc(100% - 36px); padding-block: 10px; gap: 10px; }
+  .ara2-home > .site-header .brand-logo { height: 45px; }
+  .ara2-home > .site-header .header-actions { gap: 7px; }
+  .ara2-hero-scene, .ara2-hero-content { min-height: 660px; }
+  .ara2-hero-content { padding-top: 126px; padding-bottom: 167px; }
+  .ara2-hero-background { object-position: 59% center; }
+  .ara2-hero-shade {
+    background:
+      linear-gradient(to bottom, rgba(1,18,25,.64) 0%, rgba(1,18,25,.1) 28%, transparent 60%),
+      linear-gradient(90deg, rgba(1,23,32,.81) 0%, rgba(1,23,32,.47) 64%, rgba(1,23,32,.08) 100%);
+  }
+  .ara2-hero-copy { width: min(455px, 75%); max-width: 455px; }
+  .ara2-hero h1 { font-size: clamp(2.6rem, 7.2vw, 3.5rem); }
+  .ara2-shortcuts { grid-template-columns: 1fr; width: min(530px, calc(100% - 40px)); margin-top: -62px; gap: 11px; }
+  .ara2-action { min-height: 106px; }
+}
+
+@media (max-width: 520px) {
+  .ara2-home > .site-header { width: calc(100% - 26px); min-height: 70px; gap: 8px; }
+  .ara2-home > .site-header .brand-logo { height: 37px; }
+  .ara2-home > .site-header .nav-toggle { width: 37px; height: 37px; border-radius: 8px; }
+  .ara2-home > .site-header .header-actions { gap: 6px; }
+  .ara2-home > .site-header .header-actions .ghost-button,
+  .ara2-home > .site-header .header-actions .teal-button { min-height: 36px; padding-inline: 10px; font-size: .74rem; }
+  .ara2-hero-scene, .ara2-hero-content { min-height: 680px; }
+  .ara2-hero-background { object-position: 62% center; }
+  .ara2-hero-shade {
+    background:
+      linear-gradient(to bottom, rgba(1,18,25,.67) 0%, rgba(1,18,25,.13) 40%, transparent 70%),
+      linear-gradient(90deg, rgba(1,23,32,.87) 0%, rgba(1,23,32,.62) 65%, rgba(1,23,32,.30) 100%);
+  }
+  .ara2-hero-content { align-items: flex-start; padding-top: 152px; padding-bottom: 150px; }
+  .ara2-hero-copy { width: min(100%, 365px); max-width: 365px; }
+  .ara2-hero h1 { font-size: clamp(2.35rem, 10vw, 3.15rem); }
+  .ara2-hero-copy > p { font-size: .95rem; max-width: 345px; }
+  .ara2-hero-buttons { gap: 10px; }
+  .ara2-shortcuts { margin-top: -72px; }
+  .ara2-action { min-height: 103px; padding: 18px; }
+}
+
+@media (max-width: 370px) {
+  .ara2-home > .site-header .brand-logo { height: 33px; }
+  .ara2-home > .site-header .header-actions .ghost-button,
+  .ara2-home > .site-header .header-actions .teal-button { min-height: 33px; padding-inline: 8px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ara2-hero *, .ara2-hero *::before, .ara2-hero *::after { animation: none !important; transition: none !important; }
+}

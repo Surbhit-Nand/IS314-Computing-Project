@@ -860,7 +860,7 @@ button.vm-step-hit:hover .vm-step-body strong { color: var(--vm-blue-dark); }
 /* Shared grid definitions so every row (and the header) uses the exact same
    column tracks, including a fixed action column — buttons never resize the
    layout based on label length. */
-.vm-queue-table { --vm-queue-cols: 205px 150px 118px 175px 145px minmax(191px, 1fr); }
+.vm-queue-table { --vm-queue-cols: 205px 150px 190px 175px 145px minmax(191px, 1fr); }
 .vm-appt-table { --vm-appt-cols: 260px 240px 250px minmax(191px, 1fr); }
 
 .vm-appt-table.vm-appt-even {
@@ -933,7 +933,35 @@ button.vm-step-hit:hover .vm-step-body strong { color: var(--vm-blue-dark); }
 
 .vm-td-actions { align-items: center; display: flex; gap: 8px; justify-content: flex-end; }
 
-.vm-priority-cell { white-space: nowrap; }
+.vm-priority-cell { align-content: start; display: grid; gap: 6px; white-space: normal; }
+
+.vm-triage-summary { display: grid; gap: 5px; min-width: 0; }
+.vm-triage-summary > .vm-badge { justify-self: start; max-width: 100%; text-align: left; white-space: normal; }
+.vm-triage-summary small,
+.vm-triage-summary time { color: var(--vm-muted); font-size: 0.7rem; line-height: 1.3; }
+.vm-triage-facts { display: grid; gap: 4px; }
+.vm-triage-facts > span { align-items: center; display: flex; flex-wrap: wrap; gap: 4px; }
+.vm-triage-facts small { min-width: 45px; }
+.vm-triage-facts .vm-badge { margin-top: 0; }
+.vm-triage-deteriorating strong { color: #a32820; font-size: 0.74rem; }
+
+.vm-multiple-immediate {
+  background: #fff5f2;
+  border: 1px solid #edb4ac;
+  border-left: 4px solid #b42318;
+  border-radius: 10px;
+  color: var(--vm-ink);
+  margin-bottom: 14px;
+  padding: 14px 16px;
+}
+.vm-multiple-immediate h3 { color: #912018; font-size: 0.96rem; margin: 0 0 5px; }
+.vm-multiple-immediate p { color: var(--vm-ink-soft); font-size: 0.8rem; line-height: 1.45; margin: 0 0 10px; }
+.vm-multiple-immediate ul { display: grid; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.vm-multiple-immediate li { align-items: center; border-top: 1px solid #f0d4d0; display: flex; gap: 12px; justify-content: space-between; padding-top: 8px; }
+.vm-multiple-immediate li > div { display: grid; gap: 3px; min-width: 0; }
+.vm-multiple-immediate li strong { color: var(--vm-ink); font-size: 0.84rem; }
+.vm-multiple-immediate li span { color: var(--vm-ink-soft); font-size: 0.75rem; line-height: 1.35; }
+.vm-multiple-immediate .vm-queue-action { flex: 0 0 auto; }
 
 /* Loading placeholders keep the table's height stable while data loads, so the
    dashboard does not jump from an empty state to a full queue. */
@@ -1797,4 +1825,6 @@ button.vm-step-hit:hover .vm-step-body strong { color: var(--vm-blue-dark); }
   .vm-trow-action { grid-column: 2; justify-content: flex-start; }
   .vm-trow-form { grid-template-columns: minmax(0, 1fr); }
   .vm-followup-item { grid-template-columns: minmax(0, 1fr) auto; }
+  .vm-multiple-immediate li { align-items: flex-start; flex-direction: column; }
+  .vm-multiple-immediate .vm-queue-action { align-self: flex-start; }
 }

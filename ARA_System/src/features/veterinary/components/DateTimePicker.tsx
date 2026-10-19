@@ -29,6 +29,8 @@ type Props = {
   dateOnly?: boolean;
   // Blocks past dates and (for today) already-passed times.
   disablePast?: boolean;
+  // Optional clinic-local lower bound for date-only booking flows.
+  minDate?: string;
   // Times (HH:MM) that are already taken per "YYYY-MM-DD". Booked slots are
   // greyed out and cannot be confirmed.
   takenSlots?: Record<string, string[]>;
@@ -37,10 +39,10 @@ type Props = {
 // A self-contained calendar + time picker used across the veterinary module.
 // Clicking the field opens a centred popup card with a larger month-grid
 // calendar and a styled time row, replacing the bare native date input.
-export function DateTimePicker({ value, onChange, required, dateOnly, disablePast, takenSlots }: Props) {
+export function DateTimePicker({ value, onChange, required, dateOnly, disablePast, minDate, takenSlots }: Props) {
   const [open, setOpen] = useState(false);
   const [slotError, setSlotError] = useState("");
-  const initial = toDateInputParts(value);
+  const initial = dateOnly && /^\d{4}-\d{2}-\d{2}$/.test(value) ? { date: value, time: "" } : toDateInputParts(value);
   const [calendarMonth, setCalendarMonth] = useState(() => {
     const now = new Date();
     return new Date(initial.date ? `${initial.date}T00:00` : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01T00:00`);
@@ -50,12 +52,23 @@ export function DateTimePicker({ value, onChange, required, dateOnly, disablePas
 
   useEffect(() => {
     if (!open) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const dialog = rootRef.current?.querySelector<HTMLElement>('[role="dialog"]');
+    dialog?.querySelector<HTMLElement>("button")?.focus();
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") { event.stopPropagation(); setOpen(false); }
+      if (event.key === "Tab" && dialog) {
+        const controls = Array.from(dialog.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), [tabindex="0"]'));
+        const first = controls[0];
+        const last = controls[controls.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+        if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+      }
     }
     document.addEventListener("keydown", onKeyDown);
     return () => {
       document.removeEventListener("keydown", onKeyDown);
+      previousFocus?.focus();
     };
   }, [open]);
 
@@ -63,6 +76,7 @@ export function DateTimePicker({ value, onChange, required, dateOnly, disablePas
   const year = calendarMonth.getFullYear();
   const month = calendarMonth.getMonth();
   const now = todayInputParts();
+  const earliestDate = minDate ?? now.date;
 
   const monthLabel = calendarMonth.toLocaleDateString(undefined, { month: "long", year: "numeric" });
   const firstDay = new Date(year, month, 1);
@@ -88,7 +102,7 @@ export function DateTimePicker({ value, onChange, required, dateOnly, disablePas
   }
 
   function isPast(day: number): boolean {
-    return disablePast === true && dayDate(day) < now.date;
+    return (disablePast === true || Boolean(minDate)) && dayDate(day) < earliestDate;
   }
 
   function isSlotTaken(date: string, slotTime: string): boolean {
@@ -125,7 +139,7 @@ export function DateTimePicker({ value, onChange, required, dateOnly, disablePas
   }
 
   function pickToday() {
-    const date = new Date(`${now.date}T00:00`);
+    const date = new Date(`${minDate && minDate > now.date ? minDate : now.date}T00:00`);
     while (date.getDay() === 0) date.setDate(date.getDate() + 1);
     const dateStr = dateKey(date);
     setSlotError("");
@@ -144,8 +158,12 @@ export function DateTimePicker({ value, onChange, required, dateOnly, disablePas
       setOpen(false);
       return;
     }
-    if (disablePast && selectedDate < now.date) {
+    if ((disablePast || minDate) && selectedDate < earliestDate) {
       setSlotError("That date is in the past. Choose today or a later date.");
+      return;
+    }
+    if (!officeHours(selectedDate)) {
+      setSlotError("The clinic is closed on Sundays. Choose another date.");
       return;
     }
     if (!dateOnly && isTimePassed(selectedDate, time)) {
@@ -167,10 +185,10 @@ export function DateTimePicker({ value, onChange, required, dateOnly, disablePas
 
   return (
     <div className="vm-dtp" ref={rootRef}>
-      <button type="button" className="vm-dtp-trigger" onClick={() => { setSlotError(""); setOpen(true); }}>
+      <button type="button" className="vm-dtp-trigger" aria-haspopup="dialog" aria-expanded={open} onClick={() => { setSlotError(""); setOpen(true); }}>
         <IconCalendar size={15} />
         <span className="vm-dtp-trigger-copy">
-          <strong>{selectedDate ? fmtDate(`${selectedDate}T00:00`) : "Select a date"}</strong>
+          <strong>{selectedDate ? (dateOnly ? new Date(`${selectedDate}T12:00:00Z`).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }) : fmtDate(`${selectedDate}T00:00`)) : "Select a date"}</strong>
           <small>{selectedDate ? (dateOnly ? "tap to change" : `${time} · tap to change`) : required ? "Required" : "Optional"}</small>
         </span>
         {!dateOnly ? (
@@ -188,7 +206,7 @@ export function DateTimePicker({ value, onChange, required, dateOnly, disablePas
             if (event.target === event.currentTarget) setOpen(false);
           }}
         >
-          <div className="modal vm-dtp-modal" role="dialog" aria-label="Pick a date">
+          <div className="modal vm-dtp-modal" role="dialog" aria-modal="true" aria-label="Pick a date">
             <div className="modal-header vm-dtp-modal-head">
               <h2>{dateOnly ? "Pick a date" : "Pick a date and time"}</h2>
               <button type="button" className="ghost-button modal-close" onClick={() => setOpen(false)} aria-label="Close">✕</button>
@@ -212,6 +230,8 @@ export function DateTimePicker({ value, onChange, required, dateOnly, disablePas
                     key={day}
                     type="button"
                     disabled={isSunday(day) || isPast(day)}
+                    aria-label={new Date(year, month, day).toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+                    aria-pressed={isSelected(day)}
                     className={`vm-dtp-day${isSelected(day) ? " selected" : ""}${isToday(day) ? " today" : ""}${isSunday(day) || isPast(day) ? " closed" : ""}`}
                     onClick={() => pickDay(day)}
                   >

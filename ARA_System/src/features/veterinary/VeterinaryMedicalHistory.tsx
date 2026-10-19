@@ -79,6 +79,7 @@ export function VeterinaryMedicalHistory({ currentView, onNavigate, selectedAnim
   if (selectedAnimalId && selected?.animal.id === selectedAnimalId) {
     return (
       <VeterinaryCarePage
+        onNavigate={onNavigate}
         record={selected}
         scene={careScene}
         onChangeScene={onChangeCareScene}

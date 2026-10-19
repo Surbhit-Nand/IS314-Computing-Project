@@ -1,10 +1,10 @@
 import { logAuditEntry } from "../../shared/audit/audit.service.js";
+import { FIJI_LOCATION_ERROR, isInFiji } from "../../shared/location.js";
 import { cloudinary, isCloudinaryConfigured } from "../../services/cloudinaryClient.js";
 import {
 	addRescueDebrief,
 	addRescueMissionUpdate,
 	createRescueReport,
-	createRescueIntakeHandoff,
 	deleteRescueDebrief,
 	findAllReports,
 	findAssignedReportsByDispatcher,
@@ -12,7 +12,6 @@ import {
 	findDebriefByReportIds,
 	findInProgressReportsByDispatcher,
 	findIntakeHandoffById,
-	findIntakeHandoffByReportId,
 	findIntakeHandoffsByReportIds,
 	findMissionUpdatesByReportIds,
 	findPendingIntakeHandoffs,
@@ -20,24 +19,38 @@ import {
 	findReportByReference,
 	findReportsByReporter,
 	findReportsByIds,
+	findActiveReports,
 	findActiveReportsByDispatcher,
 	findResolvedReports,
 	findResolvedReportsByDispatcher,
 	findStatusHistoryByReportIds,
 	addRescueStatusHistoryEntry,
 	claimRescueReport as claimRescueReportInRepository,
+	approveMissionTakeoverAtomically,
+	cancelPendingTakeoversForReport,
+	createPendingTakeoverRequestIfEligible,
+	decideTakeoverRequest,
 	deleteStatusHistoryEntry,
+	findAssignedReportsByOtherDispatcher,
+	findPendingTakeoverForReportAndRequester,
+	findPendingTakeoversByReportIds,
+	findPendingTakeoversByRequester,
+	findTakeoverRequestById,
+	isPendingTakeoverUniqueViolation,
 	markIntakeHandoffReceived as markIntakeHandoffReceivedInRepository,
 	releaseRescueReportAssignment,
 	reassignUnassignedRescueReport,
 	updateRescueReportStatusConditional,
+	withdrawTakeoverRequest,
 } from "./rescue.repository.js";
+import { createNotification } from "../notifications/notifications.repository.js";
 import type {
 	rescueDebriefs,
 	rescueIntakeHandoffs,
 	rescueMissionUpdates,
 	rescueReportStatusHistory,
 	rescueReports,
+	rescueTakeoverRequests,
 } from "../../db/schema.js";
 
 type RescueReportRow = typeof rescueReports.$inferSelect;
@@ -45,6 +58,7 @@ type RescueHistoryEntry = typeof rescueReportStatusHistory.$inferSelect;
 type RescueMissionUpdateRow = typeof rescueMissionUpdates.$inferSelect;
 type RescueDebriefRow = typeof rescueDebriefs.$inferSelect;
 type RescueIntakeHandoffRow = typeof rescueIntakeHandoffs.$inferSelect;
+export type RescueTakeoverRequest = typeof rescueTakeoverRequests.$inferSelect;
 
 // Phone reports are created through the exact same path as online ones (see
 // AGENTS.md's "one code path" mitigation) - the only difference is `source`.
@@ -98,7 +112,7 @@ export const RESCUE_OUTCOMES = [
 export type RescueOutcome = (typeof RESCUE_OUTCOMES)[number];
 
 // Outcomes that mean the animal was actually rescued - the only ones that
-// produce an Animal Intake handoff for the intake & profile team.
+// produce downstream intake work for the intake & profile team.
 export const RESCUE_SUCCESS_OUTCOMES = ["rescued_handed_to_spca"] as const;
 
 // The optional quick updates a dispatcher can file while a mission is in
@@ -123,6 +137,15 @@ export type RescueMission = RescueReportRow & {
 	debrief: RescueDebriefRow | null;
 	intakeHandoff: RescueIntakeHandoffRow | null;
 	summary: string;
+};
+
+// A mission plus the takeover-request context the viewing dispatcher needs:
+// `takeoverRequests` are the pending requests on a mission they own (owner
+// view), and `myTakeoverRequest` is their own pending request (requester
+// view on someone else's Assigned mission).
+export type RescueMissionWithTakeovers = RescueMission & {
+	takeoverRequests: RescueTakeoverRequest[];
+	myTakeoverRequest: RescueTakeoverRequest | null;
 };
 
 export class RescueWorkflowError extends Error {
@@ -255,8 +278,6 @@ export function generateRescueSummary(
 		lines.push(`Outcome: ${OUTCOME_LABELS[debrief.outcome] ?? debrief.outcome}`);
 		if (debrief.animalCondition) lines.push(`Animal condition: ${debrief.animalCondition}`);
 		lines.push(`What happened: ${debrief.whatHappened}`);
-		if (debrief.destinationOrHandoff) lines.push(`Destination / handoff: ${debrief.destinationOrHandoff}`);
-		if (debrief.veterinaryPriority) lines.push(`Veterinary priority at handoff: ${debrief.veterinaryPriority}`);
 		if (debrief.unsuccessfulDetails) lines.push(`Unsuccessful details: ${debrief.unsuccessfulDetails}`);
 	}
 
@@ -308,6 +329,41 @@ export async function attachMissionDetails(reports: RescueReportRow[]): Promise<
 	});
 }
 
+// Attaches the pending takeover requests a viewing dispatcher cares about:
+// the requests targeting the missions they own (owner view) and their own
+// pending request on each mission (requester view). One batched query each, so
+// a list never fans out into N+1 lookups.
+async function attachTakeoverInfo<T extends RescueMission>(
+	missions: T[],
+	viewerClerkUserId?: string,
+): Promise<(T & { takeoverRequests: RescueTakeoverRequest[]; myTakeoverRequest: RescueTakeoverRequest | null })[]> {
+	if (missions.length === 0) return [];
+	const ids = missions.map((mission) => mission.id);
+	const [pending, mine] = await Promise.all([
+		findPendingTakeoversByReportIds(ids),
+		viewerClerkUserId
+			? findPendingTakeoversByRequester(ids, viewerClerkUserId)
+			: Promise.resolve([] as RescueTakeoverRequest[]),
+	]);
+
+	const incomingByReport = new Map<string, RescueTakeoverRequest[]>();
+	for (const request of pending) {
+		const list = incomingByReport.get(request.reportId) ?? [];
+		list.push(request);
+		incomingByReport.set(request.reportId, list);
+	}
+	const mineByReport = new Map<string, RescueTakeoverRequest>();
+	for (const request of mine) {
+		mineByReport.set(request.reportId, request);
+	}
+
+	return missions.map((mission) => ({
+		...mission,
+		takeoverRequests: incomingByReport.get(mission.id) ?? [],
+		myTakeoverRequest: mineByReport.get(mission.id) ?? null,
+	}));
+}
+
 // Shared ranking for the Mission Board and both Active Mission groups:
 // Critical -> High -> Moderate -> Low, then oldest first within a band (oldest
 // alert has waited longest). Unknown urgencies sink to the bottom. Never
@@ -320,38 +376,33 @@ function sortMissionsByUrgency<T extends { urgency: string; createdAt: Date }>(m
 	});
 }
 
-// The Mission Board: alerts still awaiting a dispatcher - fresh "submitted"
-// rows and released/handed-over "awaiting_reassignment" rows, both with nobody
-// assigned. Once accepted, the alert leaves the board immediately (it becomes
-// the accepting dispatcher's Assigned or In Progress mission). The service
-// re-checks both conditions so a mis-configured query can never leak an
-// in-flight mission onto the Board.
+// The Mission Board: every unresolved alert, including missions that have
+// already been assigned or started. Assigned missions remain visible so the
+// rescue team has one shared view of unresolved work; only unassigned rows can
+// be accepted from the board.
 export async function listMissionBoard(): Promise<RescueMission[]> {
-	const available = await findAvailableReports();
-	const unassigned = available.filter(
-		(report) =>
-			(report.status === "submitted" || report.status === "awaiting_reassignment") &&
-			!report.assignedToClerkUserId,
-	);
-	return sortMissionsByUrgency(await attachMissionDetails(unassigned));
+	const active = await findActiveReports();
+	return sortMissionsByUrgency(await attachMissionDetails(active));
 }
 
 export type MyActiveMissions = {
-	assigned: RescueMission[];
+	assigned: RescueMissionWithTakeovers[];
 	inProgress: RescueMission[];
 };
 
 // A dispatcher's own active missions for the Active Mission workspace, already
 // split into the two strictly-disjoint groups the UI tabs between: "Assigned"
 // (accepted, not yet started) and "In Progress" (started, not yet resolved).
-// Legacy "rescued" rows are normalized to "in_progress" before grouping.
+// Legacy "rescued" rows are normalized to "in_progress" before grouping. The
+// Assigned group carries pending takeover requests targeting this dispatcher
+// so the list can badge "Takeover Requested".
 export async function listMyActiveMissions(clerkUserId: string): Promise<MyActiveMissions> {
 	const [assigned, inProgress] = await Promise.all([
 		attachMissionDetails(await findAssignedReportsByDispatcher(clerkUserId)),
 		attachMissionDetails(await findInProgressReportsByDispatcher(clerkUserId)),
 	]);
 	return {
-		assigned: sortMissionsByUrgency(assigned),
+		assigned: await attachTakeoverInfo(sortMissionsByUrgency(assigned), clerkUserId),
 		inProgress: sortMissionsByUrgency(inProgress),
 	};
 }
@@ -371,11 +422,16 @@ export async function listMissionHistory(): Promise<RescueMission[]> {
 }
 
 // Full detail for one mission, used by the Mission Board panel, the Active
-// Mission workspace, and the Mission History drill-down.
-export async function getRescueMissionById(id: string): Promise<RescueMission | undefined> {
+// Mission workspace, and the Mission History drill-down. Carries the takeover
+// request context for the viewing dispatcher.
+export async function getRescueMissionById(
+	id: string,
+	viewerClerkUserId?: string,
+): Promise<RescueMissionWithTakeovers | undefined> {
 	const report = await findReportById(id);
 	if (!report) return undefined;
-	return (await attachMissionDetails([report]))[0];
+	const mission = (await attachMissionDetails([report]))[0];
+	return (await attachTakeoverInfo([mission], viewerClerkUserId))[0];
 }
 
 // Accept Mission: the same guarded single-assignment as the legacy claim -
@@ -480,6 +536,12 @@ export async function startRescueMission(
 		metadata: { reference: updated.reference, fromStatus: report.status, toStatus: updated.status },
 	});
 
+	await closePendingTakeovers(
+		id,
+		updated.reference,
+		"This mission has now been started, so your takeover request was closed.",
+	);
+
 	return (await attachMissionDetails([updated]))[0];
 }
 
@@ -527,7 +589,363 @@ export async function releaseRescueMission(
 		metadata: { reference: updated.reference, fromStatus: report.status, toStatus: updated.status, reason },
 	});
 
+	await closePendingTakeovers(
+		id,
+		updated.reference,
+		"This mission has been released, so your takeover request was closed.",
+	);
+
 	return (await attachMissionDetails([updated]))[0];
+}
+
+// ---- Mission takeover requests ----
+//
+// A dispatcher may ask to take an Assigned mission over from the dispatcher
+// currently holding it. The mission stays with its owner (status unchanged)
+// while the request is pending; only that owner can approve (transferring the
+// assignment atomically, status kept at Assigned) or decline. Every request
+// and decision is recorded, and the mission's alert details, photos, and
+// history are never touched by a takeover.
+
+// The "Assigned to Others" list: Assigned missions held by another dispatcher,
+// with the viewer's own pending request (if any) attached.
+export async function listAssignedToOthers(
+	viewerClerkUserId: string,
+): Promise<RescueMissionWithTakeovers[]> {
+	const reports = await findAssignedReportsByOtherDispatcher(viewerClerkUserId);
+	const missions = sortMissionsByUrgency(await attachMissionDetails(reports));
+	return attachTakeoverInfo(missions, viewerClerkUserId);
+}
+
+// Notifies every requester whose pending request was closed because the
+// mission moved on (started, released, resolved, or taken by someone else).
+// Takes just the two fields a cancellation notice needs, so it accepts both the
+// full rows from cancelPendingTakeoversForReport and the lighter rows the atomic
+// approval returns. The notifier is injectable for tests.
+async function notifyClosedTakeoverRequests(
+	closed: { reportId: string; requestedByClerkUserId: string }[],
+	reference: string,
+	reason: string,
+	notify: typeof createNotification = createNotification,
+) {
+	await Promise.all(
+		closed.map((request) =>
+			notify({
+				recipientClerkUserId: request.requestedByClerkUserId,
+				type: "rescue.takeover_cancelled",
+				title: `Takeover request closed for ${reference}`,
+				body: reason,
+				entityType: "rescue_report",
+				entityId: request.reportId,
+			}),
+		),
+	);
+}
+
+// The collaborators the request/decision paths depend on, injectable so a test
+// can drive every database outcome - a stale request, a competing approval, a
+// mission that started/released first, a unique violation - against the real
+// service logic without a live database or module mocking. Production callers
+// pass nothing and get the real implementations.
+export type TakeoverDependencies = {
+	findReportById: typeof findReportById;
+	findTakeoverRequestById: typeof findTakeoverRequestById;
+	findPendingTakeoverForReportAndRequester: typeof findPendingTakeoverForReportAndRequester;
+	createPendingTakeoverRequestIfEligible: typeof createPendingTakeoverRequestIfEligible;
+	isPendingTakeoverUniqueViolation: typeof isPendingTakeoverUniqueViolation;
+	decideTakeoverRequest: typeof decideTakeoverRequest;
+	approveMissionTakeoverAtomically: typeof approveMissionTakeoverAtomically;
+	createNotification: typeof createNotification;
+	logAuditEntry: typeof logAuditEntry;
+	presentMissionWithTakeovers: (
+		report: RescueReportRow,
+		viewerClerkUserId?: string,
+	) => Promise<RescueMissionWithTakeovers>;
+};
+
+export const takeoverDependencies: TakeoverDependencies = {
+	findReportById,
+	findTakeoverRequestById,
+	findPendingTakeoverForReportAndRequester,
+	createPendingTakeoverRequestIfEligible,
+	isPendingTakeoverUniqueViolation,
+	decideTakeoverRequest,
+	approveMissionTakeoverAtomically,
+	createNotification,
+	logAuditEntry,
+	presentMissionWithTakeovers: async (report, viewerClerkUserId) =>
+		(await attachTakeoverInfo(await attachMissionDetails([report]), viewerClerkUserId))[0],
+};
+
+// Closes any pending takeover requests when a mission starts, is released, or
+// is resolved - the mission is no longer up for a takeover, so nobody should
+// be left waiting on it.
+async function closePendingTakeovers(reportId: string, reference: string, reason: string) {
+	const closed = await cancelPendingTakeoversForReport(reportId);
+	if (closed.length > 0) await notifyClosedTakeoverRequests(closed, reference, reason);
+}
+
+// Request to Take Over: a dispatcher asks for an Assigned mission held by
+// someone else. The mission stays put; the owner is notified and can approve
+// or decline. A dispatcher may hold at most one pending request per mission.
+export async function requestMissionTakeover(
+	id: string,
+	requesterClerkUserId: string,
+	requesterName: string,
+	input: { reason: string },
+	deps: TakeoverDependencies = takeoverDependencies,
+): Promise<RescueMissionWithTakeovers | undefined> {
+	const report = await deps.findReportById(id);
+	if (!report) return undefined;
+	if (report.status !== "assigned" || !report.assignedToClerkUserId) {
+		throw new RescueWorkflowError(
+			"Only a mission that is currently Assigned can be requested for takeover.",
+			409,
+		);
+	}
+	if (report.assignedToClerkUserId === requesterClerkUserId) {
+		throw new RescueWorkflowError("This mission is already assigned to you.", 409);
+	}
+	const reason = input.reason?.trim() ?? "";
+	if (!reason) {
+		throw new RescueWorkflowError("A short reason is required before requesting a takeover.", 400);
+	}
+	if (await deps.findPendingTakeoverForReportAndRequester(id, requesterClerkUserId)) {
+		throw new RescueWorkflowError("You already have a pending takeover request for this mission.", 409);
+	}
+
+	// The insert re-checks eligibility under a row lock inside the database, so
+	// a request that races a start/release/transfer is refused rather than
+	// attached to a mission that is no longer up for grabs.
+	let request: { id: string } | undefined;
+	try {
+		request = await deps.createPendingTakeoverRequestIfEligible({
+			reportId: id,
+			requesterClerkUserId,
+			requesterName,
+			reason,
+		});
+	} catch (error) {
+		// Only the (report, requester) WHERE pending unique index means "already
+		// pending"; any other database failure must surface as a real error.
+		if (deps.isPendingTakeoverUniqueViolation(error)) {
+			throw new RescueWorkflowError("You already have a pending takeover request for this mission.", 409);
+		}
+		throw error;
+	}
+	if (!request) {
+		throw new RescueWorkflowError(
+			"This mission is no longer available for a takeover request - please refresh and try again.",
+			409,
+		);
+	}
+
+	await deps.createNotification({
+		recipientClerkUserId: report.assignedToClerkUserId,
+		type: "rescue.takeover_requested",
+		title: `Takeover requested for ${report.reference}`,
+		body: `${requesterName} asked to take this mission over: "${reason}"`,
+		entityType: "rescue_report",
+		entityId: report.id,
+		actionId: request.id,
+	});
+
+	await deps.logAuditEntry({
+		actorClerkUserId: requesterClerkUserId,
+		action: "rescue.mission.takeover_requested",
+		entityType: "rescue_report",
+		entityId: report.id,
+		metadata: { reference: report.reference, reason, assignedTo: report.assignedTo },
+	});
+
+	return deps.presentMissionWithTakeovers(report, requesterClerkUserId);
+}
+
+// Read one takeover request as a notification deep-link target. Only the two
+// dispatchers party to the request - the mission owner it was addressed to and
+// the requester - may read it, so a stale notification cannot leak the reason
+// text to an unrelated dispatcher. Returns `undefined` (surfaced as 404) when
+// the request no longer exists. The decision UI calls this on open so it shows
+// the request's current status even after it has been handled.
+export async function getTakeoverRequestForViewer(
+	requestId: string,
+	viewerClerkUserId: string,
+): Promise<RescueTakeoverRequest | undefined> {
+	const request = await findTakeoverRequestById(requestId);
+	if (!request) return undefined;
+	const isParty =
+		request.assignedToClerkUserId === viewerClerkUserId ||
+		request.requestedByClerkUserId === viewerClerkUserId;
+	return isParty ? request : undefined;
+}
+
+// Withdraw: the requester pulls their own pending request back.
+export async function withdrawMissionTakeover(
+	requestId: string,
+	requesterClerkUserId: string,
+): Promise<RescueTakeoverRequest | undefined> {
+	const request = await findTakeoverRequestById(requestId);
+	if (!request) return undefined;
+	if (request.requestedByClerkUserId !== requesterClerkUserId) {
+		throw new RescueWorkflowError("You can only withdraw your own takeover request.", 403);
+	}
+	const withdrawn = await withdrawTakeoverRequest(requestId, requesterClerkUserId);
+	if (!withdrawn) {
+		throw new RescueWorkflowError("This takeover request has already been decided or withdrawn.", 409);
+	}
+
+	await createNotification({
+		recipientClerkUserId: request.assignedToClerkUserId,
+		type: "rescue.takeover_withdrawn",
+		title: "Takeover request withdrawn",
+		body: `${request.requestedByName ?? "A dispatcher"} withdrew their takeover request.`,
+		entityType: "rescue_report",
+		entityId: request.reportId,
+	});
+
+	await logAuditEntry({
+		actorClerkUserId: requesterClerkUserId,
+		action: "rescue.mission.takeover_withdrawn",
+		entityType: "rescue_report",
+		entityId: request.reportId,
+		metadata: { requestId },
+	});
+
+	return withdrawn;
+}
+
+// Approve / Decline: only the dispatcher currently assigned to the mission may
+// decide. Approving transfers the assignment to the requester in one atomic,
+// guarded UPDATE (status stays Assigned); every competing pending request is
+// then closed and its requester informed. Declining leaves the owner in place.
+export async function decideMissionTakeover(
+	requestId: string,
+	deciderClerkUserId: string,
+	decision: "approved" | "declined",
+	input: { decisionNote?: string } = {},
+	deps: TakeoverDependencies = takeoverDependencies,
+): Promise<RescueMissionWithTakeovers | undefined> {
+	const request = await deps.findTakeoverRequestById(requestId);
+	if (!request) return undefined;
+
+	const report = await deps.findReportById(request.reportId);
+	if (!report) {
+		throw new RescueWorkflowError("The mission for this takeover request no longer exists.", 404);
+	}
+	if (report.assignedToClerkUserId !== deciderClerkUserId) {
+		throw new RescueWorkflowError(
+			"Only the dispatcher currently assigned to this mission can decide on the takeover request.",
+			403,
+		);
+	}
+	if (report.status !== "assigned") {
+		throw new RescueWorkflowError(
+			"This mission is no longer Assigned, so the takeover request cannot be decided.",
+			409,
+		);
+	}
+	if (request.status !== "pending") {
+		throw new RescueWorkflowError("This takeover request has already been decided.", 409);
+	}
+	if (request.assignedToClerkUserId !== deciderClerkUserId) {
+		throw new RescueWorkflowError(
+			"Only the dispatcher this takeover request was addressed to can decide on it.",
+			403,
+		);
+	}
+
+	if (decision === "declined") {
+		const note = input.decisionNote?.trim() || null;
+		const declined = await deps.decideTakeoverRequest(requestId, deciderClerkUserId, "declined", note);
+		if (!declined) {
+			throw new RescueWorkflowError("This takeover request has already been decided.", 409);
+		}
+
+		await deps.createNotification({
+			recipientClerkUserId: request.requestedByClerkUserId,
+			type: "rescue.takeover_declined",
+			title: `Takeover request declined for ${report.reference}`,
+			body: note
+				? `Your request to take over this mission was declined: "${note}"`
+				: "Your request to take over this mission was declined.",
+			entityType: "rescue_report",
+			entityId: report.id,
+		});
+
+		await deps.logAuditEntry({
+			actorClerkUserId: deciderClerkUserId,
+			action: "rescue.mission.takeover_declined",
+			entityType: "rescue_report",
+			entityId: report.id,
+			metadata: { reference: report.reference, requestId, requester: request.requestedByClerkUserId },
+		});
+
+		return deps.presentMissionWithTakeovers(report, deciderClerkUserId);
+	}
+
+	// Approve: transfer the assignment, mark this request approved, close every
+	// competing pending request, and write the handover timeline entry in ONE
+	// database statement. The guard re-checks that the request is still pending
+	// and addressed to this decider and that the mission is still Assigned to
+	// them, so a stale action (withdrawn, declined, already approved, or the
+	// owner changed) transfers nothing and reports no partial success.
+	const requesterClerkUserId = request.requestedByClerkUserId;
+	const requesterName = request.requestedByName ?? "Dispatcher";
+	const outcome = await deps.approveMissionTakeoverAtomically({
+		requestId,
+		reportId: report.id,
+		deciderClerkUserId,
+		requesterClerkUserId,
+		requesterName,
+		historyNotes: `Mission transferred from ${report.assignedTo ?? "the previous dispatcher"} to ${requesterName}: "${request.reason}"`,
+	});
+	if (!outcome.transferred) {
+		throw new RescueWorkflowError(
+			"This mission has changed since the takeover request was made - please refresh and try again.",
+			409,
+		);
+	}
+
+	await deps.createNotification({
+		recipientClerkUserId: requesterClerkUserId,
+		type: "rescue.takeover_approved",
+		title: `Takeover approved for ${report.reference}`,
+		body: "This mission is now assigned to you.",
+		entityType: "rescue_report",
+		entityId: report.id,
+	});
+	if (outcome.closed.length > 0) {
+		await notifyClosedTakeoverRequests(
+			outcome.closed,
+			report.reference,
+			"Another dispatcher now holds this mission, so your takeover request was closed.",
+			deps.createNotification,
+		);
+	}
+
+	await deps.logAuditEntry({
+		actorClerkUserId: deciderClerkUserId,
+		action: "rescue.mission.takeover_approved",
+		entityType: "rescue_report",
+		entityId: report.id,
+		metadata: {
+			reference: report.reference,
+			requestId,
+			transferredFrom: report.assignedToClerkUserId,
+			transferredTo: requesterClerkUserId,
+			reason: request.reason,
+		},
+	});
+
+	// All side effects above are keyed off the successful atomic outcome, so the
+	// returned mission reflects the new owner without a second database read.
+	const transferredReport: RescueReportRow = {
+		...report,
+		assignedTo: requesterName,
+		assignedToClerkUserId: requesterClerkUserId,
+		assignedAt: new Date(),
+	};
+	return deps.presentMissionWithTakeovers(transferredReport, deciderClerkUserId);
 }
 
 // Quick update while a rescue is in progress: a note or a photo. Timestamped
@@ -572,10 +990,10 @@ export async function addRescueUpdate(
 }
 
 // Post-Rescue Debrief: the single concise debrief that completes a mission
-// (in_progress -> resolved). Everything - the timeline milestone, the debrief
-// row, the guarded status change, and (for rescued animals) the intake
-// handoff - is written in the same history-first order as the other dispatcher
-// actions, with compensating deletes so no half-written state survives a race.
+// (in_progress -> resolved). The timeline milestone, debrief row, and guarded
+// status change are written in the same history-first order as the other
+// dispatcher actions. Resolution no longer requires a veterinary priority and
+// does not create an intake handoff - intake is a separate workflow.
 export async function completeRescueDebrief(
 	id: string,
 	actorClerkUserId: string,
@@ -584,7 +1002,6 @@ export async function completeRescueDebrief(
 		outcome: RescueOutcome;
 		whatHappened: string;
 		animalCondition?: string;
-		veterinaryPriority?: string;
 		unsuccessfulDetails?: string;
 		imageUrls?: string[];
 	},
@@ -598,12 +1015,10 @@ export async function completeRescueDebrief(
 	if (!whatHappened) {
 		throw new RescueWorkflowError("Tell us what happened during the rescue to complete the debrief.", 400);
 	}
-	const rescued = (RESCUE_SUCCESS_OUTCOMES as readonly string[]).includes(input.outcome);
-	if (rescued && !input.veterinaryPriority?.trim()) {
-		throw new RescueWorkflowError("Veterinary priority is required so the intake team can triage.", 400);
-	}
-	if (input.outcome === "other" && !input.unsuccessfulDetails?.trim()) {
-		throw new RescueWorkflowError('Please explain the "Other" outcome in the unsuccessful details.', 400);
+	if (input.outcome === "other") {
+		// Retired for new dispatcher resolutions - historical debriefs that used
+		// "Other" stay readable in Mission History, but no new one may be written.
+		throw new RescueWorkflowError('"Other" is no longer available as a rescue outcome. Please select another outcome.', 400);
 	}
 
 	// 1. The resolved timeline milestone, written first so a later failure can
@@ -618,9 +1033,7 @@ export async function completeRescueDebrief(
 			dispatcherName,
 			notes: whatHappened,
 			outcome: input.outcome,
-			additionalRemarks: input.veterinaryPriority?.trim()
-				? `Veterinary priority: ${input.veterinaryPriority.trim()}`
-				: input.unsuccessfulDetails?.trim() || undefined,
+			additionalRemarks: input.unsuccessfulDetails?.trim() || undefined,
 			imageUrls: input.imageUrls ?? [],
 		});
 	} catch {
@@ -636,7 +1049,6 @@ export async function completeRescueDebrief(
 			animalCondition: input.animalCondition?.trim() || null,
 			whatHappened,
 			destinationOrHandoff: null,
-			veterinaryPriority: input.veterinaryPriority?.trim() || null,
 			unsuccessfulDetails: input.unsuccessfulDetails?.trim() || null,
 			createdByClerkUserId: actorClerkUserId,
 			dispatcherName,
@@ -658,32 +1070,19 @@ export async function completeRescueDebrief(
 		);
 	}
 
-	// 4. Animal Intake handoff for rescued outcomes only. Unique on report_id
-	// (onConflictDoNothing) so even a retried or racing request can never
-	// create two handoffs for the same animal.
-	let intakeHandoff: RescueIntakeHandoffRow | null = null;
-	if (rescued) {
-		const created = await createRescueIntakeHandoff({
-			reportId: id,
-			animalType: report.animalType,
-			animalBreed: report.animalBreed,
-			conditionDescription: report.conditionDescription,
-			veterinaryPriority: input.veterinaryPriority?.trim() || null,
-			destination: "SPCA Fiji",
-			notes: whatHappened,
-			createdByClerkUserId: actorClerkUserId,
-			dispatcherName,
-		});
-		intakeHandoff = created ?? (await findIntakeHandoffByReportId(id)) ?? null;
-	}
-
 	await logAuditEntry({
 		actorClerkUserId,
 		action: "rescue.mission.resolved",
 		entityType: "rescue_report",
 		entityId: updated.id,
-		metadata: { reference: updated.reference, outcome: input.outcome, intakeHandoff: Boolean(intakeHandoff) },
+		metadata: { reference: updated.reference, outcome: input.outcome },
 	});
+
+	await closePendingTakeovers(
+		id,
+		updated.reference,
+		"This mission has been resolved, so your takeover request was closed.",
+	);
 
 	const withDetails = await attachMissionDetails([updated]);
 	return withDetails[0];
@@ -771,6 +1170,12 @@ export async function submitRescueReport(
 	input: SubmitRescueReportInput,
 	options: { reporterClerkUserId?: string; actorClerkUserId?: string } = {},
 ) {
+	if (input.latitude == null || input.longitude == null) {
+		throw new RescueWorkflowError("Both latitude and longitude must be provided together", 400);
+	}
+	if (!isInFiji(input.latitude, input.longitude)) {
+		throw new RescueWorkflowError(FIJI_LOCATION_ERROR, 400);
+	}
 	const reference = await generateUniqueReference();
 	const report = await createRescueReport({
 		...input,
@@ -888,8 +1293,10 @@ export async function resolveRescueReport(
 	if (!input.outcome) {
 		throw new RescueWorkflowError("A rescue outcome is required before this case can be resolved.", 400);
 	}
-	if (input.outcome === "other" && !(input.additionalRemarks?.trim() ?? "")) {
-		throw new RescueWorkflowError('Please explain the "Other" outcome in the additional remarks.', 400);
+	if (input.outcome === "other") {
+		// Retired for new dispatcher resolutions - historical records that used
+		// "Other" stay readable, but no new one may be written.
+		throw new RescueWorkflowError('"Other" is no longer available as a rescue outcome. Please select another outcome.', 400);
 	}
 
 	const updated = await applyProgressTransition({

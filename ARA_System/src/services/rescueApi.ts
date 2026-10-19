@@ -5,14 +5,14 @@ import type {
   RescueOutcome,
   RescueReport,
   RescueReportFormInput,
+  RescueTakeoverRequest,
   RescueUpdateType,
-  RescueUrgency,
 } from "../types/rescue";
 
 // Same base URL / dev-server-not-running guard pattern used in
 // animalsApi.ts and ManagerDashboard.tsx - one shared copy for every rescue
 // page.
-const apiBaseUrl = import.meta.env.VITE_API_URL ?? "http://localhost:8787";
+const apiBaseUrl = import.meta.env?.VITE_API_URL ?? "http://localhost:8787";
 
 export const rescueApiBaseUrl = apiBaseUrl;
 
@@ -249,7 +249,7 @@ export async function fetchMyActiveMissions(token: string): Promise<MyActiveMiss
 }
 
 // Staff + dispatchers: one mission in full (report, timeline, updates,
-// debrief, intake handoff, generated summary).
+// debrief, and generated summary).
 export async function fetchMission(token: string, id: string): Promise<RescueMission> {
   const response = await fetch(`${apiBaseUrl}/api/rescue/missions/${id}`, {
     headers: authHeaders(token),
@@ -285,6 +285,92 @@ export async function startMission(
   });
   const result = await readApiResponse<RescueMission | { error?: string }>(response);
   if (!response.ok) throw new Error((result as { error?: string }).error ?? "The mission could not be started.");
+  return result as RescueMission;
+}
+
+// Dispatcher-only: Assigned missions held by another dispatcher, for the
+// "Assigned to Others" list.
+export async function fetchAssignedToOthers(token: string): Promise<RescueMission[]> {
+  const response = await fetch(`${apiBaseUrl}/api/rescue/missions/assigned-to-others`, {
+    headers: authHeaders(token),
+  });
+  const result = await readApiResponse<RescueMission[] | { error?: string }>(response);
+  if (!response.ok) {
+    throw new Error(
+      (result as { error?: string }).error ?? "Assigned-to-others missions could not be loaded.",
+    );
+  }
+  return result as RescueMission[];
+}
+
+// Dispatcher-only: Request to Take Over an Assigned mission held by another
+// dispatcher.
+export async function requestMissionTakeover(
+  token: string,
+  id: string,
+  reason: string,
+): Promise<RescueMission> {
+  const response = await fetch(`${apiBaseUrl}/api/rescue/missions/${id}/takeover`, {
+    method: "POST",
+    headers: authHeaders(token, { "Content-Type": "application/json" }),
+    body: JSON.stringify({ reason }),
+  });
+  const result = await readApiResponse<RescueMission | { error?: string }>(response);
+  if (!response.ok) {
+    throw new Error((result as { error?: string }).error ?? "Takeover request could not be sent.");
+  }
+  return result as RescueMission;
+}
+
+// Dispatcher-only: withdraw your own pending takeover request.
+export async function withdrawMissionTakeover(
+  token: string,
+  requestId: string,
+): Promise<RescueTakeoverRequest> {
+  const response = await fetch(`${apiBaseUrl}/api/rescue/missions/takeover/${requestId}/withdraw`, {
+    method: "POST",
+    headers: authHeaders(token),
+  });
+  const result = await readApiResponse<RescueTakeoverRequest | { error?: string }>(response);
+  if (!response.ok) {
+    throw new Error((result as { error?: string }).error ?? "Takeover request could not be withdrawn.");
+  }
+  return result as RescueTakeoverRequest;
+}
+
+// Dispatcher-only: read one takeover request by id (the notification
+// deep-link). Only the mission owner the request was addressed to, or the
+// requester, may read it.
+export async function fetchTakeoverRequest(
+  token: string,
+  requestId: string,
+): Promise<RescueTakeoverRequest> {
+  const response = await fetch(`${apiBaseUrl}/api/rescue/missions/takeover/${requestId}`, {
+    headers: authHeaders(token),
+  });
+  const result = await readApiResponse<RescueTakeoverRequest | { error?: string }>(response);
+  if (!response.ok) {
+    throw new Error((result as { error?: string }).error ?? "The takeover request could not be loaded.");
+  }
+  return result as RescueTakeoverRequest;
+}
+
+// Dispatcher-only: approve or decline a pending takeover request (owner only).
+export async function decideMissionTakeover(
+  token: string,
+  requestId: string,
+  decision: "approved" | "declined",
+  decisionNote?: string,
+): Promise<RescueMission> {
+  const response = await fetch(`${apiBaseUrl}/api/rescue/missions/takeover/${requestId}/decide`, {
+    method: "POST",
+    headers: authHeaders(token, { "Content-Type": "application/json" }),
+    body: JSON.stringify({ decision, decisionNote }),
+  });
+  const result = await readApiResponse<RescueMission | { error?: string }>(response);
+  if (!response.ok) {
+    throw new Error((result as { error?: string }).error ?? "Takeover decision could not be saved.");
+  }
   return result as RescueMission;
 }
 
@@ -335,7 +421,6 @@ export async function completeMissionDebrief(
     outcome: RescueOutcome;
     whatHappened: string;
     animalCondition?: string;
-    veterinaryPriority?: RescueUrgency;
     unsuccessfulDetails?: string;
   },
 ): Promise<RescueMission> {

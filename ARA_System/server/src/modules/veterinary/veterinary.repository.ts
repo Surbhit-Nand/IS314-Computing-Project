@@ -1,6 +1,8 @@
+import { emergencyClosureStatement } from "./emergency.lifecycle.js";
 import { and, asc, desc, eq, exists, gte, inArray, isNull, ne, sql } from "drizzle-orm";
 import { db } from "../../db/client.js";
 import {
+	adoptionApplications,
 	animals,
 	vetAppointments,
 	veterinaryCarePlans,
@@ -72,7 +74,7 @@ export async function listMedicalQueue() {
 			careCompleted: careItemsDone,
 		})
 		.from(animals)
-		.where(and(isNull(animals.deletedAt), ne(animals.status, "adopted"), eq(animals.medicallyCleared, false)))
+		.where(and(isNull(animals.deletedAt), sql`${animals.status} not in ('adopted','closed')`, eq(animals.medicallyCleared, false)))
 		.orderBy(
 			// Most urgent priority first (critical -> routine, unset last)...
 			sql`case ${animals.veterinaryPriority}
@@ -198,9 +200,21 @@ export async function createTreatment(input: typeof veterinaryTreatmentHistory.$
 
 export async function listAppointments() {
 	return db
-		.select({ appointment: vetAppointments, animal: animals })
+		.select({
+			appointment: vetAppointments,
+			animal: animals,
+			adopterName: adoptionApplications.fullName,
+		})
 		.from(vetAppointments)
 		.innerJoin(animals, eq(vetAppointments.animalId, animals.id))
+		.leftJoin(
+			adoptionApplications,
+			and(
+				eq(adoptionApplications.animalId, animals.id),
+				eq(adoptionApplications.applicantClerkUserId, vetAppointments.bookedByClerkUserId),
+				inArray(adoptionApplications.status, ["approved", "completed"]),
+			),
+		)
 		.where(and(eq(vetAppointments.status, "booked"), gte(vetAppointments.appointmentDate, new Date())))
 		.orderBy(asc(vetAppointments.appointmentDate));
 }
@@ -222,6 +236,6 @@ export async function updateAppointment(id: string, input: Partial<typeof vetApp
 
 export async function clearAnimal(animalId: string, clerkUserId: string, notes?: string) {
 	const clearedAt = new Date();
-	const [animal] = await db.update(animals).set({ medicallyCleared: true, veterinaryStatus: "medically_cleared", medicalClearanceDate: clearedAt, medicalClearedByClerkUserId: clerkUserId, medicalClearanceNotes: notes, updatedAt: clearedAt }).where(eq(animals.id, animalId)).returning();
-	return { animal, clearedBy: clerkUserId, clearedAt };
+	const [updated] = await db.batch([db.update(animals).set({ medicallyCleared: true, veterinaryStatus: "medically_cleared", medicalClearanceDate: clearedAt, medicalClearedByClerkUserId: clerkUserId, medicalClearanceNotes: notes, updatedAt: clearedAt }).where(eq(animals.id, animalId)).returning(), db.execute(emergencyClosureStatement(animalId, clerkUserId))]);
+	return { animal: updated[0], clearedBy: clerkUserId, clearedAt };
 }

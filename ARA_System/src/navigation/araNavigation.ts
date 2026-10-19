@@ -8,7 +8,8 @@ export const views = [
   "rescue-active", "rescue-history", "user-dashboard", "register-animal",
   "manage-animals", "edit-animal", "rescue-report", "rescue-report-phone",
   "my-reports", "manage-rescue-reports", "adoption-apply", "my-applications",
-  "my-profile", "manage-adoption-applications", "reports", "veterinary-dashboard",
+  "my-animals", "my-animal-record", "my-animal-booking", "my-profile",
+  "manage-adoption-applications", "reports", "veterinary-dashboard",
   "veterinary-record", "veterinary-records", "vet-appointments", "vet-booking",
   "vet-appointment-details",
 ] as const;
@@ -39,6 +40,7 @@ const id = z.string().trim().min(1);
 const nullableText = z.string().nullable();
 const animalSchema = z.object({
   id, publicId: z.string(), name: z.string(), type: z.enum(["dog", "cat", "rabbit", "other"]),
+  speciesName: nullableText.default(null),
   breed: nullableText, estimatedAge: nullableText, gender: nullableText, colour: nullableText,
   description: nullableText, rescueDate: nullableText, behaviour: nullableText, rescueHistory: nullableText,
   photoUrls: z.array(z.string()), vaccinationStatus: z.enum(["vaccinated", "not_vaccinated"]),
@@ -79,7 +81,8 @@ export function canVisit(view: View, session: NavigationSession): boolean {
     case "veterinary-dashboard": case "veterinary-record": case "veterinary-records":
     case "vet-appointment-details": case "vet-appointments":
       return !!userId && (devBypass || role === "veterinarian");
-    case "user-dashboard": case "my-profile": case "my-reports": case "my-applications": case "vet-booking":
+    case "user-dashboard": case "my-profile": case "my-reports": case "my-applications":
+    case "my-animals": case "my-animal-record": case "my-animal-booking": case "vet-booking":
       return !!userId;
     default: return true; // Includes public rescue and the adoption sign-in prompt.
   }
@@ -109,6 +112,10 @@ export function resolveNavigation(value: unknown, session: NavigationSession): A
     case "edit-animal": {
       const selected = id.safeParse(input.selectedAnimalId);
       return selected.success ? { ...next, selectedAnimalId: selected.data } : base("manage-animals");
+    }
+    case "my-animal-record": case "my-animal-booking": {
+      const selected = id.safeParse(input.selectedAnimalId);
+      return selected.success ? { ...next, selectedAnimalId: selected.data } : base("my-animals");
     }
     case "veterinary-record": {
       const parent = input.veterinaryParent === "veterinary-records" ? "veterinary-records" : "veterinary-dashboard";

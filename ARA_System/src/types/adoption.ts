@@ -6,7 +6,8 @@ export type AdoptionStatus =
   | "under_review"
   | "approved"
   | "completed"
-  | "rejected";
+  | "rejected"
+  | "withdrawn";
 
 export type AdoptionStatusHistoryEntry = {
   id: string;
@@ -140,6 +141,8 @@ export function adoptionStatusLabel(status: AdoptionStatus): string {
       return "Approved - one step to go";
     case "completed":
       return "Adopted - welcome home!";
+    case "withdrawn":
+      return "Withdrawn by you";
     default:
       return "Not approved";
   }
@@ -158,9 +161,24 @@ export function adoptionStatusShortLabel(status: AdoptionStatus): string {
       return "Approved";
     case "completed":
       return "Adopted";
+    case "withdrawn":
+      return "Withdrawn";
     default:
       return "Not approved";
   }
+}
+
+// Applicant-facing closure wording. An applicant never sees "withdrawn" as a
+// lifecycle status: withdrawing is an action they take, so the resulting state
+// reads as a cancellation. The staff queue keeps the "Withdrawn" wording (it
+// needs to find and count those records), so these wrappers are used only by
+// the applicant's own views.
+export function applicantClosureLabel(status: AdoptionStatus): string {
+  return status === "withdrawn" ? "Cancelled by you" : adoptionStatusLabel(status);
+}
+
+export function applicantClosureShortLabel(status: AdoptionStatus): string {
+  return status === "withdrawn" ? "Cancelled" : adoptionStatusShortLabel(status);
 }
 
 export function adoptionStatusClass(status: AdoptionStatus): string {

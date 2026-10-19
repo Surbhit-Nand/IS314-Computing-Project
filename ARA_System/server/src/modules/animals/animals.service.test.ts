@@ -76,6 +76,7 @@ const BASE_PROFILE = {
 	publicId: "SPCA-2026-0001",
 	name: "Milo",
 	type: "dog",
+	speciesName: null,
 	breed: "Terrier",
 	estimatedAge: "2 years",
 	size: "small",
@@ -207,6 +208,15 @@ describe("the text sent to the embedding provider", () => {
 
 		assert.match(text, /Size: Extra large/);
 		assert.match(text, /Species: Rabbit/);
+	});
+
+	it("uses the typed species name for other animals", () => {
+		const text = buildAnimalSearchText(animal({ type: "other", speciesName: "Guinea Pig", breed: "Unknown" }));
+		assert.match(text, /Species: Guinea Pig/);
+		assert.match(text, /Breed: Unknown/);
+
+		const unnamed = buildAnimalSearchText(animal({ type: "other", speciesName: null }));
+		assert.match(unnamed, /Species: Other pet/);
 	});
 
 	it("omits fields staff left blank rather than embedding empty labels", () => {

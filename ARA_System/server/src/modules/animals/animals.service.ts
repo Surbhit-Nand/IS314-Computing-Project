@@ -226,6 +226,13 @@ export async function registerAnimal(
 		publicId,
 		medicallyCleared: false,
 		status: "intake",
+		// Registering an animal IS the moment it's received into care, so the
+		// rescue date is today's date, set here rather than asking staff to
+		// enter it - per lecturer feedback. Always today's date regardless of
+		// what (if anything) is in `input`, since the client no longer sends
+		// rescueDate at all. updateAnimalProfile below never touches this
+		// column, so it can't be changed once set.
+		rescueDate: new Date().toISOString().slice(0, 10),
 	});
 
 	// A new animal is not publicly listed yet (medically_cleared is false until a
