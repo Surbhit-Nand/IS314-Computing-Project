@@ -14380,3 +14380,104 @@
     padding: 21px;
   }
 }
+
+/* Keep takeover decisions compact and distinct from page-level actions. */
+.rescue-takeover-card .rescue-takeover-request {
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.rescue-takeover-card .rescue-takeover-request-linked {
+  border-color: var(--teal);
+  background: var(--teal-tint);
+  box-shadow: none;
+}
+
+.rescue-takeover-card .rescue-takeover-request-copy {
+  flex: 1 1 240px;
+  overflow-wrap: anywhere;
+}
+
+.rescue-takeover-card .rescue-takeover-request-copy strong {
+  font-size: 0.94rem;
+}
+
+.rescue-takeover-card .rescue-takeover-request-copy p {
+  margin: 6px 0 10px;
+}
+
+.rescue-takeover-card .rescue-takeover-actions {
+  align-items: center;
+  gap: 8px;
+}
+
+.rescue-takeover-card .rescue-takeover-actions > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1.25;
+  white-space: nowrap;
+  box-shadow: none;
+  transform: none;
+}
+
+.rescue-takeover-card .rescue-takeover-actions > .teal-button {
+  border-color: var(--teal-dark);
+  background: var(--teal-dark);
+  color: var(--white);
+}
+
+.rescue-takeover-card .rescue-takeover-actions > .ghost-button {
+  background: var(--white);
+  color: var(--slate);
+}
+
+.rescue-takeover-card .rescue-takeover-actions > .teal-button:hover:not(:disabled) {
+  border-color: var(--navy);
+  background: var(--navy);
+}
+
+.rescue-takeover-card .rescue-takeover-actions > .ghost-button:hover:not(:disabled) {
+  border-color: var(--slate);
+  background: var(--bg);
+  color: var(--navy);
+}
+
+.rescue-takeover-card .rescue-takeover-actions > button:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 3px;
+}
+
+.rescue-takeover-card .rescue-takeover-actions > button:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.rescue-takeover-card .rescue-takeover-confirmation {
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+@media (max-width: 620px) {
+  .rescue-takeover-card .rescue-takeover-request {
+    align-items: stretch;
+  }
+
+  .rescue-takeover-card .rescue-takeover-request-copy {
+    flex-basis: auto;
+  }
+
+  .rescue-takeover-card .rescue-takeover-actions > button {
+    flex: 1 1 auto;
+  }
+}

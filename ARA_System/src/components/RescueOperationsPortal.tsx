@@ -386,11 +386,12 @@ export function RescueOperationsPortal({ onNavigate, page = "rescue-board", deta
   const detailMission = useMemo(() => {
     if (!detailMissionId) return null;
     return (
-      board.find((mission) => mission.id === detailMissionId) ??
-      history.find((mission) => mission.id === detailMissionId) ??
+      // Assigned lists carry takeover context that the shared board omits.
       myAssigned.find((mission) => mission.id === detailMissionId) ??
-      myInProgress.find((mission) => mission.id === detailMissionId) ??
       assignedToOthers.find((mission) => mission.id === detailMissionId) ??
+      myInProgress.find((mission) => mission.id === detailMissionId) ??
+      history.find((mission) => mission.id === detailMissionId) ??
+      board.find((mission) => mission.id === detailMissionId) ??
       null
     );
   }, [assignedToOthers, board, detailMissionId, history, myAssigned, myInProgress]);
@@ -1876,6 +1877,7 @@ function MissionDetail({
               <button
                 type="button"
                 className="ghost-button"
+                disabled={isActionSubmitting}
                 onClick={() => onWithdrawTakeover(mission.myTakeoverRequest!.id, mission.reference)}
               >
                 Withdraw Request
@@ -1889,6 +1891,7 @@ function MissionDetail({
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
+                  if (isActionSubmitting) return;
                   const form = e.currentTarget;
                   const reason = (form.elements.namedItem("takeoverReason") as HTMLTextAreaElement).value;
                   if (reason.trim()) {
@@ -1905,7 +1908,7 @@ function MissionDetail({
                   rows={2}
                   required
                 />
-                <button type="submit" className="teal-button" style={{ alignSelf: "flex-start" }}>
+                <button type="submit" className="teal-button" disabled={isActionSubmitting} style={{ alignSelf: "flex-start" }}>
                   Request Takeover
                 </button>
               </form>

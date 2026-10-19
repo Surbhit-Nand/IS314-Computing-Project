@@ -802,6 +802,43 @@ describe("Rescue mission workflow", () => {
     assert.equal(auditEntries.at(-1)?.action, "rescue.mission.takeover_approved");
   });
 
+  test("approval notifies every competing requester that their request is closed", async () => {
+    impls.set("findReportById", async () => baseReport({
+      status: "assigned",
+      assignedTo: "Dispatcher B",
+      assignedToClerkUserId: OTHER_DISPATCHER_ID,
+    }));
+    impls.set("findTakeoverRequestById", async () => ({
+      id: "takeover-winner",
+      reportId: REPORT_ID,
+      requestedByClerkUserId: DISPATCHER_ID,
+      requestedByName: "Dispatcher A",
+      assignedToClerkUserId: OTHER_DISPATCHER_ID,
+      reason: "I am nearby.",
+      status: "pending",
+    }));
+    const competitors = ["dispatcher-c", "dispatcher-d"];
+    impls.set("approveMissionTakeoverAtomically", async () => ({
+      transferred: true,
+      approvedRequestId: "takeover-winner",
+      closed: competitors.map((requestedByClerkUserId) => ({
+        reportId: REPORT_ID,
+        requestedByClerkUserId,
+      })),
+    }));
+
+    const transferred = await decideMissionTakeover("takeover-winner", OTHER_DISPATCHER_ID, "approved");
+
+    assert.equal(transferred?.assignedToClerkUserId, DISPATCHER_ID);
+    const closedNotices = notifications.filter((notice) => notice.type === "rescue.takeover_cancelled");
+    assert.equal(closedNotices.length, competitors.length);
+    assert.deepEqual(closedNotices.map((notice) => notice.recipientClerkUserId).sort(), competitors);
+    for (const notice of closedNotices) {
+      assert.equal(notice.entityId, REPORT_ID);
+      assert.equal(notice.body, "Another dispatcher now holds this mission, so your takeover request was closed.");
+    }
+  });
+
   test("only the current assignee can decide and rejection preserves assignment", async () => {
     const assigned = baseReport({
       status: "assigned",
