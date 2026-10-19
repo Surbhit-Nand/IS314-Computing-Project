@@ -32,7 +32,7 @@ into a single record. Three modules, plus cross-cutting donations:
 | Backend | **Express 5 + TypeScript** in `server/src/`, Drizzle ORM |
 | Data | PostgreSQL on Neon, schema `server/src/db/schema.ts` |
 | Auth | Clerk (`@clerk/react` frontend; `@clerk/backend` verifies Bearer tokens) |
-| Other | Cloudinary (photo uploads), Leaflet (rescue map) |
+| Other | Cloudinary (photo uploads), Leaflet (rescue map), `@electric-sql/pglite` (dev-only in-process Postgres for DB-backed suites) |
 | NOT present | Next.js, Tailwind, Stripe (see checklist), plain `.js` when TS works |
 
 - **Backend module pattern**: `server/src/modules/<module>/{routes,service,repository}.ts`.
@@ -40,8 +40,12 @@ into a single record. Three modules, plus cross-cutting donations:
   business rules; repositories access the DB. Routes handle HTTP, nothing else.
 - **Mounted routers** (`server/src/app.ts`): `/api/animals`, `/api/admin`
   (staff), `/api/rescue`, `/api/adoptions`, `/api/donations`, `/api/reports`
-  (manager/admin), `/api/veterinary` (veterinarian), `/api/webhooks` (Clerk
-  webhook, mounted before the JSON body parser because it needs the raw body).
+  (manager/admin), `/api/veterinary` (veterinarian, incl. `/emergency-responses`),
+  `/api/my-animals` (signed-in owner, scoped to their approved/completed
+  adoption), `/api/notifications`, `/api/webhooks` (Clerk webhook, mounted
+  before the JSON body parser because it needs the raw body). Global middleware
+  `veterinaryAlertChanges()` (`modules/notifications/veterinaryAlerts.middleware.ts`)
+  runs after `express.json()` and syncs veterinary alerts on successful writes.
 - **Frontend navigation (history-state store, no URL router)**: `src/App.tsx`
   renders the view from `useAraNavigation` (`src/navigation/`), which keeps a
   zod-validated `NavigationDestination` (view + selected ids/snapshots) in
@@ -52,7 +56,11 @@ into a single record. Three modules, plus cross-cutting donations:
   gate + `resolveNavigation` context if it carries detail state) and add a
   branch in `App.tsx`. Anonymous Adopt across sign-in resumes via the
   `pendingAdoption` localStorage stash in `App.tsx`; invitees get their role
-  via the `invitations/reconcile` effect there.
+  via the `invitations/reconcile` effect there. Owner-side animal views
+  (`my-animals`, `my-animal-record`, `my-animal-booking`) are visitable by any
+  signed-in user and validate their `selectedAnimalId`; `App.tsx` also drives a
+  `#root.ara-route-transition` class per navigation and a one-shot
+  `pendingAboutStoryScroll` for the homepage "Our story" link.
 - **Auth middleware**: `requireClerkSession` (`server/src/middleware/auth.ts`)
   resolves the token into `request.clerkUserId`; `requireStaffOrAbove` /
   `requireRescueQueueAccess` / `requireDispatcher` / `requireManagerOrAdmin`
@@ -75,8 +83,9 @@ into a single record. Three modules, plus cross-cutting donations:
 ## Commands (all verified)
 
 ```sh
+npm install           # REQUIRED after a pull — new dev deps (e.g. @electric-sql/pglite)
 npm run dev           # Vite frontend only (port 5173)
-npm run server:dev    # Express API only (tsx, port 8787) — needs env (below)
+npm run server:dev    # Express API only (node --use-system-ca --import tsx, port 8787) — needs env (below)
 npm run server:check  # typecheck the server package only
 npm run db:generate   # create a Drizzle migration from schema.ts
 npm run db:migrate    # apply migrations — run AFTER every pull, BEFORE server:dev
@@ -85,13 +94,30 @@ npm run lint          # eslint .
 npm test             # node:test via tsx — server + frontend suites
 ```
 
+- **⚠️ `npm run db:migrate` currently FAILS at migration `0021`** — it is a
+  deliberately guarded destructive cleanup (`0021_remove_rapid_triage.sql` +
+  `.approval.md`) that raises unless session-local
+  `ara.approve_rapid_triage_removal=on` and a matching row count are set; no
+  approval settings exist on Neon. It refuses unattended runs on purpose. Read
+  `docs/kara-merge-migration-review.md` before touching migrations.
+- `npm run server:dev` runs through `node --use-system-ca --import tsx` so the
+  system certificate store is used for Neon/Clerk TLS.
+
 - **Tests**: `npm test` runs every `*.test.ts` under `server/src/**` and
-  `src/**`: adoptions, animals, donations, reports, rescue, staff, plus
-  `src/utils/clerkToken.test.ts`. The script needs
-  `--experimental-test-module-mocks` because the suites stub modules with
-  `node:test`'s `mock.module` — running `npx tsx --test <file>` directly fails
-  with `TypeError: mock.module is not a function`. Add new suites as
+  `src/**` (~39 suites / 341 cases at the redesign merge). The script needs
+  `--experimental-test-module-mocks` because several suites (adoptions, rescue,
+  staff, notifications) stub modules with `node:test`'s `mock.module` — running
+  `npx tsx --test <file>` directly fails with
+  `TypeError: mock.module is not a function`. Add new suites as
   `*.test.ts` anywhere under those two roots; the glob picks them up.
+- **DB-backed suites** (veterinary emergency, veterinary alerts/assistance,
+  `db/retireTriageMigration`) use `@electric-sql/pglite` — an in-process
+  Postgres seeded with the raw migration SQL. They never touch Neon, so they
+  need `npm install` first (the dependency is dev-only).
+- **Browser suite**: `src/features/veterinary/emergency.browser.test.ts` is a
+  full-stack test that boots Vite, a pglite database and a Chromium build (env
+  var `EMERGENCY_TEST_BROWSER`). It must **never** start the project API or
+  connect to its database; skip it rather than pointing it at real services.
 - **⚠️ `mock.module` does not work on Node v22.20.0** (verified with an isolated
   probe, with and without `tsx`): the mocks are ignored and every mock-based
   suite dies at import time with
@@ -128,12 +154,20 @@ npm test             # node:test via tsx — server + frontend suites
 ## Database / Neon gotchas
 
 - Shared Neon DB across branches — extra columns/tables from other branches
-  are normal and benign. Migrations currently have **two `0004_*` entries**
-  (idx 4 and 5) in the journal; when you `db:generate`, make sure you don't
-  collide with an existing migration name/index.
+  are normal and benign. Migration **number prefixes are already duplicated**:
+  two `0004_*`, two `0018_*` (`0018_rescue_takeover_requests`,
+  `0018_owner_veterinary_bookings`) and two `0019_*`
+  (`0019_notification_action_id`, `0019_rapid_triage`). Journal indices `2` and
+  `3` are unused. Entries are disambiguated by tag + `when`, never by the
+  number, so when you `db:generate` pick a fresh number and check
+  `server/src/db/migrations/meta/_journal.json` for collisions. The approved
+  reconciliation is written up in `docs/kara-merge-migration-review.md`.
 - The API prints a **non-fatal** schema-drift warning at boot if `schema.ts`
   columns are missing on the live DB (`server/src/db/drift-check.ts`) — warns,
-  never crashes.
+  never crashes. Its table list is fixed (`animals`, `rescueReports`,
+  `adoptionApplications`, `vetAppointments`, `auditLogs`, `donations`,
+  `notifications`), so the newer `veterinary_emergency_responses` and
+  `rescue_takeover_requests` tables are **not** covered and will not warn.
 - One person should own applying migrations so the journal stays consistent.
 - **Skipped-migration trap (hit Oct 2026 with `0012`)**: drizzle's migrator
   applies only migrations with a journal `when` NEWER than the single latest
@@ -181,11 +215,31 @@ npm test             # node:test via tsx — server + frontend suites
 - [x] Phone-in reports through the *same* form/schema (`source: "phone"`,
       staff variant of the same component)
 - [x] Staff review + Dispatcher claim workflow — `RescueOperationsPortal.tsx` (Mission Board / Active Mission / Mission History + `/api/rescue/missions*`), `rescue.service.ts`
+- [x] Mission takeover requests — a dispatcher asks to take over another's
+      mission (`rescue_takeover_requests`, migration `0018`; partial unique
+      pending index), the owner approves/declines atomically, competing pending
+      requests are cancelled, and each event raises a notification carrying
+      `action_id` so the bell deep-links to the exact request
+      (`src/utils/takeoverReview.ts` + `RescueOperationsPortal`).
 - [x] Reporter tracks status — `MyReports.tsx`, `GET /api/rescue/mine`
 - [x] Registered user submits adoption application — `AdoptionApplicationForm.tsx`, `POST /api/adoptions`
 - [x] Staff review/approve/reject — `ManageAdoptionApplications.tsx`, `PATCH /api/adoptions/:id`
 - [x] Applicant tracks application status — `MyApplications.tsx`, `GET /api/adoptions/mine`
 - [x] Accepted application removes animal from public listings — partial unique index `adoption_animal_unique_active` on `(animal_id) WHERE status IN ('approved','completed')` + DB-level 23505 check in service
+- [x] My Animals owner portal — `/api/my-animals` (`myAnimals` module): an
+      approved/completed applicant sees their animal's veterinary history and
+      books or cancels owner appointments. Ownership is derived from the
+      adoption application and re-checked on every read and booking
+      (`findOwnedAnimal` joins `adoption_applications` in
+      `myAnimals.repository.ts`); `bookAppointment` additionally lets
+      staff-or-above book on any animal's behalf. Owner writes are stamped
+      `source = owner_booked`. The schedule is Fiji time, Mon–Fri 08:00–17:00,
+      Sat 08:00–13:00, in 30-minute slots, and the slot unique index is
+      **partial** (`WHERE status = 'booked'`) so a cancellation frees it.
+- [x] Notifications on stage change — in-app rows (`notifications` module) plus
+      email through `services/email.ts`, both best-effort: a provider outage
+      never blocks a submit or a transition
+      (`adoptions.service.test.ts`, cases AD-17/18/19/33/34).
 
 **Veterinary & Health Management** — **BUILT** (merged from `origin/jasprit`
 in `672401d`). Module implemented and mounted at `/api/veterinary` in `app.ts`;
@@ -196,7 +250,11 @@ can read the vet queue but cannot issue clearance).
       required treatments → clearance), `pages/VeterinaryCarePage.tsx`
 - [x] Vet appointments (online + phone) — `VeterinaryAppointmentBooking.tsx`,
       `components/DateTimePicker.tsx`; `vet_appointments.source` distinguishes
-      the two
+      `online` / `phone` / `owner_booked`. Booking is authorised in
+      `modules/veterinary/veterinary.booking.ts` (`bookAppointment`): staff-or-above
+      can book for any animal, everyone else only for an animal they own, and
+      the write is rejected with 409 when the partial unique index
+      `vet_appointment_slot_unique` (`WHERE status = 'booked'`) is taken.
 - [x] Treatments / vaccinations / prescriptions — `veterinary_care_plans` +
       `veterinary_treatment_history`, `treatmentOptions.tsx`
 - [x] Full medical history on repeat visits — `VeterinaryMedicalHistory.tsx`,
@@ -205,6 +263,29 @@ can read the vet queue but cannot issue clearance).
       `POST /api/veterinary/animals/:animalId/clearance`; sets
       `medically_cleared`, `medical_clearance_date`,
       `medical_cleared_by_clerk_user_id`, `medical_clearance_notes`
+- [x] Emergency response coordination — `emergency.{service,repository,routes,lifecycle}.ts`
+      over the `veterinary_emergency_responses` table (migration `0020`): one
+      open episode per animal (partial unique index), actions `attend` /
+      `release` / `take_over` / `support` at
+      `POST /api/veterinary/emergency-responses/:animalId`, with `GET` for the
+      queue. All behind `requireVeterinaryAccess`, coordinated under
+      `pg_advisory_xact_lock(7314,2021)` plus an animal `FOR UPDATE` row lock,
+      optimistic `version` checks, and DB error codes (`23505`, `40001`,
+      `40P01`, `55P03`) mapped to 409. Episodes close automatically — batched
+      into `clearAnimal`, `updateAnimal` and `softDeleteAnimal` — whenever the
+      animal leaves active Critical care; every action writes an `audit_logs`
+      row with `entity_type = 'veterinary_emergency_response'`.
+- [x] Veterinary alert notifications — `notifications/veterinaryAlerts.service.ts`
+      and `veterinaryAssistance.service.ts`. Alerts reach unbanned, unlocked
+      `veterinarian` accounts only, dedup per recipient per episode, and
+      `hasVeterinaryAccess` **fails closed**. Emergency notification types are
+      filtered out for non-vets and sorted first for vets. Think of these as
+      best-effort: a directory outage degrades delivery, never care.
+- [~] **Rapid Triage was removed** in favour of the coordination model above.
+      The code no longer reads or writes `veterinary_triage_assessments` (the
+      table/enums are dropped by `0021_remove_rapid_triage.sql`, which is
+      **prepared but deliberately NOT applied**). Deploying the code does not
+      require it; read the sibling `.approval.md` before applying.
 
 **Donations (cross-cutting)**
 - [~] Donation flow works as **card/QR data-entry** (validate + insert,
@@ -244,8 +325,11 @@ can read the vet queue but cannot issue clearance).
 - **Mounted at** `/api/adoptions`. Routes: `POST /`, `GET /mine`, `GET /`,
   `GET /:id`, `PATCH /:id`. Auth: `requireClerkSession`, `requireStaffOrAbove`.
 - **Statuses**: `submitted → under_review → approved → completed`, or
-  `rejected`. Every transition timestamped in `adoptionStatusHistory` so both
-  the adopter stepper and the staff queue show *when*, not just *what*.
+  `rejected`. `ALLOWED_TRANSITIONS` in `adoptions.service.ts` allows exactly
+  `submitted → {under_review, rejected}`, `under_review → {approved, rejected}`,
+  `approved → {completed}`, and nothing out of `completed`/`rejected`. Every
+  transition is timestamped in `adoptionStatusHistory` so both the adopter
+  stepper and the staff queue show *when*, not just *what*.
 - `rejected` requires `reviewNotes` shown to the applicant.
 - **Medical-clearance gate**: now a **hard gate**.
   `requireMedicallyCleared` reads `animals.medically_cleared` and throws
@@ -253,7 +337,20 @@ can read the vet queue but cannot issue clearance).
   `under_review -> approved`. Because `medically_cleared` is only ever written
   by the vet-only `clearAnimal`, approval is genuinely vet-gated. The same
   flag gates the public listing - see Data model guardrails.
-- Notifications on stage change (email or in-app) — not yet wired.
+- **Ownership transfer on approval**: `approved` and `completed` both call
+  `updateAnimalProfile(animalId, { status: "adopted" })`, which removes the
+  animal from public listings and hands it to the adopter (the My Animals
+  portal reads ownership from the application). Approval is the real transfer;
+  completion re-asserts it so applications approved before this rule still end
+  up correct. There is **no transaction** on neon-http, so the two statements
+  run in order and the partial unique index is what actually blocks a second
+  approval.
+- Notifications on stage change are wired (in-app + email, best-effort) — see
+  the Adoption checklist entry above.
+- **Test coverage**: 37 documented cases live in
+  `server/src/modules/adoptions/adoptions.service.test.ts` (34) and
+  `src/features/adoptions/adoptionQueue.test.ts` (3); the written-up case list,
+  expected results and traceability are in `docs/adoption-test-cases.md`.
 
 ## Entities & role-based access
 
@@ -262,7 +359,9 @@ Every route/action is gated server-side by role, not just hidden in the UI
 
 - **Unregistered** — browse listings only, no login required, no actions.
 - **Registered user** — browse + adoptions + vet follow-up bookings + track
-  report/application status.
+  report/application status; after an application is approved they also own the
+  animal in **My Animals** (`/api/my-animals`) where they see its veterinary
+  history and book or cancel appointments.
 - **Donor** — donations via the Donate modal (card/QR; Stripe not wired yet);
   one account may be both user and donor.
 - **SPCA staff** — register animals, review/reject
@@ -270,7 +369,13 @@ Every route/action is gated server-side by role, not just hidden in the UI
 - **Dispatcher** — claims available rescue cases and advances only their own
   assigned reports (`requireDispatcher` on mutation routes; works inside the
   `RescueOperationsPortal`). Staff can read the queue but cannot claim or update.
-- **Veterinarian** — medical history, treatments, medical clearance.
+  A dispatcher can also request a **takeover** of another dispatcher's mission
+  and only the current owner can approve or decline it
+  (`/api/rescue/missions*`, `rescue_takeover_requests`).
+- **Veterinarian** — medical history, treatments, medical clearance, and
+  **emergency coordination** (claim `attend`, `release`, `take_over` or request
+  `support` on a Critical animal), which drives the veterinary alert
+  notifications. All of it behind `requireVeterinaryAccess`.
 - **Manager/Admin** — staff invitations (`staff` module, `/api/admin`),
   edit staff member roles, revoke member access / pending invitations
   (admins rule managers/admin; no self-changes), metrics, wage payments.
@@ -301,32 +406,65 @@ Every route/action is gated server-side by role, not just hidden in the UI
 ## Frontend styling & design system (verified against real CSS)
 
 > `STYLE_FORMAT.md` is aspirational, not accurate for this repo — the real
-> styles below are the source of truth.
+> styles below are the source of truth. **Updated after the UI redesign** (see
+> `docs/ui-redesign-walkthrough.md`).
 
-- **No Tailwind.** Plain CSS. Design tokens live in `src/index.css` `:root`;
-  component classes live in `src/App.css` (readable, not minified). Always
+- **No Tailwind, no `@layer`, no `@import`** — plain CSS where *import order is
+  the only layering mechanism*. `src/main.tsx` loads `index.css` → `App.tsx`
+  (which pulls `App.css` + `veterinary.css`) → `visual-system.css` →
+  `workspace.css` → `workspace-minimal.css` → `rescue-workspace.css` →
+  `features/veterinary/veterinary-minimal.css`. The new sheets come **after**
+  `App.css` on purpose so they win by source order.
+- **There are now 15 stylesheets, not 2.** Base tokens live in `src/index.css`
+  `:root`; `App.css` (12.6k lines) is the catch-all for internal/app pages and
+  now also stacks several legacy redesign layers, so "which rule wins" depends
+  on line position. Feature styles moved to their own files:
+  `components/{HomePage,UserDashboard,MyProfilePage,NotificationBell}.css`,
+  `features/rescue/MyReports.css`,
+  `features/veterinary/{my-animals-banner,my-animal-records,veterinary-minimal}.css`,
+  plus the global `visual-system.css` / `workspace.css` /
+  `workspace-minimal.css` / `rescue-workspace.css`. **Put a feature's styles in
+  its own file, not in `App.css`.**
+- **Scoped palettes** (no single source): `--spca-brand #115cba` / `--spca-*`,
+  two `--home-*` blocks, `--about-*` in `App.css`; `--ara2-*` in
+  `HomePage.css`; `--surface-radius` / `--control-radius` in
+  `visual-system.css`; `--workspace-card-*` in `workspace-minimal.css`. Always
   reference `var(--token)` — never hard-code hex.
 - **⚠️ Token bug**: `--green: #147fb8` is actually **blue** (documented in an
-  `index.css` comment). A real green exists as `--success: #1f9d55`. `--gold`
-  / `--orange` don't exist in the real `:root`. Check the rendered color
-  before assuming a name means what it says; flag fixing at the source.
-- **Real class names to reuse** (in `src/App.css`): `.teal-button` (teal→
-  `--teal-dark` gradient, `border-radius: 999px`, weight 800), `.ghost-button`
-  (and `.light` variant), `.danger-button`, `.chip`, `.mini-button`,
-  `.animal-grid`, `.catalog-layout` (`310px 1fr`), `.dashboard-metrics`
-  (`repeat(4, 1fr)`), `.user-stat-card`, `.modal` / `.modal-backdrop`,
-  `.toast`, `.urgency-dot`. Do NOT reference `.public-nav`, `.metric-grid`,
+  `index.css` comment) and is still consumed by `.urgency-dot.low` etc. A real
+  green exists as `--success: #1f9d55` — use that in new code. `--gold` /
+  `--orange` don't exist in the real `:root`.
+- **Real class names to reuse** (in `src/App.css`): `.teal-button`,
+  `.ghost-button` (and `.light`), `.danger-button`, `.chip`, `.mini-button`,
+  `.animal-grid`, `.catalog-layout`, `.dashboard-metrics`, `.user-stat-card`,
+  `.modal` / `.modal-backdrop`, `.toast`, `.urgency-dot` — all still exist, but
+  `visual-system.css` restyles the buttons/cards (navy, 6–10px radius, flat).
+  Redesign prefixes: `ara2-*` (public homepage), `about2-*` (About),
+  `workspace-*` (internal sidebar shell), `vm-*` (veterinary), `ops-*` /
+  `mission-*` (rescue), `account-*`, `my-alert-*`, `companion-*`,
+  `notification-*`. Do NOT reference `.public-nav`, `.metric-grid`,
   `.staff-shell`, `.form-grid`, `.submit-button`, `.animal-status` — those
   don't exist.
+- **Page roots changed**: the public homepage root is **`.ara2-home`**, not
+  `.home-page`; `.home-page` now denotes the catalogue/rescue/about/account
+  pages. The public header/sidebar carries both `.site-header` and
+  `.workspace-sidebar` when internal.
 - **Urgency dots** (real): `critical→var(--red)`, `high→#ff9500`,
   `moderate→#e5a500`, `low→var(--green)` (the blue one).
-- **Z-index scale**: nav 20, modal 100, toast 1000.
-- **Breakpoints**: 1180 / 900 / 620 px (plus non-ad-hoc 980 / 720 / 420 in
-  use). Mobile-first; don't invent extra media queries arbitrarily.
-- **Border radius**: 10–14px inputs/cards, 20–24px buttons/modals, 999px pills.
+- **Z-index scale**: nav 20, public header / workspace sidebar **40**, modal
+  100, veterinary notification panel **110**, toast 1000. (Feature sheets also
+  use small local values 0–10; don't invent new top-level tiers.)
+- **Breakpoints**: 1180 / 1120 / 1050 / 980 / 900 / 800 / 760 / 720 / 700 /
+  620 / 540 / 520 / 500 / 420 / 370 px are all in use. Mobile-first — extend the
+  existing set rather than inventing arbitrary new cuts.
+- **Border radius**: controls/inputs **6–10px** (`--control-radius: 6px`),
+  cards 14–16px, pills 999px. The old "20–24px buttons" guidance is obsolete.
 - **Forms**: 10px radius, `border-color: var(--teal)`, focus ring
   `box-shadow: 0 0 0 3px rgba(21,135,195,.12)`.
-- **Font**: Arial/Helvetica stack; weights only 400 or 800.
+- **Font**: base is Arial/Helvetica (weights 400/800), but the redesigned public
+  and workspace surfaces override it — `"Segoe UI Variable"` / `"Avenir Next"` /
+  `Inter`, Georgia serif for workspace headings — and use intermediate weights
+  (550–820). Match the surrounding page rather than assuming the base stack.
 
 ## Data model guardrails
 
@@ -347,11 +485,16 @@ Every route/action is gated server-side by role, not just hidden in the UI
   `requireVeterinaryAccess`; `registerAnimal` hard-codes it to `false`, and
   neither the registration nor the edit zod schema accepts it, so clearance is
   genuinely vet-only. Do not add a staff path to set it.
-- On adoption acceptance, remove the animal from public listings **in the
-  same transaction** as the status update, and use **database-level locking**
-  (two applicants for one animal — race risk) so only one application per
-  animal can be approved. Not implemented yet — build these into the
-  adoptions module.
+- On adoption acceptance the animal is removed from public listings by marking
+  it `adopted` **and** the DB-level guard is in place: the partial unique index
+  `adoption_animal_unique_active` on `(animal_id) WHERE status IN
+  ('approved','completed')` makes a second approval fail with `23505`, and the
+  service pre-checks with `findAdoptionConflict` for a friendly 409. **Still
+  open**: the two writes (application status, then animal) are *not* one
+  transaction — neon-http has no interactive transactions here — and no row
+  lock is taken, so the unique index is the only concurrency guarantee. If you
+  touch this path, keep the ordering (status first, animal second) or move it
+  onto `server/src/db/transaction.ts` (`withSqlTransaction`).
 - Rescue reports and vet bookings can arrive online *or* by phone — one
   schema/form path, distinguished by `source` (both are in
   `rescue_reports`/`vet_appointments`). Same `source` field exists on the
@@ -414,3 +557,8 @@ must remain a no-match state. Search is assistive and never decides adoption.
   `src/components/ReportsPage.tsx`) overlaps `Adoption.md`'s "report generation"
   but was built on `surbhit` deliberately **at the user's request** — QA it in
   that context, not as an Alvin duplicate.
+- **Maintained docs** (trust these over legacy planning files):
+  `docs/adoption-test-cases.md` (adoption test cases + traceability),
+  `docs/ui-redesign-walkthrough.md` (what the redesigned UI is, page by page),
+  `docs/kara-merge-migration-review.md` (migration/journal reconciliation) and
+  `server/README.md` (AI search internals).
