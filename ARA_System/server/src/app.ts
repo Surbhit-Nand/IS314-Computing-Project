@@ -12,6 +12,7 @@ import { veterinaryRouter } from "./modules/veterinary/veterinary.routes.js";
 import { myAnimalsRouter } from "./modules/myAnimals/myAnimals.routes.js";
 import { veterinaryAlertChanges } from "./modules/notifications/veterinaryAlerts.middleware.js";
 import { webhooksRouter } from "./webhooks/webhooks.routes.js";
+import { apiErrorHandler } from "./middleware/errorHandler.js";
 
 export const app = express();
 
@@ -50,8 +51,4 @@ app.use("/api/reports", reportsRouter);
 app.use("/api/veterinary", veterinaryRouter);
 app.use("/api/my-animals", myAnimalsRouter);
 
-app.use((error: unknown, _request: express.Request, response: express.Response, next: express.NextFunction) => {
-	void next;
-	console.error("API request failed", error);
-	response.status(500).json({ error: "Internal server error" });
-});
+app.use(apiErrorHandler);
