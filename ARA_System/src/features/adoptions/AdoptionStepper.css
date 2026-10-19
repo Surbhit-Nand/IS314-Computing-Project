@@ -1,0 +1,254 @@
+/* Adoption phase visuals: the forward-path rail plus the status pills that
+   label it. Imported by AdoptionStepper.tsx, so the applicant tracking modal
+   and the staff review panel read one stylesheet instead of two screens
+   drifting apart.
+
+   Both adoption views are lazily loaded chunks, so this file can be injected
+   AFTER visual-system.css. Every rule is therefore built from the :root tokens
+   in index.css and from color-mix() over them (the same technique
+   workspace.css and NotificationBell.css use) rather than from literals, so
+   the result is identical whichever order the chunk lands in. */
+
+/* ------------------------------------------------------------ phase rail */
+
+.adoption-stepper-wrap {
+  margin: 4px 0 18px;
+}
+
+.adoption-stepper {
+  display: flex;
+  align-items: flex-start;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* flex: 1 1 0 makes every stage the same width without the old hard-coded
+   grid-template-columns: repeat(4, ...), which silently broke if a stage was
+   added to ADOPTION_STATUS_STEPS. */
+.adoption-stepper-stage {
+  position: relative;
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+/* Connector between markers: runs from this marker's centre to the next one,
+   and is hidden behind the marker (which is opaque and sits above it). */
+.adoption-stepper-stage:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  width: 100%;
+  height: 2px;
+  background: var(--line);
+}
+
+.adoption-stepper-stage.passed::after {
+  background: var(--teal);
+}
+
+.adoption-stepper-dot {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: 2px solid var(--line);
+  background: var(--white);
+  color: var(--slate);
+  font-size: 0.66rem;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.adoption-stepper-stage.passed .adoption-stepper-dot {
+  border-color: var(--teal);
+  background: var(--teal);
+  color: var(--white);
+}
+
+/* The stage the application is actually on: the one marker that gets a halo. */
+.adoption-stepper-stage.current .adoption-stepper-dot {
+  border-color: var(--navy);
+  background: var(--navy);
+  color: var(--white);
+  box-shadow: 0 0 0 4px var(--teal-ghost);
+}
+
+/* Terminal outcome (rejected or withdrawn). Reuses the red stop marker rather
+   than inventing a fifth stage for a state that is not on the forward path. */
+.adoption-stepper-stage.rejected .adoption-stepper-dot {
+  border-color: var(--red);
+  background: var(--red);
+  color: var(--white);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--red) 16%, transparent);
+}
+
+.adoption-stepper-label {
+  font-size: 0.7rem;
+  font-weight: 800;
+  line-height: 1.3;
+  color: var(--slate);
+}
+
+.adoption-stepper-stage.passed .adoption-stepper-label {
+  color: var(--teal-dark);
+}
+
+.adoption-stepper-stage.current .adoption-stepper-label {
+  color: var(--navy);
+}
+
+.adoption-stepper-stage.rejected .adoption-stepper-label {
+  color: var(--red);
+}
+
+/* "Step 2 of 4" / "Stopped at Under Review" - the line that answers
+   "what's done and what's next" in words, not colour alone. */
+.adoption-stepper-summary {
+  margin: 14px 0 0;
+  font-size: 0.78rem;
+  color: var(--slate);
+}
+
+/* Below the tablet cut, four labels beside one another crush together, so the
+   rail folds into a vertical list. The connector is dropped rather than
+   re-geometried: the tick/number markers already read as a sequence. */
+@media (max-width: 620px) {
+  .adoption-stepper {
+    flex-direction: column;
+    align-items: stretch;
+    row-gap: 12px;
+  }
+
+  .adoption-stepper-stage {
+    flex: 0 0 auto;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    text-align: left;
+  }
+
+  .adoption-stepper-stage:not(:last-child)::after {
+    display: none;
+  }
+
+  .adoption-stepper-dot {
+    flex-shrink: 0;
+  }
+
+  .adoption-stepper-label {
+    font-size: 0.78rem;
+  }
+}
+
+/* ------------------------------------------------------- status pills */
+
+/* Mirrors .rescue-status-badge so the review queue, the tracking list and the
+   staff panel share one visual language. Fixed min-width keeps queue rows
+   aligned; the long descriptive label lives in the tooltip. */
+.adoption-status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  min-width: 96px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  white-space: nowrap;
+  line-height: 1;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.adoption-status-badge.submitted {
+  background: var(--teal-tint);
+  color: var(--teal-dark);
+}
+
+.adoption-status-badge.under-review {
+  background: var(--amber-tint);
+  color: var(--amber);
+}
+
+.adoption-status-badge.approved {
+  background: var(--teal);
+  color: var(--white);
+}
+
+.adoption-status-badge.completed {
+  background: var(--success);
+  color: var(--white);
+}
+
+.adoption-status-badge.rejected {
+  background: var(--red);
+  color: var(--white);
+}
+
+/* Neutral, not red: the applicant chose to withdraw, so the pill should not
+   read as an outcome SPCA imposed. Without this rule a withdrawn application
+   fell through to the uncoloured base pill. */
+.adoption-status-badge.withdrawn {
+  background: var(--bg);
+  color: var(--slate);
+}
+
+/* Vet clearance warning on an application whose animal is not cleared yet.
+   Amber, not red: a "waiting on the vet team" state rather than an error the
+   reviewer caused. Shares the under-review amber pair so the two read alike
+   when both are shown. */
+.adoption-clearance-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--amber-tint);
+  color: var(--amber);
+  font-size: 0.68rem;
+  font-weight: 800;
+  white-space: nowrap;
+  line-height: 1;
+}
+
+/* Badges inside the timestamped history lists size to their content. */
+.adoption-history-badge {
+  width: auto;
+  flex-shrink: 0;
+}
+
+/* Status line under the rail in the detail modal. */
+.adoption-status-line {
+  margin: 0 0 18px;
+}
+
+/* Rejection banner shown to the applicant. */
+.adoption-rejection-note {
+  border: 1px solid color-mix(in srgb, var(--red) 35%, transparent);
+  background: color-mix(in srgb, var(--red) 7%, var(--white));
+  border-radius: var(--surface-radius, 10px);
+  padding: 14px 16px;
+  margin-bottom: 18px;
+}
+
+.adoption-rejection-note .eyebrow {
+  color: var(--red);
+  margin-bottom: 2px;
+}
+
+.adoption-rejection-note p:last-child {
+  margin: 0;
+}

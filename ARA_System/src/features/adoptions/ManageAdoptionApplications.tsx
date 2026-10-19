@@ -31,6 +31,7 @@ import {
   isTerminalAdoptionStatus,
   type AdoptionQueueTab,
 } from "./adoptionQueue";
+import { AdoptionStepper } from "./AdoptionStepper";
 import { SkeletonLoader } from "../../components/SkeletonLoader";
 import { isDevBypassEnabled } from "../../utils/devBypass";
 import { formatDate } from "../../utils/format";
@@ -42,15 +43,6 @@ type ManageAdoptionApplicationsProps = {
   // staff -> "staff-dashboard". Mirrors the header's dashboardView() rule, so
   // the shared SiteHeaderView union is the correct parameter type here.
   onNavigate: (view: SiteHeaderView) => void;
-};
-
-const SHORT_STATUS_LABEL: Record<AdoptionStatus, string> = {
-  submitted: "Submitted",
-  under_review: "Under Review",
-  approved: "Approved",
-  completed: "Completed",
-  rejected: "Rejected",
-  withdrawn: "Withdrawn",
 };
 
 // Status filter value: "all" plus every lifecycle state (the dropdown
@@ -298,7 +290,7 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
       setDraftStatus(updated.status);
       setDraftNotes(updated.reviewNotes ?? "");
       setSavingMessage(
-        `Application for ${updated.animal?.name ?? "the animal"} moved to ${SHORT_STATUS_LABEL[updated.status]}.`,
+        `Application for ${updated.animal?.name ?? "the animal"} moved to ${adoptionStatusShortLabel(updated.status)}.`,
       );
     } catch (error) {
       setSavingError(
@@ -408,7 +400,7 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
                 <option key={status} value={status}>
                   {status === "all"
                     ? "All statuses"
-                    : `Status: ${SHORT_STATUS_LABEL[status as AdoptionStatus]}`}
+                    : `Status: ${adoptionStatusShortLabel(status as AdoptionStatus)}`}
                 </option>
               ))}
             </select>
@@ -505,7 +497,7 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
                         </span>
                       )}
                       <span className={`adoption-status-badge ${adoptionStatusClass(application.status)}`}>
-                        {SHORT_STATUS_LABEL[application.status]}
+                        {adoptionStatusShortLabel(application.status)}
                       </span>
                       <span className="rescue-view-action">Review</span>
                     </div>
@@ -513,6 +505,7 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
 
                   {isExpanded && (
                     <div className="rescue-detail-body">
+                      <AdoptionStepper status={detail.status} history={detail.history ?? []} />
                       <div className="rescue-detail-columns">
                         <div className="rescue-details-card">
                           <h3 className="rescue-card-title">Application Details</h3>
@@ -570,7 +563,7 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
                                 {detail.history.map((entry) => (
                                   <li key={entry.id}>
                                     <span className={`adoption-status-badge adoption-history-badge ${adoptionStatusClass(entry.status)}`}>
-                                      {SHORT_STATUS_LABEL[entry.status]}
+                                      {adoptionStatusShortLabel(entry.status)}
                                     </span>
                                     <span className="adoption-history-when">{formatDate(entry.createdAt)}</span>
                                     {entry.note && <span className="adoption-history-note">{entry.note}</span>}
@@ -607,7 +600,7 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
                               }
                             >
                               <option value={application.status}>
-                                {SHORT_STATUS_LABEL[application.status]}
+                                {adoptionStatusShortLabel(application.status)}
                               </option>
                               {nextStatuses.map((status) => (
                                 <option
@@ -615,7 +608,7 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
                                   value={status}
                                   disabled={status === "approved" && awaitingClearance}
                                 >
-                                  Move to: {SHORT_STATUS_LABEL[status]}
+                                  Move to: {adoptionStatusShortLabel(status)}
                                   {transitionHint(status, awaitingClearance)}
                                 </option>
                               ))}
@@ -659,7 +652,7 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
                           <div className="rescue-dispatch-card">
                             <h3 className="rescue-card-title">Review & Status</h3>
                             <p className="dispatch-hint">
-                              This application is {SHORT_STATUS_LABEL[application.status].toLowerCase()} and
+                              This application is {adoptionStatusShortLabel(application.status).toLowerCase()} and
                               closed - no further action is needed. The full record stays here
                               for reference.
                             </p>

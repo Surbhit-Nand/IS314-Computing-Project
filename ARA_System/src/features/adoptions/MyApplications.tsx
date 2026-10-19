@@ -12,12 +12,10 @@ import {
   adoptionStatusClass,
   adoptionStatusLabel,
   adoptionStatusShortLabel,
-  adoptionStepIndex,
-  ADOPTION_STATUS_STEPS,
   type AdoptionApplication,
-  type AdoptionStatus,
   type AdoptionStatusHistoryEntry,
 } from "../../types/adoption";
+import { AdoptionStepper } from "./AdoptionStepper";
 import { questionnaireSections } from "./AdoptionQuestionnaireAnswers";
 import { formatDate } from "../../utils/format";
 
@@ -26,27 +24,6 @@ type MyApplicationsProps = {
   isSignedIn: boolean | undefined;
   onNavigate: (view: SiteHeaderView) => void;
 };
-
-// Stepper position for an application. A normal (live) status maps straight to
-// its forward step. Rejected and withdrawn are branch/terminal states, not
-// steps, so the stepper stops on the furthest stage the status history shows
-// was actually visited - a rejected application must never paint "Submitted"
-// as though it were still the current stage. An empty history yields reached
-// = -1, which leaves every stage unhighlighted (a neutral "closed" read).
-function stepperState(
-  status: AdoptionStatus,
-  history: AdoptionStatusHistoryEntry[],
-): { reached: number; stopped: boolean } {
-  if (status !== "rejected" && status !== "withdrawn") {
-    return { reached: adoptionStepIndex(status), stopped: false };
-  }
-  let reached = -1;
-  for (const entry of history) {
-    const index = ADOPTION_STATUS_STEPS.indexOf(entry.status);
-    if (index > reached) reached = index;
-  }
-  return { reached, stopped: reached >= 0 };
-}
 
 // The withdraw endpoint returns the updated row without its history, so the
 // freshly created "withdrawn" entry is appended locally to keep the modal's
@@ -97,7 +74,6 @@ function AdoptionApplicationDetailModal({
     return () => window.removeEventListener("keydown", handleKey);
   }, [onClose]);
 
-  const { reached, stopped } = stepperState(application.status, history);
   const canWithdraw =
     application.status === "submitted" || application.status === "under_review";
 
@@ -156,20 +132,7 @@ function AdoptionApplicationDetailModal({
           </button>
         </header>
 
-        <div className="adoption-stepper" aria-label="Adoption progress">
-          {ADOPTION_STATUS_STEPS.map((status, index) => (
-            <div
-              key={status}
-              // ".rejected" is the existing red stop marker; it is reused for
-              // withdrawal too, which is likewise a stop rather than a stage.
-              className={`adoption-stepper-stage${index < reached ? " passed" : ""}${index === reached ? " current" : ""}${index === reached && stopped ? " rejected" : ""}`}
-              aria-current={index === reached ? "step" : undefined}
-            >
-              <span className="adoption-stepper-dot" aria-hidden="true" />
-              <span className="adoption-stepper-label">{adoptionStatusLabel(status).split(" - ")[0]}</span>
-            </div>
-          ))}
-        </div>
+        <AdoptionStepper status={application.status} history={history} />
 
         <p className="adoption-status-line">
           <span
