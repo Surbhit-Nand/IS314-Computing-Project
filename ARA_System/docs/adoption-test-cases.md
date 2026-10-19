@@ -5,35 +5,25 @@
 > **System:** ARA — Animal Rescue & Adoption Management System, SPCA Fiji (Group 7, IS314 Computing Project).
 > **Date:** 2026-10-19
 
-> **⚠️ Scope — this is a snapshot taken before the hardening merge.** The case
-> list below (AD-01 … AD-37) documents the adoption suites as they stood on
-> `main` @ `06f364a`: `adoptions.service.test.ts` (34 cases) plus
-> `adoptionQueue.test.ts` (3). The `fix/adoption-module-hardening` branch was
-> then merged into `main` (`1e69b5f`), which grew adoption coverage to **79
-> cases — all passing**:
->
-> | Suite | Cases |
-> | ----- | ----- |
-> | `adoptions.service.test.ts` | 44 (was 34) |
-> | `adoptions.validation.test.ts` (new) | 32 |
-> | `adoptionQueue.test.ts` | 3 |
->
-> The 10 extra service cases and the whole validation suite are **not written up
-> below yet**; the environment block records the pre-merge run.
-
 ## Summary
 
-| Item               | Value                                                              |
-| ------------------ | ------------------------------------------------------------------ |
-| Backend suite      | `server/src/modules/adoptions/adoptions.service.test.ts` (34 cases) |
-| Frontend suite     | `src/features/adoptions/adoptionQueue.test.ts` (3 cases)            |
-| Total test cases   | **37**                                                             |
-| Runner             | `node --import tsx --experimental-test-module-mocks --test` (via `npm test`) |
-| Environment        | Node v24.21.0, tsx, no database / Clerk / mail provider required    |
-| Where tested       | Local development workstation, branch `main` @ `06f364a`             |
-| Date of run        | 2026-10-19, 14:15 (Fiji Standard Time, UTC+12)                     |
-| Verified result    | **37 tests, 7 suites, 37 pass, 0 fail**                             |
-| Whole suite at that commit | **350 tests, 39 suites, 350 pass, 0 fail**                  |
+| Item                    | Value                                                                    |
+| ----------------------- | ------------------------------------------------------------------------ |
+| Backend suite           | `server/src/modules/adoptions/adoptions.service.test.ts` (44 cases)      |
+| HTTP-layer suite        | `server/src/modules/adoptions/adoptions.validation.test.ts` (32 cases)   |
+| Frontend suite          | `src/features/adoptions/adoptionQueue.test.ts` (3 cases)                 |
+| Total test cases        | **79**                                                                   |
+| Runner                  | `node --import tsx --experimental-test-module-mocks --test` (via `npm test`) |
+| Environment             | Node v24.21.0, tsx, no database / Clerk / mail provider required          |
+| Where tested            | Local development workstation, branch `main` @ `8493fb2`                  |
+| Date of run             | 2026-10-19, 15:17 (Fiji Standard Time, UTC+12)                           |
+| Verified result         | **79 tests, 11 suites, 79 pass, 0 fail**                                 |
+| Whole suite at that commit | **392 tests, 43 suites, 392 pass, 0 fail**                            |
+
+The three suites divide the module by layer: `adoptions.service.ts` (business
+rules, with every collaborator stubbed), `adoptions.routes.ts` (the zod request
+schemas and the business-error → HTTP status mapping), and the pure frontend
+queue helper `adoptionQueue.ts`.
 
 ## Environment (test rig)
 
@@ -45,12 +35,16 @@
 | Graphics                | Intel Iris Xe (integrated)                                            |
 | Operating system        | Microsoft Windows 11 Home, build 10.0.26300, 64-bit                    |
 | BIOS                    | LENOVO `LACN41WW`                                                     |
-| Where tested            | Local development workstation above - repository at `C:\Users\surbh\SWE\IS314-Computing-Project\ARA_System`, branch `main`, commit `06f364a` |
+| Where tested            | Local development workstation above - repository at `C:\Users\surbh\SWE\IS314-Computing-Project\ARA_System`, branch `main`, commit `8493fb2` (this report is committed immediately after it and changes no code) |
 | Connection type         | Wi-Fi (Intel Wi-Fi 6 AX203, 802.11); IPv4 and IPv6 Internet connectivity |
-| Date of run             | 2026-10-19, 14:15 (Fiji Standard Time, UTC+12)                         |
+| Date of run             | 2026-10-19, 15:17 (Fiji Standard Time, UTC+12)                         |
 | Toolchain               | Node v24.21.0, npm 11.19.0, PowerShell 7.6.6, tsx                      |
 
-The adoption suites run fully offline against stubbed collaborators: no database, Clerk instance, mail provider or network access is required, so connection type and latency do not affect the results. The Wi-Fi network name is deliberately omitted. Node's test reporter does not print a timestamp, so the date above is the wall-clock time the run was executed.
+The adoption suites run fully offline against stubbed collaborators or pure
+schemas: no database, Clerk instance, mail provider or network access is
+required, so connection type and latency do not affect the results. The Wi-Fi
+network name is deliberately omitted. Node's test reporter does not print a
+timestamp, so the date above is the wall-clock time the run was executed.
 
 ## How to run
 
@@ -59,113 +53,253 @@ npm install
 npm test
 ```
 
-`npm install` is required before the first run: the whole-suite dev dependency `@electric-sql/pglite` (added with the veterinary emergency work) must be present, and five unrelated suites import it. The `test` script then globs `server/src/**/*.test.ts` and `src/**/*.test.ts`, so both adoption suites are picked up automatically. To run only the adoption cases:
+`npm install` is required before the first run: the whole-suite dev dependency
+`@electric-sql/pglite` must be present (five unrelated suites import it), and
+`npm test` needs `--experimental-test-module-mocks`. The `test` script globs
+`server/src/**/*.test.ts` and `src/**/*.test.ts`, so all three adoption suites
+are picked up automatically. To run only the adoption cases:
 
 ```sh
 node --import tsx --experimental-test-module-mocks --test `
   server/src/modules/adoptions/adoptions.service.test.ts `
+  server/src/modules/adoptions/adoptions.validation.test.ts `
   src/features/adoptions/adoptionQueue.test.ts
 ```
 
 ## Test strategy
 
-- **No live infrastructure.** Every collaborator of `adoptions.service.ts` is replaced with `node:test`'s `mock.module` *before* the service is imported: the adoptions repository (`adoptions.repository.js`), `animals.service.js`, `shared/audit/audit.service.js`, `notifications/notifications.service.js`, `services/email.js`, `services/staffDirectory.js` and `services/clerkClient.js`. Each stub forwards to a test-provided implementation held in an `impls` map, so individual cases swap behaviour per test while the module-namespace functions stay stable.
-- **Rules, not framework.** Cases assert the business rules at the service boundary — illegal transitions, the veterinary-clearance gate, the single-approval conflict guard, terminal-state locking, review-note enforcement, and best-effort notification behaviour.
-- **Stateful fakes.** `statefulApplication()` wires a mutable in-memory application row so transition tests behave like the real database: the service fetches the row, the status update mutates it, and the final re-fetch returns the fresh state. `resetImpls()` runs before every test, so cases cannot leak state into each other.
-- **Frontend helper.** `adoptionQueue.ts` is a pure module backing the staff review queue's Active/History tabs and their status dropdowns; it has no DOM dependency, so it is covered directly.
+- **No live infrastructure (service suite).** Every collaborator of
+  `adoptions.service.ts` is replaced with `node:test`'s `mock.module` *before*
+  the service is imported: the adoptions repository (`adoptions.repository.js`),
+  `animals.service.js`, `shared/audit/audit.service.js`,
+  `notifications/notifications.service.js`, `services/email.js`,
+  `services/staffDirectory.js` and `services/clerkClient.js`. Each stub forwards
+  to a test-provided implementation held in an `impls` map, so individual cases
+  swap behaviour per test while the module-namespace functions stay stable.
+- **No mocks at all (validation suite).** `adoptions.validation.test.ts` imports
+  the real schemas with plain `import`s after setting dummy
+  `CLERK_SECRET_KEY` / `DATABASE_URL` / Cloudinary variables. It deliberately
+  avoids `mock.module`, which is why it runs on any Node version (see the
+  caveat in Appendix B).
+- **Rules, not framework.** Cases assert the business rules at the service
+  boundary — illegal transitions, the veterinary-clearance gate at both submit
+  and approval, the single-approval conflict guard, terminal-state locking,
+  review-note enforcement, applicant-only withdrawal, self-review refusal, the
+  compensating writes, and best-effort notification behaviour.
+- **Stateful fakes.** `statefulApplication()` wires a mutable in-memory
+  application row so transition tests behave like the real database: the service
+  fetches the row, the status update mutates it, and the final re-fetch returns
+  the fresh state. `resetImpls()` runs before every test, so cases cannot leak
+  state into each other.
+- **Frontend helper.** `adoptionQueue.ts` is a pure module backing the staff
+  review queue's Active/History tabs and their status dropdowns; it has no DOM
+  dependency, so it is covered directly.
 
 ## Regression sensitivity
 
-The following cases map to the module's load-bearing guarantees and will fail if the rule is weakened:
+The following cases map to the module's load-bearing guarantees and will fail if
+the rule is weakened:
 
-- `AD-11` / `AD-12` — cat adoptions are screened for applicant respiratory conditions; dog adoptions are not.
-- `AD-22` — approval is gated on `animals.medically_cleared` being true and on no other approval existing for the animal, and it **marks the animal `adopted` in the same action** (ownership transfer, removing it from public listings).
-- `AD-23` — the hard veterinary-clearance gate refuses `under_review -> approved` when the animal is not cleared.
-- `AD-24` — completion re-asserts `adopted`, kept idempotent for applications approved before the ownership rule existed.
-- `AD-31` — concurrent-approval guard: a second approval for the same animal is refused (`findAdoptionConflict`, backing the DB-level partial unique index `adoption_animal_unique_active`).
-- `AD-25`–`AD-28` — no illegal jumps and no escape from `completed` / `rejected`.
-- `AD-29` / `AD-30` — `rejected` requires `reviewNotes`, and the note is preserved on the record for the applicant.
-- `AD-19` / `AD-34` — notification and email failures must never abort a submit or a transition.
-- `AD-21` — every transition writes an `adoptionStatusHistory` row and an audit entry with actor and from/to status.
+- `AD-12` / `AD-13` — cat adoptions are screened for applicant respiratory
+  conditions; dog adoptions are not.
+- `AD-26` — approval is gated on `animals.medically_cleared`, on no other
+  approval existing for the animal, and it **marks the animal `adopted` in the
+  same action** (ownership transfer, removing it from public listings).
+- `AD-27` — the hard veterinary-clearance gate refuses `under_review -> approved`
+  when the animal is not cleared. `AD-21` applies the same gate at submission.
+- `AD-28` — completion re-asserts `adopted`, kept idempotent for applications
+  approved before the ownership rule existed.
+- `AD-35` — concurrent-approval guard: a second approval for the same animal is
+  refused (`findAdoptionConflict`), and `AD-39` maps the *real* `23505` race
+  (the partial unique index `adoption_animal_unique_active`) to the same 409.
+- `AD-36`–`AD-32` — no illegal jumps and no escape from `completed` /
+  `rejected` / `withdrawn`.
+- `AD-33` / `AD-34` — `rejected` requires `reviewNotes`, and the note is
+  preserved on the record for the applicant.
+- `AD-40` — a reviewer cannot approve their own application (403).
+- `AD-41` / `AD-23` — the two non-transactional write pairs are compensated: a
+  failed animal update restores the previous application status, and a failed
+  first history write deletes the application row.
+- `AD-20` / `AD-38` — notification and email failures must never abort a submit
+  or a transition.
+- `AD-25` — every transition writes an `adoptionStatusHistory` row and an audit
+  entry with actor and from/to status; `AD-22` covers the submission audit.
+- `AD-45`–`AD-76` — the request-schema contract (every required field and
+  conditional rule) and the typed-error → HTTP status mapping that stops a
+  reworded 409 becoming a 500.
 
 ## Test cases — Lifecycle and queries
 
-| ID    | Test case                                                       | Rule under test                                        | Preconditions / stubs                                                                 | Expected result                                                        | Actual | Status |
-| ----- | --------------------------------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | ------ | ------ |
-| AD-01 | Declares the full lifecycle statuses                            | The five lifecycle states are fixed and ordered        | None                                                                                  | `ADOPTION_STATUSES` deep-equals `submitted, under_review, approved, completed, rejected` | As expected | Pass |
-| AD-02 | `listAdoptionApplications` returns everything the repository finds | Staff queue is a straight pass-through of stored rows | `findAllAdoptionApplications` returns two rows                                        | Result is the same two rows                                            | As expected | Pass |
-| AD-03 | `listMyAdoptionApplications` queries by the caller's Clerk user id | Applicants only see their own applications           | `findAdoptionApplicationsByApplicant` asserts the id it receives                      | Queried with `APPLICANT_ID`; the applicant's rows returned             | As expected | Pass |
-| AD-04 | `getAdoptionApplicationDetail` returns the application joined with its status history | Detail view carries the timeline          | `findAdoptionApplicationById` returns an application; history returns one entry       | `result.id` matches and `result.history` is the history array           | As expected | Pass |
-| AD-05 | `getAdoptionApplicationDetail` returns `undefined` when the application does not exist | Missing records are not an error             | `findAdoptionApplicationById` returns `undefined`                                     | `undefined`                                                            | As expected | Pass |
+`adoptions.service.test.ts`, `adoptions.service` / `listAdoptionApplications` /
+`listMyAdoptionApplications` / `getAdoptionApplicationDetail`.
+
+| ID    | Test case                                                                    | Rule under test                                     | Preconditions / stubs                                                          | Expected result                                                                                     | Actual | Status |
+| ----- | ---------------------------------------------------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------- | ------ | ------ |
+| AD-01 | Declares the full lifecycle statuses                                          | The six lifecycle states are fixed and ordered      | None                                                                           | `ADOPTION_STATUSES` deep-equals `submitted, under_review, approved, completed, rejected, withdrawn`  | As expected | Pass |
+| AD-02 | `listAdoptionApplications` returns everything the repository finds             | Staff queue is a straight pass-through of stored rows | `findAllAdoptionApplications` returns two rows                                | Result is the same two rows                                                                          | As expected | Pass |
+| AD-03 | `listMyAdoptionApplications` queries by the caller's Clerk user id and attaches each application's history | Applicants only see their own applications, and the list carries their timelines | `findAdoptionApplicationsByApplicant` asserts the id; `findAdoptionStatusHistoryByApplications` asserts the id list and returns two entries | Queried with `APPLICANT_ID`; one row returned carrying its two-entry `history`                        | As expected | Pass |
+| AD-04 | `listMyAdoptionApplications` skips the history lookup when the applicant has no applications | An empty queue costs no second query | `findAdoptionApplicationsByApplicant` returns `[]`                             | Result is `[]`                                                                                       | As expected | Pass |
+| AD-05 | `getAdoptionApplicationDetail` returns the application joined with its status history | Detail view carries the timeline            | `findAdoptionApplicationById` returns an application; history returns one entry | `result.id` matches and `result.history` is the history array                                         | As expected | Pass |
+| AD-06 | `getAdoptionApplicationDetail` returns `undefined` when the application does not exist | Missing records are not an error       | `findAdoptionApplicationById` returns `undefined`                               | `undefined`                                                                                          | As expected | Pass |
 
 ## Test cases — Submit application (`submitAdoptionApplication`)
 
-All rows below submit `input` with `APPLICANT_ID` as the caller.
+`adoptions.service.test.ts`. All rows below submit `input` with `APPLICANT_ID` as
+the caller.
 
 | ID    | Test case                                                             | Rule under test                                                       | Preconditions / stubs                                                                                   | Input                                                        | Expected result                                                                                   | Actual | Status |
 | ----- | --------------------------------------------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- | ------ | ------ |
-| AD-06 | Creates a submitted application and its first history entry           | A new application starts `submitted` and is timeline-tracked          | Animal exists; no active application; `createAdoptionApplication` echoes the input                         | Valid full application payload                                | Row returned with `status: "submitted"`, applicant id, and all submitted fields; exactly one history entry with `status: "submitted"`, `changedByClerkUserId: null`, `note: null` | As expected | Pass |
-| AD-07 | Throws when the animal does not exist                                 | Cannot apply for a non-existent animal                                | `getAnimalById` returns `undefined`                                                                       | Valid payload                                                 | Rejects with `/no longer available/`                                                              | As expected | Pass |
-| AD-08 | Throws when the animal has been soft-deleted                          | Soft-deleted animals are not adoptable                                | `getAnimalById` returns an animal with `deletedAt` set                                                    | Valid payload                                                 | Rejects with `/no longer available/`                                                              | As expected | Pass |
-| AD-09 | Throws when the animal is already adopted                             | Adopted animals are not adoptable                                     | `getAnimalById` returns an animal with `status: "adopted"`                                                | Valid payload                                                 | Rejects with `/no longer available/`                                                              | As expected | Pass |
-| AD-10 | Throws when the applicant already has an active application for the animal | One active application per applicant per animal                 | `findActiveAdoptionApplication` returns an existing application                                           | Valid payload                                                 | Rejects with `/already applied/`                                                                  | As expected | Pass |
-| AD-11 | Blocks a cat adoption for an applicant with a respiratory condition   | Allergen screening for cats                                           | Animal `type: "cat"`                                                                                      | Payload with `respiratoryIssues: "yes"`                       | Rejects with `/respiratory condition/`                                                            | As expected | Pass |
-| AD-12 | Allows a dog adoption for an applicant with a respiratory condition   | Screening is cat-specific, not a blanket block                        | Animal `type: "dog"`; no active application; create echoes input                                           | Payload with `respiratoryIssues: "yes"`                       | Application created (`id` present)                                                                | As expected | Pass |
-| AD-13 | Stores guardian details for a minor applicant                         | Minors require a consenting guardian                                  | Animal exists; no active application; create captures the payload                                         | `ageBracket: "minor"` + guardian name, contact, relationship, consent | Stored row has `guardianName: "Jone Koro"` and `guardianConsent: true`                            | As expected | Pass |
-| AD-14 | Stores the identification document on submit                          | ID verification is captured at application time                        | Animal exists; no active application; create captures the payload                                         | `idDocumentType: "voter_card"` + Cloudinary `idDocumentUrl`   | Stored row has the matching document type and URL                                                 | As expected | Pass |
-| AD-15 | Stores the next-of-kin backup contact on submit                       | A secondary contact is recorded                                        | Animal exists; no active application; create captures the payload                                         | Next-of-kin name and contact                                  | Stored row has `nextOfKinName: "Jone Koro"` and `nextOfKinContact: "+679 9900001"`                | As expected | Pass |
-| AD-16 | Uploads an ID photo through the injected uploader                     | Upload provider is injected, not hard-wired                           | Uploader stub injected as a parameter                                                                     | A `Buffer` of fake image bytes                                | Returns the stub URL and the uploader was called exactly once                                     | As expected | Pass |
-| AD-17 | Notifies the applicant in-app and by email on submit                  | Applicant gets an acknowledgement                                     | Animal exists; create echoes input; notification and email spies                                          | Valid payload                                                 | One in-app notification to `APPLICANT_ID` with `toStatus: "submitted"`; one email to the applicant's address | As expected | Pass |
-| AD-18 | Notifies the review team in-app and by email on submit                | Staff are alerted to a new application                                | `listStaffContacts` returns a staffer with an email and a manager without one                             | Valid payload                                                 | One staff notification listing both Clerk ids; exactly one staff email, to the staffer who has an address | As expected | Pass |
-| AD-19 | Still completes the submit when staff notification fails              | Notifications are best-effort, never blocking                         | `listStaffContacts` throws `"clerk down"`                                                                 | Valid payload                                                 | Application still created; applicant notified; zero staff notifications                            | As expected | Pass |
+| AD-07 | Creates a submitted application and its first history entry           | A new application starts `submitted` and is timeline-tracked          | Animal exists; no active application; `createAdoptionApplication` echoes the input                         | Valid full application payload                                | Row returned with `status: "submitted"`, applicant id, and all submitted fields; exactly one history entry with `status: "submitted"`, `changedByClerkUserId: null`, `note: null` | As expected | Pass |
+| AD-08 | Throws when the animal does not exist                                 | Cannot apply for a non-existent animal                                | `getAnimalById` returns `undefined`                                                                       | Valid payload                                                 | Rejects with `/no longer available/`                                                              | As expected | Pass |
+| AD-09 | Throws when the animal has been soft-deleted                          | Soft-deleted animals are not adoptable                                | `getAnimalById` returns an animal with `deletedAt` set                                                    | Valid payload                                                 | Rejects with `/no longer available/`                                                              | As expected | Pass |
+| AD-10 | Throws when the animal is already adopted                             | Adopted animals are not adoptable                                     | `getAnimalById` returns an animal with `status: "adopted"`                                                | Valid payload                                                 | Rejects with `/no longer available/`                                                              | As expected | Pass |
+| AD-11 | Throws when the applicant already has an active application for the animal | One active application per applicant per animal                 | `findActiveAdoptionApplication` returns an existing application                                           | Valid payload                                                 | Rejects with `/already applied/`                                                                  | As expected | Pass |
+| AD-12 | Blocks a cat adoption for an applicant with a respiratory condition   | Allergen screening for cats                                           | Animal `type: "cat"`                                                                                      | Payload with `respiratoryIssues: "yes"`                       | Rejects with `/respiratory condition/`                                                            | As expected | Pass |
+| AD-13 | Allows a dog adoption for an applicant with a respiratory condition   | Screening is cat-specific, not a blanket block                        | Animal `type: "dog"`; no active application; create echoes input                                           | Payload with `respiratoryIssues: "yes"`                       | Application created (`id` present)                                                                | As expected | Pass |
+| AD-14 | Stores guardian details for a minor applicant                         | Minors require a consenting guardian                                  | Animal exists; no active application; create captures the payload                                         | `ageBracket: "minor"` + guardian name, contact, relationship, consent | Stored row has `guardianName: "Jone Koro"` and `guardianConsent: true`                            | As expected | Pass |
+| AD-15 | Stores the identification document on submit                          | ID verification is captured at application time                        | Animal exists; no active application; create captures the payload                                         | `idDocumentType: "voter_card"` + Cloudinary `idDocumentUrl`   | Stored row has the matching document type and URL                                                 | As expected | Pass |
+| AD-16 | Stores the next-of-kin backup contact on submit                       | A secondary contact is recorded                                        | Animal exists; no active application; create captures the payload                                         | Next-of-kin name and contact                                  | Stored row has `nextOfKinName: "Jone Koro"` and `nextOfKinContact: "+679 9900001"`                | As expected | Pass |
+| AD-17 | Uploads an ID photo through the injected uploader                     | Upload provider is injected, not hard-wired                           | Uploader stub injected as a parameter                                                                     | A `Buffer` of fake image bytes                                | Returns the stub URL and the uploader was called exactly once                                     | As expected | Pass |
+| AD-18 | Notifies the applicant in-app and by email on submit                  | Applicant gets an acknowledgement                                     | Animal exists; create echoes input; notification and email spies                                          | Valid payload                                                 | One in-app notification to `APPLICANT_ID` with `toStatus: "submitted"`; one email to the applicant's address | As expected | Pass |
+| AD-19 | Notifies the review team in-app and by email on submit                | Staff are alerted to a new application                                | `listStaffContacts` returns a staffer with an email and a manager without one                             | Valid payload                                                 | One staff notification listing both Clerk ids; exactly one staff email, to the staffer who has an address | As expected | Pass |
+| AD-20 | Still completes the submit when staff notification fails              | Notifications are best-effort, never blocking                         | `listStaffContacts` throws `"clerk down"`                                                                 | Valid payload                                                 | Application still created; applicant notified; zero staff notifications                            | As expected | Pass |
+| AD-21 | Rejects an application for an animal that is not medically cleared     | **The clearance gate also runs at submission**, not only at approval  | `getAnimalById` returns an animal with `medicallyCleared: false`                                          | Valid payload                                                 | Rejects with `/not yet medically cleared/`; no application created                                 | As expected | Pass |
+| AD-22 | Audits the submission                                                 | Every submission is recorded on the audit trail                       | Animal exists; no active application; create echoes input; `auditSpy` captures calls                      | Valid payload                                                 | One audit entry `adoption.application.submitted` with metadata `{ animalId: ANIMAL_ID }`            | As expected | Pass |
+| AD-23 | Removes the application if its first history entry cannot be written  | A half-written application is never left behind                       | `createAdoptionStatusHistoryEntry` throws `"history insert failed"`                                       | Valid payload                                                 | Rejects with `/history insert failed/`; `deleteAdoptionApplication` called once with `APPLICATION_ID` | As expected | Pass |
 
 ## Test cases — Status transition (`transitionAdoptionApplication`)
 
-All rows call the service with `ACTOR_ID` as the acting staff member.
+`adoptions.service.test.ts`. All rows call the service with `ACTOR_ID` as the
+acting staff member.
 
 | ID    | Test case                                                              | Rule under test                                                            | Preconditions / stubs                                                                    | Input                                                        | Expected result                                                                                                    | Actual | Status |
 | ----- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ | ------ | ------ |
-| AD-20 | Returns `undefined` when the application does not exist                | Unknown ids are a no-op, not a crash                                        | `findAdoptionApplicationById` returns `undefined`                                         | `{ status: "under_review" }`                                 | `undefined`                                                                                                        | As expected | Pass |
-| AD-21 | Moves `submitted -> under_review` and records actor history + audit    | First staff action is tracked with actor and audit trail                    | Stateful row starting `submitted`                                                         | `{ status: "under_review" }`                                 | Status becomes `under_review`; one history row (`changedByClerkUserId: ACTOR_ID`); one audit entry `adoption.application.status_changed` with `{ animalId, fromStatus, toStatus }`; animal untouched | As expected | Pass |
-| AD-22 | Approves the application and assigns the animal to the adopter         | Approval transfers ownership and removes the animal from public listings     | Stateful row `under_review`; animal `medicallyCleared: true`; no conflict                 | `{ status: "approved" }`                                      | Status becomes `approved`; animal updated with `{ status: "adopted" }`                                              | As expected | Pass |
-| AD-23 | Blocks approval when the animal is not medically cleared               | **Veterinary-clearance hard gate**                                          | Stateful row `under_review`; `getAnimalById` returns `medicallyCleared: false`            | `{ status: "approved" }`                                      | Rejects with `/not yet medically cleared/`; row stays `under_review`; animal untouched                              | As expected | Pass |
-| AD-24 | Moves `approved -> completed` and keeps the animal adopted             | Completion is idempotent for the ownership rule                              | Stateful row `approved`                                                                   | `{ status: "completed" }`                                     | Status becomes `completed`; animal updated with `{ status: "adopted" }` (re-asserted)                               | As expected | Pass |
-| AD-25 | Rejects `submitted -> approved` as a direct jump                       | No skipping the review step                                                 | Application row `submitted`                                                               | `{ status: "approved" }`                                      | Rejects with `/cannot move from "submitted" to "approved"/`                                                         | As expected | Pass |
-| AD-26 | Rejects `approved -> rejected` (no stepping backwards)                 | Decided applications cannot be reversed through this path                   | Application row `approved`                                                                | `{ status: "rejected" }`                                      | Rejects with `/cannot move from "approved" to "rejected"/`                                                          | As expected | Pass |
-| AD-27 | Rejects any move out of the terminal `completed` state                 | `completed` is terminal                                                      | Application row `completed`                                                               | `{ status: "under_review" }`                                  | Rejects with `/terminal state/`                                                                                     | As expected | Pass |
-| AD-28 | Rejects any move out of the terminal `rejected` state                  | `rejected` is terminal                                                       | Application row `rejected`                                                                | `{ status: "submitted" }`                                     | Rejects with `/terminal state/`                                                                                     | As expected | Pass |
-| AD-29 | Requires a review note when rejecting                                  | Applicants must be told why                                                   | Application row `submitted`                                                               | `{ status: "rejected" }` (no note)                            | Rejects with `/review note/i`                                                                                       | As expected | Pass |
-| AD-30 | Rejects with a review note and preserves the note on the application   | The rejection reason is stored and shown to the applicant                    | Stateful row `submitted`                                                                  | `{ status: "rejected", reviewNotes: "Home visit found no fenced yard" }` | Status becomes `rejected`; `reviewNotes` stored on the record; history row carries the same note                    | As expected | Pass |
-| AD-31 | Blocks approval when another application for the animal is already approved | Only one application per animal can be approved (race guard)          | Row `under_review`; `findAdoptionConflict` returns an already-approved application         | `{ status: "approved" }`                                      | Rejects with `/Another applicant has already been approved/`                                                        | As expected | Pass |
-| AD-32 | Allows a same-status no-op transition but still records it             | Idempotent writes are still auditable                                        | Stateful row `submitted`                                                                  | `{ status: "submitted" }`                                     | Status stays `submitted`; one history row (`note: null`); one audit entry with `fromStatus` = `toStatus`             | As expected | Pass |
-| AD-33 | Notifies the applicant in-app and by email on every transition         | Status changes reach the applicant                                           | Stateful row `submitted`                                                                  | `{ status: "under_review" }`                                  | One in-app notification to the applicant with `toStatus: "under_review"`; one email with the same `toStatus`        | As expected | Pass |
-| AD-34 | Still completes the transition when notification and email fail        | Notification failures never roll back a status change                        | `createAdoptionStatusNotification` and `sendAdoptionStatusEmail` both throw               | `{ status: "under_review" }`                                  | Status becomes `under_review`; history and audit entries still written                                              | As expected | Pass |
+| AD-24 | Returns `undefined` when the application does not exist                | Unknown ids are a no-op, not a crash                                        | `findAdoptionApplicationById` returns `undefined`                                         | `{ status: "under_review" }`                                 | `undefined`                                                                                                        | As expected | Pass |
+| AD-25 | Moves `submitted -> under_review` and records actor history + audit    | First staff action is tracked with actor and audit trail                    | Stateful row starting `submitted`                                                         | `{ status: "under_review" }`                                 | Status becomes `under_review`; one history row (`changedByClerkUserId: ACTOR_ID`); one audit entry `adoption.application.status_changed` with `{ animalId, fromStatus, toStatus }`; animal untouched | As expected | Pass |
+| AD-26 | Approves the application and assigns the animal to the adopter         | Approval transfers ownership and removes the animal from public listings     | Stateful row `under_review`; animal `medicallyCleared: true`; no conflict                 | `{ status: "approved" }`                                      | Status becomes `approved`; animal updated with `{ status: "adopted" }`                                              | As expected | Pass |
+| AD-27 | Blocks approval when the animal is not medically cleared               | **Veterinary-clearance hard gate**                                          | Stateful row `under_review`; `getAnimalById` returns `medicallyCleared: false`            | `{ status: "approved" }`                                      | Rejects with `/not yet medically cleared/`; row stays `under_review`; animal untouched                              | As expected | Pass |
+| AD-28 | Moves `approved -> completed` and keeps the animal adopted             | Completion is idempotent for the ownership rule                              | Stateful row `approved`                                                                   | `{ status: "completed" }`                                     | Status becomes `completed`; animal updated with `{ status: "adopted" }` (re-asserted)                               | As expected | Pass |
+| AD-29 | Rejects `submitted -> approved` as a direct jump                       | No skipping the review step                                                 | Application row `submitted`                                                               | `{ status: "approved" }`                                      | Rejects with `/cannot move from "submitted" to "approved"/`                                                         | As expected | Pass |
+| AD-30 | Rejects `approved -> rejected` (no stepping backwards)                 | Decided applications cannot be reversed through this path                   | Application row `approved`                                                                | `{ status: "rejected" }`                                      | Rejects with `/cannot move from "approved" to "rejected"/`                                                          | As expected | Pass |
+| AD-31 | Rejects any move out of the terminal `completed` state                 | `completed` is terminal                                                      | Application row `completed`                                                               | `{ status: "under_review" }`                                  | Rejects with `/terminal state/`                                                                                     | As expected | Pass |
+| AD-32 | Rejects any move out of the terminal `rejected` state                  | `rejected` is terminal                                                       | Application row `rejected`                                                                | `{ status: "submitted" }`                                     | Rejects with `/terminal state/`                                                                                     | As expected | Pass |
+| AD-33 | Requires a review note when rejecting                                  | Applicants must be told why                                                   | Application row `submitted`                                                               | `{ status: "rejected" }` (no note)                            | Rejects with `/review note/i`                                                                                       | As expected | Pass |
+| AD-34 | Rejects with a review note and preserves the note on the application   | The rejection reason is stored and shown to the applicant                    | Stateful row `submitted`                                                                  | `{ status: "rejected", reviewNotes: "Home visit found no fenced yard" }` | Status becomes `rejected`; `reviewNotes` stored on the record; history row carries the same note                    | As expected | Pass |
+| AD-35 | Blocks approval when another application for the animal is already approved | Only one application per animal can be approved (race guard)          | Row `under_review`; `findAdoptionConflict` returns an already-approved application         | `{ status: "approved" }`                                      | Rejects with `/Another applicant has already been approved/`                                                        | As expected | Pass |
+| AD-36 | Allows a same-status no-op transition but still records it             | Idempotent writes are still auditable                                        | Stateful row `submitted`                                                                  | `{ status: "submitted" }`                                     | Status stays `submitted`; one history row (`note: null`); one audit entry with `fromStatus` = `toStatus`             | As expected | Pass |
+| AD-37 | Notifies the applicant in-app and by email on every transition         | Status changes reach the applicant                                           | Stateful row `submitted`                                                                  | `{ status: "under_review" }`                                  | One in-app notification to the applicant with `toStatus: "under_review"`; one email with the same `toStatus`        | As expected | Pass |
+| AD-38 | Still completes the transition when notification and email fail        | Notification failures never roll back a status change                        | `createAdoptionStatusNotification` and `sendAdoptionStatusEmail` both throw               | `{ status: "under_review" }`                                  | Status becomes `under_review`; history and audit entries still written                                              | As expected | Pass |
+| AD-39 | Turns a unique-violation from a concurrent approval into a conflict    | The **real** double-approval race returns 409, not 500                       | Row `under_review`; `updateAdoptionApplicationStatus` throws an error with `code: "23505"` | `{ status: "approved" }`                                      | Rejects with `/Another applicant has already been approved/` (typed `AdoptionBusinessError(409)`)                    | As expected | Pass |
+| AD-40 | Refuses to let a reviewer approve their own application                | Separation of applicant and reviewer cannot be bypassed                     | Stateful row `under_review`; acting user **is** `APPLICANT_ID`                             | `{ status: "approved" }`                                      | Rejects with `/your own adoption application/`; row stays `under_review`                                            | As expected | Pass |
+| AD-41 | Restores the previous status if marking the animal adopted fails       | The two non-transactional writes are compensated                             | Stateful row `approved`; `updateAnimalProfile` throws `"animal update failed"`             | `{ status: "completed" }`                                     | Rejects with `/animal update failed/`; the row is restored to `approved`                                            | As expected | Pass |
+
+## Test cases — Applicant withdrawal (`withdrawAdoptionApplication`)
+
+`adoptions.service.test.ts`. Withdrawal is a separate service entry point behind
+`POST /api/adoptions/:id/withdraw`, never a reviewer status move.
+
+| ID    | Test case                                                     | Rule under test                                                        | Preconditions / stubs                              | Expected result                                                                                       | Actual | Status |
+| ----- | ------------------------------------------------------------- | ---------------------------------------------------------------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ------ | ------ |
+| AD-42 | Withdraws the applicant's own submitted application            | The applicant may cancel their own live application                    | Stateful row `submitted`; caller is `APPLICANT_ID` | Status becomes `withdrawn`; history row with `status: "withdrawn"`; audit entry `adoption.application.withdrawn` | As expected | Pass |
+| AD-43 | Refuses to withdraw someone else's application                 | Only the owner can withdraw                                            | Stateful row `submitted`; caller is another Clerk id | Rejects with `/your own adoption application/`                                                       | As expected | Pass |
+| AD-44 | Refuses to withdraw an application that is already decided     | Decided applications are immutable through this path                   | Stateful row `rejected`                            | Rejects with `/terminal state/`                                                                       | As expected | Pass |
+
+## Test cases — Request validation (`adoptions.validation.test.ts`)
+
+The zod schemas and the error → HTTP status mapping that the adoption routes
+apply. Each rejected row asserts the **first zod issue's message verbatim**, so
+the copy the applicant sees is part of the contract.
+
+### `applicationSchema` (`POST /api/adoptions`)
+
+| ID    | Test case                                                                                  | Rule under test                                            | Input (over a valid adult application)                                | Expected result                                   | Actual | Status |
+| ----- | ------------------------------------------------------------------------------------------ | ---------------------------------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------- | ------ | ------ |
+| AD-45 | Accepts a complete adult application                                                       | The happy path parses                                      | Full valid payload                                                    | `safeParse().success` is `true`                   | As expected | Pass |
+| AD-46 | Accepts a minor application when all four guardian answers are present                     | Guardian block is complete for minors                      | `ageBracket: "minor"` + name, contact, relationship, `consent: true`  | Parses successfully                               | As expected | Pass |
+| AD-47 | Accepts a dog application declaring a respiratory condition (gate is species-specific)      | The allergen gate is **not** in the schema                 | `respiratoryIssues: "yes"`                                            | Parses successfully (the species check is a service rule, AD-12/AD-13) | As expected | Pass |
+| AD-48 | Normalizes an empty optional text field to `undefined`                                     | Blank optional text is not stored as whitespace            | `previousPetOutcome: "   "` with `ownedPetsBefore: "no"`              | Parses; `data.previousPetOutcome` is `undefined`  | As expected | Pass |
+| AD-49 | Treats a whitespace-only previous-pet outcome as missing                                   | Whitespace does not satisfy a required field               | `ownedPetsBefore: "yes"`, `previousPetOutcome: "   "`                 | `"Tell us what happened to your previous pet(s)"` | As expected | Pass |
+| AD-50 | Rejects a non-UUID `animalId`                                                              | The animal link must be a real id                          | `animalId: "not-a-uuid"`                                              | `"Link a valid animal"`                           | As expected | Pass |
+| AD-51 | Rejects a missing full name                                                                | Applicant identity is required                             | `fullName: ""`                                                        | `"Tell us your full name"`                        | As expected | Pass |
+| AD-52 | Rejects a missing contact number                                                           | A reachable phone number is required                       | `contactNumber: ""`                                                   | `"Tell us your contact number"`                   | As expected | Pass |
+| AD-53 | Rejects an invalid email address                                                           | Email must be well-formed                                  | `applicantEmail: "mere@"`                                             | `"Enter a valid email address"`                   | As expected | Pass |
+| AD-54 | Rejects an invalid age bracket                                                             | Only `adult` / `minor` are accepted                        | `ageBracket: "child"`                                                 | `"Tell us whether you are 18 or older"`           | As expected | Pass |
+| AD-55 | Rejects a missing identification document type                                             | Which ID was shown must be recorded                        | `idDocumentType: ""`                                                  | `"Choose your identification document type"`      | As expected | Pass |
+| AD-56 | Rejects a missing identification document photo URL                                        | The ID photo is mandatory                                  | `idDocumentUrl: ""`                                                   | `"Upload your identification document photo"`     | As expected | Pass |
+| AD-57 | Rejects a missing vet cost plan                                                            | The applicant must say how vet care is funded              | `vetCostPlan: ""`                                                     | `"Tell us how you will cover veterinary costs"`   | As expected | Pass |
+| AD-58 | Rejects a missing next-of-kin name                                                         | A backup contact is mandatory                              | `nextOfKinName: ""`                                                   | `"Tell us who looks after the animal when you are unavailable"` | As expected | Pass |
+| AD-59 | Rejects a missing next-of-kin contact                                                      | The backup contact needs a number                          | `nextOfKinContact: ""`                                                | `"Tell us your next of kin's contact number"`     | As expected | Pass |
+| AD-60 | Rejects a missing `adoptionFor` choice                                                     | Who the animal is for must be stated                       | `adoptionFor: ""`                                                     | `"Choose who this adoption is for"`               | As expected | Pass |
+| AD-61 | Rejects a minor application missing guardian consent                                       | Minor applications require explicit consent                | `ageBracket: "minor"`, guardian details but no consent                | `"Your parent or guardian must consent to this adoption"` | As expected | Pass |
+| AD-62 | Rejects a minor application missing the guardian relationship                              | Consent alone is not enough                                | `ageBracket: "minor"`, consent `true`, no relationship                | `"Choose their relationship to you"`              | As expected | Pass |
+| AD-63 | Rejects guardian details supplied by an adult applicant                                    | Guardian fields are minor-only (no silent acceptance)      | `ageBracket: "adult"` + `guardianName`                                | `"Guardian details are only needed for applicants under 18"` | As expected | Pass |
+| AD-64 | Requires a previous-pet outcome when the applicant has owned pets before                   | Conditional required field                                 | `ownedPetsBefore: "yes"` (no outcome)                                 | `"Tell us what happened to your previous pet(s)"` | As expected | Pass |
+| AD-65 | Requires current-pet details when the applicant has current pets                           | Conditional required field                                 | `hasCurrentPets: "yes"` (no details)                                  | `"Tell us about your current pets"`               | As expected | Pass |
+
+### `transitionSchema` (`PATCH /api/adoptions/:id`)
+
+| ID    | Test case                                                                     | Rule under test                                                 | Input                                   | Expected result                              | Actual | Status |
+| ----- | ----------------------------------------------------------------------------- | --------------------------------------------------------------- | --------------------------------------- | -------------------------------------------- | ------ | ------ |
+| AD-66 | Accepts a status-only transition                                              | A reviewer may move status without a note                       | `{ status: "under_review" }`            | Parses successfully                          | As expected | Pass |
+| AD-67 | Accepts every reviewer status                                                 | The five reviewer statuses are all writable                     | Each of `submitted, under_review, approved, completed, rejected` | All parse successfully              | As expected | Pass |
+| AD-68 | Rejects withdrawal: only the applicant can withdraw, via its own route        | `withdrawn` is **not** a reviewer status                        | `{ status: "withdrawn" }`               | Rejected                                     | As expected | Pass |
+| AD-69 | Rejects an unknown status                                                     | No free-text statuses                                           | `{ status: "canceled" }`                | Rejected                                     | As expected | Pass |
+| AD-70 | Normalizes an empty review note to `undefined`                                | A blank note is not stored                                      | `{ status: "rejected", reviewNotes: "   " }` | Parses; `data.reviewNotes` is `undefined` | As expected | Pass |
+
+### `businessErrorStatus` (error → HTTP status mapping)
+
+| ID    | Test case                                                                          | Rule under test                                                          | Input                                                                 | Expected result | Actual | Status |
+| ----- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | --------------------------------------------------------------------- | --------------- | ------ | ------ |
+| AD-71 | Maps a typed conflict to 409                                                       | `AdoptionBusinessError` carries its own status                            | `AdoptionBusinessError(409, …)`                                       | `409`           | As expected | Pass |
+| AD-72 | Maps typed lifecycle and permission rejections to their own status                 | 400 and 403 survive the mapping                                           | `AdoptionBusinessError(400, …)`; `AdoptionBusinessError(403, …)`      | `400`; `403`    | As expected | Pass |
+| AD-73 | Maps a Postgres unique violation (the real double-approval race) to 409            | A raw `23505` becomes a conflict, not a 500                               | `Error` with `code: "23505"`                                          | `409`           | As expected | Pass |
+| AD-74 | Maps a unique violation wrapped in a cause chain to 409                            | Driver-wrapped violations are unwrapped                                   | `Error({ cause: <23505 error> })`                                     | `409`           | As expected | Pass |
+| AD-75 | Returns `null` for an unrecognized error (falls through to the 500 handler)        | Only known shapes are translated                                          | `new Error("something unexpected")`                                   | `null`          | As expected | Pass |
+| AD-76 | Returns `null` for a non-`Error` value                                             | Thrown non-errors are not misread as business errors                      | `"boom"`                                                              | `null`          | As expected | Pass |
 
 ## Test cases — Staff queue tabs (frontend helper)
 
-| ID    | Test case                                              | Rule under test                                                 | Preconditions / stubs | Expected result                                                                                    | Actual | Status |
-| ----- | ------------------------------------------------------ | --------------------------------------------------------------- | --------------------- | -------------------------------------------------------------------------------------------------- | ------ | ------ |
-| AD-35 | Treats `completed` and `rejected` as terminal          | Finished applications move out of the live queue                | None                  | `isTerminalAdoptionStatus` is true for `completed` / `rejected`, false for `submitted`, `under_review`, `approved` | As expected | Pass |
-| AD-36 | Splits every lifecycle status across exactly one tab   | No status is orphaned or shown in both tabs                     | None                  | Active + History tab statuses sorted equal `approved, completed, rejected, submitted, under_review` | As expected | Pass |
-| AD-37 | Matches dropdown options to their tab                  | Filter options cannot drift from the tabs                       | None                  | `ACTIVE_STATUS_FILTERS` matches the Active tab; `HISTORY_STATUS_FILTERS` matches the History tab    | As expected | Pass |
+`src/features/adoptions/adoptionQueue.test.ts`.
+
+| ID    | Test case                                              | Rule under test                                                 | Preconditions / stubs | Expected result                                                                                                     | Actual | Status |
+| ----- | ------------------------------------------------------ | --------------------------------------------------------------- | --------------------- | -------------------------------------------------------------------------------------------------------------------- | ------ | ------ |
+| AD-77 | Treats `completed`, `rejected` and `withdrawn` as terminal | Finished applications move out of the live queue            | None                  | `isTerminalAdoptionStatus` is true for `completed` / `rejected` / `withdrawn`, false for `submitted`, `under_review`, `approved` | As expected | Pass |
+| AD-78 | Splits every lifecycle status across exactly one tab   | No status is orphaned or shown in both tabs                     | None                  | Active + History tab statuses sorted equal `approved, completed, rejected, submitted, under_review, withdrawn`        | As expected | Pass |
+| AD-79 | Matches dropdown options to their tab                  | Filter options cannot drift from the tabs                       | None                  | `ACTIVE_STATUS_FILTERS` matches the Active tab; `HISTORY_STATUS_FILTERS` matches the History tab                       | As expected | Pass |
 
 ## Status transition matrix
 
-The matrix the suite enforces (`ALLOWED_TRANSITIONS` in `adoptions.service.ts`). "No-op" rows are permitted and are still written to `adoptionStatusHistory`.
+The matrix the suite enforces (`ALLOWED_TRANSITIONS` in `adoptions.service.ts`).
+"No-op" rows are permitted and are still written to `adoptionStatusHistory`.
 
-| from \ to   | submitted       | under_review    | approved                                                    | completed | rejected            |
-| ----------- | --------------- | --------------- | ----------------------------------------------------------- | --------- | ------------------- |
-| submitted   | Allowed (no-op) | Allowed         | Blocked (illegal jump)                                      | Blocked   | Allowed (needs note) |
-| under_review| Blocked         | Allowed (no-op) | Allowed (needs vet clearance + no conflicting approval; marks the animal `adopted`) | Blocked | Allowed (needs note) |
-| approved    | Blocked         | Blocked         | Blocked (no-op)                                             | Allowed (re-asserts `adopted`) | Blocked |
-| completed   | Blocked (terminal) | Blocked      | Blocked                                                     | Blocked   | Blocked             |
-| rejected    | Blocked (terminal) | Blocked      | Blocked                                                     | Blocked   | Blocked             |
+| from \ to    | submitted       | under_review    | approved                                                    | completed | rejected            | withdrawn                          |
+| ------------ | --------------- | --------------- | ----------------------------------------------------------- | --------- | ------------------- | ---------------------------------- |
+| submitted    | Allowed (no-op) | Allowed         | Blocked (illegal jump)                                      | Blocked   | Allowed (needs note) | Allowed (applicant, own route only) |
+| under_review | Blocked         | Allowed (no-op) | Allowed (needs vet clearance + no conflicting approval; marks the animal `adopted`) | Blocked | Allowed (needs note) | Allowed (applicant, own route only) |
+| approved     | Blocked         | Blocked         | Blocked (no-op)                                             | Allowed (re-asserts `adopted`) | Blocked | Blocked               |
+| completed    | Blocked (terminal) | Blocked      | Blocked                                                     | Blocked   | Blocked             | Blocked                            |
+| rejected     | Blocked (terminal) | Blocked      | Blocked                                                     | Blocked   | Blocked             | Blocked                            |
+| withdrawn    | Blocked (terminal) | Blocked      | Blocked                                                     | Blocked   | Blocked             | Blocked                            |
 
-Ownership note: since the ownership rule was introduced, **approval** marks the animal `adopted` (removing it from public listings and transferring it to the adopter); **completion** re-asserts the same state so applications approved before that rule still end up correct. Both are covered by AD-22 and AD-24.
+Two notes the matrix depends on:
+
+- **Ownership**: approval marks the animal `adopted` (removing it from public
+  listings and transferring it to the adopter); completion re-asserts the same
+  state so applications approved before that rule still end up correct. Covered
+  by AD-26 and AD-28, with compensation covered by AD-41.
+- **`withdrawn` is not a reviewer move.** It is written only by
+  `withdrawAdoptionApplication` through `POST /api/adoptions/:id/withdraw`, so it
+  is excluded from `REVIEWER_STATUSES` and from `transitionSchema` (AD-68), and
+  `adoptionStatusHistory` records it with the applicant as the actor (AD-42).
 
 ## Appendix A — Combined test source (single listing)
 
-Both suites are reproduced below as one continuous listing, so the report carries a single code artifact. The runnable copies remain split by package (`server/src/**` and `src/**`) because the repository typechecks them under two different TypeScript projects (`server/tsconfig.json` with `rootDir: "src"`, and `tsconfig.app.json`), and merging them into one physical file would move test code outside a project root and break `npm run server:check` and `npm run build`.
+The three suites are reproduced below as one continuous listing, so the report
+carries a single code artifact. The runnable copies remain split by package,
+because the repository typechecks them under two different TypeScript projects
+(`server/tsconfig.json` with `rootDir: "src"`, and `tsconfig.app.json`), and
+merging them into one physical file would move test code outside a project root
+and break `npm run server:check` and `npm run build`.
 
 ```ts
 // ===== server/src/modules/adoptions/adoptions.service.test.ts =====
@@ -219,11 +353,14 @@ moduleMock("./adoptions.repository.js", {
 	findAdoptionConflict: (animalId: string, excludeId: string) =>
 		currentImpl("findAdoptionConflict")(animalId, excludeId),
 	createAdoptionApplication: (input: unknown) => currentImpl("createAdoptionApplication")(input),
+	deleteAdoptionApplication: (id: string) => currentImpl("deleteAdoptionApplication")(id),
 	updateAdoptionApplicationStatus: (id: string, input: unknown) =>
 		currentImpl("updateAdoptionApplicationStatus")(id, input),
 	createAdoptionStatusHistoryEntry: (input: unknown) => currentImpl("createAdoptionStatusHistoryEntry")(input),
 	findAdoptionStatusHistoryByApplication: (applicationId: string) =>
 		currentImpl("findAdoptionStatusHistoryByApplication")(applicationId),
+	findAdoptionStatusHistoryByApplications: (applicationIds: string[]) =>
+		currentImpl("findAdoptionStatusHistoryByApplications")(applicationIds),
 });
 
 moduleMock("../animals/animals.service.js", {
@@ -272,6 +409,7 @@ const {
 	submitAdoptionApplication,
 	transitionAdoptionApplication,
 	uploadAdoptionIdDocument,
+	withdrawAdoptionApplication,
 } = await import("./adoptions.service.js");
 
 const APPLICATION_ID = "11111111-1111-1111-1111-111111111111";
@@ -286,6 +424,7 @@ const notificationSpy: Array<Record<string, unknown>> = [];
 const emailSpy: Array<Record<string, unknown>> = [];
 const staffNotificationSpy: Array<Record<string, unknown>> = [];
 const staffEmailSpy: Array<Record<string, unknown>> = [];
+const deletedApplicationSpy: string[] = [];
 
 function baseApplication(overrides: Record<string, unknown> = {}) {
 	return {
@@ -345,6 +484,9 @@ function baseAnimal(overrides: Record<string, unknown> = {}) {
 		breed: null,
 		status: "intake",
 		deletedAt: null,
+		// Most submit tests use this directly; the clearance gate is exercised
+		// explicitly by tests that override it to false.
+		medicallyCleared: true,
 		...overrides,
 	};
 }
@@ -371,6 +513,7 @@ function resetImpls() {
 	emailSpy.length = 0;
 	staffNotificationSpy.length = 0;
 	staffEmailSpy.length = 0;
+	deletedApplicationSpy.length = 0;
 
 	repo("findAllAdoptionApplications", async () => []);
 	repo("findAdoptionApplicationsByApplicant", async () => []);
@@ -378,6 +521,10 @@ function resetImpls() {
 	repo("findActiveAdoptionApplication", async () => undefined);
 	repo("findAdoptionConflict", async () => undefined);
 	repo("findAdoptionStatusHistoryByApplication", async () => []);
+	repo("findAdoptionStatusHistoryByApplications", async () => []);
+	repo("deleteAdoptionApplication", async (id: string) => {
+		deletedApplicationSpy.push(id);
+	});
 	// Approval is gated on veterinary clearance, so the default animal is
 	// cleared. Tests that exercise the gate stub this out explicitly.
 	repo("getAnimalById", async () => baseAnimal({ medicallyCleared: true }));
@@ -428,6 +575,7 @@ describe("adoptions.service", () => {
 			"approved",
 			"completed",
 			"rejected",
+			"withdrawn",
 		]);
 	});
 
@@ -442,15 +590,34 @@ describe("adoptions.service", () => {
 	});
 
 	describe("listMyAdoptionApplications", () => {
-		it("queries by the caller's clerk user id", async () => {
+		it("queries by the caller's clerk user id and attaches each application's history", async () => {
 			const rows = [baseApplication()];
+			const history = [
+				{ applicationId: APPLICATION_ID, status: "submitted", createdAt: new Date() },
+				{ applicationId: APPLICATION_ID, status: "under_review", createdAt: new Date() },
+			];
 			repo("findAdoptionApplicationsByApplicant", async (id: string) => {
 				assert.equal(id, APPLICANT_ID);
 				return rows;
 			});
+			repo("findAdoptionStatusHistoryByApplications", async (ids: string[]) => {
+				assert.deepEqual(ids, [APPLICATION_ID]);
+				return history;
+			});
 
 			const result = await listMyAdoptionApplications(APPLICANT_ID);
-			assert.equal(result, rows);
+
+			assert.equal(result.length, 1);
+			assert.equal(result[0].id, APPLICATION_ID);
+			assert.deepEqual(result[0].history, history);
+		});
+
+		it("skips the history lookup when the applicant has no applications", async () => {
+			repo("findAdoptionApplicationsByApplicant", async () => []);
+
+			const result = await listMyAdoptionApplications(APPLICANT_ID);
+
+			assert.deepEqual(result, []);
 		});
 	});
 
@@ -675,6 +842,42 @@ describe("adoptions.service", () => {
 			assert.equal(notificationSpy.length, 1);
 			assert.equal(staffNotificationSpy.length, 0);
 		});
+
+		it("rejects an application for an animal that is not medically cleared", async () => {
+			repo("getAnimalById", async () => baseAnimal({ medicallyCleared: false }));
+
+			await assert.rejects(
+				submitAdoptionApplication(input, APPLICANT_ID),
+				/not yet medically cleared/,
+			);
+		});
+
+		it("audits the submission", async () => {
+			repo("getAnimalById", async () => baseAnimal());
+			repo("findActiveAdoptionApplication", async () => undefined);
+			repo("createAdoptionApplication", async (data: Record<string, unknown>) => ({ id: APPLICATION_ID, ...data }));
+
+			await submitAdoptionApplication(input, APPLICANT_ID);
+
+			assert.equal(auditSpy.length, 1);
+			assert.equal(auditSpy[0].action, "adoption.application.submitted");
+			assert.deepEqual(auditSpy[0].metadata, { animalId: ANIMAL_ID });
+		});
+
+		it("removes the application if its first history entry cannot be written", async () => {
+			repo("getAnimalById", async () => baseAnimal());
+			repo("findActiveAdoptionApplication", async () => undefined);
+			repo("createAdoptionApplication", async (data: Record<string, unknown>) => ({ id: APPLICATION_ID, ...data }));
+			repo("createAdoptionStatusHistoryEntry", async () => {
+				throw new Error("history insert failed");
+			});
+
+			await assert.rejects(
+				submitAdoptionApplication(input, APPLICANT_ID),
+				/history insert failed/,
+			);
+			assert.deepEqual(deletedApplicationSpy, [APPLICATION_ID]);
+		});
 	});
 
 	describe("transitionAdoptionApplication", () => {
@@ -849,11 +1052,357 @@ describe("adoptions.service", () => {
 			assert.equal(historySpy.length, 1);
 			assert.equal(auditSpy.length, 1);
 		});
+
+		it("turns a unique-violation from a concurrent approval into a conflict", async () => {
+			statefulApplication("under_review");
+			repo("updateAdoptionApplicationStatus", async () => {
+				throw Object.assign(
+					new Error("duplicate key value violates unique constraint admission_animal"),
+					{ code: "23505" },
+				);
+			});
+
+			await assert.rejects(
+				transitionAdoptionApplication(APPLICATION_ID, { status: "approved" }, ACTOR_ID),
+				/Another applicant has already been approved/,
+			);
+		});
+
+		it("refuses to let a reviewer approve their own application", async () => {
+			statefulApplication("under_review");
+
+			await assert.rejects(
+				transitionAdoptionApplication(APPLICATION_ID, { status: "approved" }, APPLICANT_ID),
+				/your own adoption application/,
+			);
+		});
+
+		it("restores the previous status if marking the animal adopted fails", async () => {
+			const current = statefulApplication("approved");
+			repo("updateAnimalProfile", async () => {
+				throw new Error("animal update failed");
+			});
+
+			await assert.rejects(
+				transitionAdoptionApplication(APPLICATION_ID, { status: "completed" }, ACTOR_ID),
+				/animal update failed/,
+			);
+			assert.equal(current.status, "approved");
+		});
+	});
+
+	describe("withdrawAdoptionApplication", () => {
+		it("withdraws the applicant's own submitted application", async () => {
+			const current = statefulApplication("submitted");
+
+			const result = await withdrawAdoptionApplication(APPLICATION_ID, APPLICANT_ID);
+
+			assert.equal(result?.status, "withdrawn");
+			assert.equal(current.status, "withdrawn");
+			assert.equal(historySpy[0].status, "withdrawn");
+			assert.equal(auditSpy[0].action, "adoption.application.withdrawn");
+		});
+
+		it("refuses to withdraw someone else's application", async () => {
+			statefulApplication("submitted");
+
+			await assert.rejects(
+				withdrawAdoptionApplication(APPLICATION_ID, "user-someone-else"),
+				/your own adoption application/,
+			);
+		});
+
+		it("refuses to withdraw an application that is already decided", async () => {
+			statefulApplication("rejected");
+
+			await assert.rejects(
+				withdrawAdoptionApplication(APPLICATION_ID, APPLICANT_ID),
+				/terminal state/,
+			);
+		});
+	});
+});// ===== server/src/modules/adoptions/adoptions.validation.test.ts =====
+import { describe, it } from "node:test";
+import assert from "node:assert/strict";
+
+// Pure validation tests for the adoption HTTP layer: the request schemas the
+// routes parse and the business-error -> status mapping they apply. Nothing
+// here touches a database, Clerk, Cloudinary or mail, so the suite runs with
+// dummy credentials and no .env (see AGENTS.md). Deliberately no mock.module -
+// these are plain imports, which is why this suite is safe on any Node version.
+//
+// The schemas live in adoptions.routes.ts, so this imports that module (which
+// pulls in express/the service chain at import time). The env vars are set
+// before the dynamic import so the module graph loads without real secrets.
+process.env.CLERK_SECRET_KEY ??= "sk_test_dummy";
+process.env.DATABASE_URL ??= "postgres://dummy:dummy@localhost:5432/dummy";
+process.env.CLOUDINARY_CLOUD_NAME ??= "dummy";
+process.env.CLOUDINARY_API_KEY ??= "dummy";
+process.env.CLOUDINARY_API_SECRET ??= "dummy";
+
+const { applicationSchema, transitionSchema, businessErrorStatus } = await import(
+	"./adoptions.routes.js"
+);
+const { AdoptionBusinessError } = await import("./adoptionErrors.js");
+
+// A complete, valid adult application. Tests clone and break one field at a time.
+function validApplication(overrides: Record<string, unknown> = {}) {
+	return {
+		animalId: "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+		fullName: "Mere Koro",
+		contactNumber: "+679 9900000",
+		applicantEmail: "mere@example.com",
+		ageBracket: "adult",
+		idDocumentType: "voter_card",
+		idDocumentUrl: "https://res.cloudinary.com/demo/id.jpg",
+		petAllergies: "no",
+		respiratoryIssues: "no",
+		ownedPetsBefore: "no",
+		hasCurrentPets: "no",
+		vetCostPlan: "Savings",
+		nextOfKinName: "Jone Koro",
+		nextOfKinContact: "+679 9900001",
+		adoptionFor: "self",
+		...overrides,
+	};
+}
+
+// Mirrors the route: surface the first zod issue's message to the client.
+function firstMessage(payload: unknown): string {
+	const parsed = applicationSchema.safeParse(payload);
+	assert.equal(parsed.success, false, "expected the payload to be rejected");
+	return parsed.error.issues[0]!.message;
+}
+
+describe("applicationSchema", () => {
+	it("accepts a complete adult application", () => {
+		const parsed = applicationSchema.safeParse(validApplication());
+		assert.equal(parsed.success, true, JSON.stringify(parsed));
+	});
+
+	it("accepts a minor application when all four guardian answers are present", () => {
+		const parsed = applicationSchema.safeParse(
+			validApplication({
+				ageBracket: "minor",
+				guardianName: "Jone Koro",
+				guardianContact: "+679 9900001",
+				guardianRelationship: "parent",
+				guardianConsent: true,
+			}),
+		);
+		assert.equal(parsed.success, true, JSON.stringify(parsed));
+	});
+
+	it("accepts a dog application declaring a respiratory condition (gate is species-specific)", () => {
+		const parsed = applicationSchema.safeParse(validApplication({ respiratoryIssues: "yes" }));
+		assert.equal(parsed.success, true, JSON.stringify(parsed));
+	});
+
+	it("normalizes an empty optional text field to undefined", () => {
+		const parsed = applicationSchema.safeParse(
+			validApplication({ ownedPetsBefore: "no", previousPetOutcome: "   " }),
+		);
+		assert.equal(parsed.success, true, JSON.stringify(parsed));
+		assert.equal(parsed.data?.previousPetOutcome, undefined);
+	});
+
+	it("treats a whitespace-only previous-pet outcome as missing", () => {
+		assert.equal(
+			firstMessage(validApplication({ ownedPetsBefore: "yes", previousPetOutcome: "   " })),
+			"Tell us what happened to your previous pet(s)",
+		);
+	});
+
+	it("rejects a non-UUID animalId", () => {
+		assert.equal(firstMessage(validApplication({ animalId: "not-a-uuid" })), "Link a valid animal");
+	});
+
+	it("rejects a missing full name", () => {
+		assert.equal(firstMessage(validApplication({ fullName: "" })), "Tell us your full name");
+	});
+
+	it("rejects a missing contact number", () => {
+		assert.equal(
+			firstMessage(validApplication({ contactNumber: "" })),
+			"Tell us your contact number",
+		);
+	});
+
+	it("rejects an invalid email address", () => {
+		assert.equal(
+			firstMessage(validApplication({ applicantEmail: "mere@" })),
+			"Enter a valid email address",
+		);
+	});
+
+	it("rejects an invalid age bracket", () => {
+		assert.equal(
+			firstMessage(validApplication({ ageBracket: "child" })),
+			"Tell us whether you are 18 or older",
+		);
+	});
+
+	it("rejects a missing identification document type", () => {
+		assert.equal(
+			firstMessage(validApplication({ idDocumentType: "" })),
+			"Choose your identification document type",
+		);
+	});
+
+	it("rejects a missing identification document photo URL", () => {
+		assert.equal(
+			firstMessage(validApplication({ idDocumentUrl: "" })),
+			"Upload your identification document photo",
+		);
+	});
+
+	it("rejects a missing vet cost plan", () => {
+		assert.equal(
+			firstMessage(validApplication({ vetCostPlan: "" })),
+			"Tell us how you will cover veterinary costs",
+		);
+	});
+
+	it("rejects a missing next-of-kin name", () => {
+		assert.equal(
+			firstMessage(validApplication({ nextOfKinName: "" })),
+			"Tell us who looks after the animal when you are unavailable",
+		);
+	});
+
+	it("rejects a missing next-of-kin contact", () => {
+		assert.equal(
+			firstMessage(validApplication({ nextOfKinContact: "" })),
+			"Tell us your next of kin's contact number",
+		);
+	});
+
+	it("rejects a missing adoptionFor choice", () => {
+		assert.equal(
+			firstMessage(validApplication({ adoptionFor: "" })),
+			"Choose who this adoption is for",
+		);
+	});
+
+	it("rejects a minor application missing guardian consent", () => {
+		const message = firstMessage(
+			validApplication({
+				ageBracket: "minor",
+				guardianName: "Jone Koro",
+				guardianContact: "+679 9900001",
+				guardianRelationship: "parent",
+				// guardianConsent omitted
+			}),
+		);
+		assert.equal(message, "Your parent or guardian must consent to this adoption");
+	});
+
+	it("rejects a minor application missing the guardian relationship", () => {
+		const message = firstMessage(
+			validApplication({
+				ageBracket: "minor",
+				guardianName: "Jone Koro",
+				guardianContact: "+679 9900001",
+				guardianConsent: true,
+			}),
+		);
+		assert.equal(message, "Choose their relationship to you");
+	});
+
+	it("rejects guardian details supplied by an adult applicant", () => {
+		const message = firstMessage(
+			validApplication({ ageBracket: "adult", guardianName: "Jone Koro" }),
+		);
+		assert.equal(message, "Guardian details are only needed for applicants under 18");
+	});
+
+	it("requires a previous-pet outcome when the applicant has owned pets before", () => {
+		const message = firstMessage(validApplication({ ownedPetsBefore: "yes" }));
+		assert.equal(message, "Tell us what happened to your previous pet(s)");
+	});
+
+	it("requires current-pet details when the applicant has current pets", () => {
+		const message = firstMessage(validApplication({ hasCurrentPets: "yes" }));
+		assert.equal(message, "Tell us about your current pets");
 	});
 });
-```
 
-```ts
+describe("transitionSchema", () => {
+	it("accepts a status-only transition", () => {
+		const parsed = transitionSchema.safeParse({ status: "under_review" });
+		assert.equal(parsed.success, true, JSON.stringify(parsed));
+	});
+
+	it("accepts every reviewer status", () => {
+		for (const status of ["submitted", "under_review", "approved", "completed", "rejected"]) {
+			assert.equal(transitionSchema.safeParse({ status }).success, true, status);
+		}
+	});
+
+	it("rejects withdrawal: only the applicant can withdraw, via its own route", () => {
+		assert.equal(transitionSchema.safeParse({ status: "withdrawn" }).success, false);
+	});
+
+	it("rejects an unknown status", () => {
+		assert.equal(transitionSchema.safeParse({ status: "canceled" }).success, false);
+	});
+
+	it("normalizes an empty review note to undefined", () => {
+		const parsed = transitionSchema.safeParse({ status: "rejected", reviewNotes: "   " });
+		assert.equal(parsed.success, true, JSON.stringify(parsed));
+		assert.equal(parsed.data?.reviewNotes, undefined);
+	});
+});
+
+describe("businessErrorStatus", () => {
+	it("maps a typed conflict to 409", () => {
+		assert.equal(
+			businessErrorStatus(
+				new AdoptionBusinessError(409, "Another applicant has already been approved for this animal."),
+			),
+			409,
+		);
+	});
+
+	it("maps typed lifecycle and permission rejections to their own status", () => {
+		assert.equal(
+			businessErrorStatus(
+				new AdoptionBusinessError(
+					400,
+					'Adoption application cannot move from "submitted" to "approved" - only under_review, rejected may come next.',
+				),
+			),
+			400,
+		);
+		assert.equal(
+			businessErrorStatus(
+				new AdoptionBusinessError(403, "You cannot approve your own adoption application."),
+			),
+			403,
+		);
+	});
+
+	it("maps a Postgres unique violation (the real double-approval race) to 409", () => {
+		const violation = Object.assign(new Error("duplicate key value violates unique constraint"), {
+			code: "23505",
+		});
+		assert.equal(businessErrorStatus(violation), 409);
+	});
+
+	it("maps a unique violation wrapped in a cause chain to 409", () => {
+		const inner = Object.assign(new Error("duplicate key value"), { code: "23505" });
+		const wrapped = Object.assign(new Error("query failed"), { cause: inner });
+		assert.equal(businessErrorStatus(wrapped), 409);
+	});
+
+	it("returns null for an unrecognized error (falls through to the 500 handler)", () => {
+		assert.equal(businessErrorStatus(new Error("something unexpected")), null);
+	});
+
+	it("returns null for a non-Error value", () => {
+		assert.equal(businessErrorStatus("boom"), null);
+	});
+});
 // ===== src/features/adoptions/adoptionQueue.test.ts =====
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
@@ -866,9 +1415,10 @@ import {
 
 // Run: npm test (glob covers src/**/*.test.ts).
 describe("adoption queue tabs", () => {
-  it("treats completed and rejected as terminal", () => {
+  it("treats completed, rejected and withdrawn as terminal", () => {
     assert.equal(isTerminalAdoptionStatus("completed"), true);
     assert.equal(isTerminalAdoptionStatus("rejected"), true);
+    assert.equal(isTerminalAdoptionStatus("withdrawn"), true);
     assert.equal(isTerminalAdoptionStatus("submitted"), false);
     assert.equal(isTerminalAdoptionStatus("under_review"), false);
     assert.equal(isTerminalAdoptionStatus("approved"), false);
@@ -876,7 +1426,14 @@ describe("adoption queue tabs", () => {
 
   it("splits every lifecycle status across exactly one tab", () => {
     const all = [...QUEUE_TAB_STATUSES.active, ...QUEUE_TAB_STATUSES.history].sort();
-    assert.deepEqual(all, ["approved", "completed", "rejected", "submitted", "under_review"]);
+    assert.deepEqual(all, [
+      "approved",
+      "completed",
+      "rejected",
+      "submitted",
+      "under_review",
+      "withdrawn",
+    ]);
   });
 
   it("matches dropdown options to their tab", () => {
@@ -884,34 +1441,78 @@ describe("adoption queue tabs", () => {
     assert.deepEqual([...HISTORY_STATUS_FILTERS], [...QUEUE_TAB_STATUSES.history]);
   });
 });
-
 ```
 
-## Appendix B — Traceability and known gaps
+## Appendix B — Traceability, ID mapping and known gaps
 
 ### Traceability to the module requirements
 
-| Requirement (from `Adoption.md` / `AGENTS.md`)                                  | Cases                    |
-| ------------------------------------------------------------------------------- | ------------------------ |
-| Registered user submits an adoption application                                 | AD-06 to AD-19           |
-| Staff review, approve or reject                                                 | AD-02, AD-21 to AD-34    |
-| Applicant tracks application status (timeline, not just current state)          | AD-04, AD-21, AD-30, AD-32 |
-| Lifecycle `submitted -> under_review -> approved -> completed`, or `rejected`   | AD-01, AD-21 to AD-28    |
-| `rejected` requires `reviewNotes` shown to the applicant                        | AD-29, AD-30             |
-| Medical clearance is a hard precondition for approval                           | AD-23                    |
-| Approval transfers ownership and removes the animal from public listings        | AD-22 (AD-24 idempotent) |
-| Only one active application per animal, safe against concurrent approvals       | AD-10, AD-31             |
-| Audit trail for status changes                                                  | AD-21, AD-32             |
-| Notifications on stage change (best-effort)                                     | AD-17, AD-18, AD-19, AD-33, AD-34 |
-| Applicant privacy: applicants only see their own applications                   | AD-03                    |
-| Staff queue Active/History split                                                | AD-35 to AD-37           |
+| Requirement (from `Adoption.md` / `AGENTS.md`)                                  | Cases                          |
+| ------------------------------------------------------------------------------- | ------------------------------ |
+| Registered user submits an adoption application                                 | AD-07 to AD-20, AD-45 to AD-65 |
+| Staff review, approve or reject                                                 | AD-02, AD-24 to AD-41          |
+| Applicant tracks application status (timeline, not just current state)          | AD-03, AD-05, AD-25, AD-34, AD-36 |
+| Applicant withdraws their own application                                       | AD-42 to AD-44, AD-68, AD-77, AD-78 |
+| Lifecycle `submitted -> under_review -> approved -> completed`, or `rejected`/`withdrawn` | AD-01, AD-25 to AD-34, AD-40, AD-42 |
+| `rejected` requires `reviewNotes` shown to the applicant                        | AD-33, AD-34, AD-70            |
+| Medical clearance is a hard precondition (at submit **and** at approval)        | AD-21, AD-27                   |
+| Approval transfers ownership and removes the animal from public listings        | AD-26 (AD-28 idempotent)       |
+| Only one active application per animal, safe against concurrent approvals       | AD-11, AD-35, AD-39, AD-73, AD-74 |
+| Reviewer cannot decide their own application                                    | AD-40, AD-72                   |
+| Audit trail for submissions and status changes                                  | AD-22, AD-25, AD-36, AD-42     |
+| Notifications on stage change (best-effort)                                     | AD-18, AD-19, AD-20, AD-37, AD-38 |
+| Applicant privacy: applicants only see their own applications                   | AD-03                          |
+| Staff queue Active/History split                                                | AD-77 to AD-79                 |
+| Request validation is enforced before the service sees the payload              | AD-45 to AD-70                 |
 
-### Known gaps (not covered by these 37 cases)
+### ID mapping from the previous revision
 
-- `adoptions.routes.ts` — HTTP-layer behaviour (status codes, zod request validation, RBAC rejection of a registered user hitting a staff route) is not unit-tested here; it is exercised indirectly through the service contract.
-- `adoptions.repository.ts` — the Drizzle queries and the `23505` unique-violation handling behind `findAdoptionConflict` are not unit-tested; AD-31 covers the service-level pre-check only.
-- Frontend adoption components — `AdoptionApplicationForm.tsx`, `ManageAdoptionApplications.tsx` and `MyApplications.tsx` have no automated tests; only the pure `adoptionQueue.ts` helper is covered (AD-35 to AD-37).
-- Notification content (email/in-app body text) is asserted by recipient and status only, not by rendered copy.
-- Ordering between the two writes on approval (application status first, then the animal marked `adopted`) is asserted through call order in the fakes, not against a real database; the module relies on the partial unique index for the concurrency guarantee.
-- The repository also carries a browser-level veterinary emergency test (`src/features/veterinary/emergency.browser.test.ts`) that needs `@electric-sql/pglite` installed and skips unless a Chromium executable is found, so a fresh clone must run `npm install` before `npm test` is fully green.
-- One caveat for reproducibility: `mock.module` is ignored on Node v22.20.0, where this suite fails at import time. The results above were produced on Node v24.21.0.
+The earlier revision of this document listed 37 cases (the pre-merge service
+suite of 34 plus 3 queue cases). The merge of `fix/adoption-module-hardening`
+renumbered them; the mapping is:
+
+| Old | New | Case                                             |
+| --- | --- | ------------------------------------------------ |
+| AD-01 | AD-01 | Declares the full lifecycle statuses           |
+| AD-02 | AD-02 | `listAdoptionApplications` pass-through        |
+| AD-03 | AD-03 | `listMyAdoptionApplications` scoped to caller  |
+| AD-04 | AD-05 | `getAdoptionApplicationDetail` joined history  |
+| AD-05 | AD-06 | detail returns `undefined` when missing        |
+| AD-06 to AD-19 | AD-07 to AD-20 | the 14 original submission cases    |
+| AD-20 to AD-34 | AD-24 to AD-38 | the 15 original transition cases    |
+| AD-35 to AD-37 | AD-77 to AD-79 | staff queue tabs                    |
+
+Everything else is new coverage: `AD-04` (empty applicant history shortcut),
+`AD-21` (submit-time clearance gate), `AD-22` (submission audit), `AD-23`
+(history-write compensation), `AD-39` (raw `23505` → 409), `AD-40` (self-review
+refusal), `AD-41` (animal-write compensation), `AD-42` to `AD-44` (withdrawal),
+and the whole `AD-45` to `AD-76` validation block.
+
+### Known gaps (not covered by these 79 cases)
+
+- `adoptions.routes.ts` — the **HTTP** behaviour itself (status codes on the
+  wire, the RBAC middleware chain, multipart ID upload) is still not unit-tested;
+  the schemas and the error→status mapping are now covered (AD-45 to AD-76), but
+  the route handlers that use them are exercised only indirectly.
+- `adoptions.repository.ts` — the Drizzle queries are not unit-tested. The
+  service-level pre-check (AD-35) and the `23505` translation (AD-39, AD-73,
+  AD-74) are covered, but the index that actually raises it lives in the schema
+  and is verified only by the migration/snapshot work.
+- Frontend adoption components — `AdoptionApplicationForm.tsx`,
+  `ManageAdoptionApplications.tsx` and `MyApplications.tsx` have no automated
+  tests; only the pure `adoptionQueue.ts` helper is covered (AD-77 to AD-79).
+- Notification content (email/in-app body text) is asserted by recipient and
+  status only, not by rendered copy.
+- Ordering between the two writes on approval (application status first, then
+  the animal marked `adopted`) is asserted through call order in the fakes, not
+  against a real database; the module relies on the partial unique index for the
+  concurrency guarantee, and compensation is covered by AD-41/AD-23 rather than
+  by a transactional test.
+- Browser-level coverage for the adoption UI does not exist in the automated
+  suite. The manual companion (real Clerk sessions and a live database) is
+  `TestCases_Gr7.md` (ADOPT-01 to ADOPT-12) with
+  `docs/adoption-manual-test-runbook.md`.
+- One caveat for reproducibility: `mock.module` is ignored on Node v22.20.0,
+  where the **service** suite fails at import time. The results above were
+  produced on Node v24.21.0. `adoptions.validation.test.ts` and
+  `adoptionQueue.test.ts` use plain imports and are unaffected.
