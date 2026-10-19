@@ -16,6 +16,10 @@
 }
 
 .adoption-stepper {
+  /* The marker diameter is named because the connector geometry and the flush
+     outer markers are both derived from it. */
+  --rail-dot: 22px;
+
   display: flex;
   align-items: flex-start;
   list-style: none;
@@ -37,16 +41,46 @@
   text-align: center;
 }
 
+/* Equal columns keep the connector geometry simple, so the two outer stages are
+   pulled out to the rail edges instead of sitting centred in their column.
+   Centred, the first and last markers sat half a column inside the rail - 12.5%
+   of its width, which is ~52px in the applicant modal and ~145px across the
+   staff review panel - leaving the phases bunched around the middle with dead
+   space at both ends. */
+.adoption-stepper-stage:first-child {
+  align-items: flex-start;
+  text-align: left;
+}
+
+.adoption-stepper-stage:last-child {
+  align-items: flex-end;
+  text-align: right;
+}
+
 /* Connector between markers: runs from this marker's centre to the next one,
-   and is hidden behind the marker (which is opaque and sits above it). */
+   and is hidden behind the marker (which is opaque and sits above it). The
+   default assumes both ends sit centred in equal columns. */
 .adoption-stepper-stage:not(:last-child)::after {
   content: "";
   position: absolute;
-  top: 10px;
+  top: calc(var(--rail-dot) / 2 - 1px);
   left: 50%;
   width: 100%;
   height: 2px;
   background: var(--line);
+}
+
+/* The flush outer markers are not at their column centre, so those two segments
+   span one and a half columns rather than one. (Both rules need `content` from
+   the base rule above; on a single-stage rail neither generates anything.) */
+.adoption-stepper-stage:first-child::after {
+  left: calc(var(--rail-dot) / 2);
+  width: calc(150% - var(--rail-dot) / 2);
+}
+
+.adoption-stepper-stage:nth-last-child(2)::after {
+  left: 50%;
+  width: calc(150% - var(--rail-dot) / 2);
 }
 
 .adoption-stepper-stage.passed::after {
@@ -59,8 +93,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: var(--rail-dot);
+  height: var(--rail-dot);
   border-radius: 999px;
   border: 2px solid var(--line);
   background: var(--white);
@@ -136,6 +170,15 @@
     flex-direction: row;
     align-items: center;
     gap: 10px;
+    text-align: left;
+  }
+
+  /* In the horizontal layout the outer stages are pulled to the rail edges.
+     Here the rail is a row per stage, so those same declarations would
+     top/bottom-align their markers instead of centring them. */
+  .adoption-stepper-stage:first-child,
+  .adoption-stepper-stage:last-child {
+    align-items: center;
     text-align: left;
   }
 
