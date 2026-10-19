@@ -798,6 +798,36 @@ describe("adoptions.service", () => {
 			assert.equal(auditSpy[0].action, "adoption.application.withdrawn");
 		});
 
+		it("notifies the applicant that their withdrawal was recorded", async () => {
+			statefulApplication("submitted");
+
+			await withdrawAdoptionApplication(APPLICATION_ID, APPLICANT_ID);
+
+			// Withdrawal is a status change, so it must reach the applicant the
+			// same way every staff transition does: an in-app row plus email.
+			assert.equal(notificationSpy.length, 1);
+			assert.equal(notificationSpy[0].recipientClerkUserId, APPLICANT_ID);
+			assert.equal(notificationSpy[0].toStatus, "withdrawn");
+			assert.equal(emailSpy.length, 1);
+			assert.equal(emailSpy[0].toStatus, "withdrawn");
+		});
+
+		it("still records the withdrawal when the notification or email fails", async () => {
+			const current = statefulApplication("submitted");
+			repo("createAdoptionStatusNotification", async () => {
+				throw new Error("notification store down");
+			});
+			repo("sendAdoptionStatusEmail", async () => {
+				throw new Error("mail down");
+			});
+
+			const result = await withdrawAdoptionApplication(APPLICATION_ID, APPLICANT_ID);
+
+			assert.equal(result?.status, "withdrawn");
+			assert.equal(current.status, "withdrawn");
+			assert.equal(auditSpy[0].action, "adoption.application.withdrawn");
+		});
+
 		it("refuses to withdraw someone else's application", async () => {
 			statefulApplication("submitted");
 

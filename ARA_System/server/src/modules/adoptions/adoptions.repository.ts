@@ -108,8 +108,16 @@ export async function findAdoptionApplicationsByApplicant(
 	return rows.limit(query.limit).offset(query.offset ?? 0);
 }
 
-// An application that is still "in play" (not rejected/completed) for one
-// animal + applicant, used to stop a user submitting twice for the same pet.
+// An application that is still "in play" for one animal + applicant, used to
+// stop a user submitting twice for the same pet.
+//
+// Only "live" statuses block a new application. The closed ones - rejected,
+// completed AND withdrawn - do not: a withdrawn application was cancelled by
+// the applicant themselves, so refusing to let them apply again for the same
+// animal would strand them forever (withdrawal is the one status a user can
+// reach by choice and then change their mind about). Keep this list in step
+// with ALLOWED_TRANSITIONS in adoptions.service.ts: a status with no outgoing
+// transitions is terminal, and only non-terminal statuses are "active".
 export async function findActiveAdoptionApplication(animalId: string, applicantClerkUserId: string) {
 	const [application] = await db
 		.select()
@@ -118,7 +126,7 @@ export async function findActiveAdoptionApplication(animalId: string, applicantC
 			and(
 				eq(adoptionApplications.animalId, animalId),
 				eq(adoptionApplications.applicantClerkUserId, applicantClerkUserId),
-				notInArray(adoptionApplications.status, ["rejected", "completed"]),
+				notInArray(adoptionApplications.status, ["rejected", "completed", "withdrawn"]),
 			),
 		)
 		.limit(1);

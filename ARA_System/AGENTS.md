@@ -438,14 +438,38 @@ can read the vet queue but cannot issue clearance).
   order, the partial unique index is what actually blocks a second approval, and
   a failed animal write restores the previous application status (best-effort
   compensation).
-- Notifications on stage change are wired best-effort (in-app row + email), and
-  both the submission (`adoption.application.submitted`) and every status change
-  are written to the audit trail.
+- Notifications on stage change are wired best-effort (in-app row + email) for
+  submit, every staff transition **and** the applicant's own withdrawal
+  (`withdrawAdoptionApplication`, which used to notify nobody). Submission
+  (`adoption.application.submitted`), every status change and the withdrawal
+  are written to the audit trail. Notification copy for `withdrawn` lives in
+  `notifications.service.ts` and `services/email.ts`.
+- **One active application per applicant per animal**: `findActiveAdoptionApplication`
+  (`adoptions.repository.ts`) counts an application as "active" unless its status
+  is terminal — `rejected`, `completed` or `withdrawn`. `withdrawn` matters: an
+  applicant who cancels may apply again for the same animal, so do not remove it
+  from that list. The list is deliberately derived from the terminal statuses of
+  `ALLOWED_TRANSITIONS` (exported from `adoptions.service.ts` for exactly this
+  reason) and pinned by `adoptions.repository.test.ts`, which runs the real
+  Drizzle query with only the transport intercepted. This is a read-then-write
+  pre-check, not a DB constraint — there is no unique index on
+  `(animal_id, applicant_clerk_user_id)`, so a genuine concurrent double-submit
+  is technically possible (only the *approval* race is index-backed, by
+  `adoption_animal_unique_active`).
+- **Withdrawal is shown to the applicant as a cancellation, not a status.** The
+  stored status stays `withdrawn`, and the staff queue keeps the "Withdrawn"
+  label, tab and filter (staff must find and count those rows), but the
+  applicant's own views route every label through `applicantClosureLabel` /
+  `applicantClosureShortLabel` (`src/types/adoption.ts`) so no applicant-facing
+  status list shows "withdrawn". Add new applicant labels there, not by editing
+  the shared staff labels.
 - **Test coverage**: adoption is covered by
-  `server/src/modules/adoptions/adoptions.service.test.ts` (lifecycle and
-  guarantees), `adoptions.validation.test.ts` (request schemas +
-  `businessErrorStatus`) and `src/features/adoptions/adoptionQueue.test.ts`
-  (queue tabs). The written-up case list, expected results and traceability are
+  `server/src/modules/adoptions/adoptions.service.test.ts` (lifecycle,
+  guarantees and notification side-effects), `adoptions.validation.test.ts`
+  (request schemas + `businessErrorStatus`), `adoptions.repository.test.ts` (the
+  duplicate-application predicate as real SQL), `src/features/adoptions/adoptionQueue.test.ts`
+  (queue tabs) and `src/types/adoption.test.ts` (applicant status wording). The
+  written-up case list, expected results and traceability are
   in `docs/adoption-test-cases.md`; the browser-level companion that needs real
   Clerk sessions and a live database is `TestCases_Gr7.md` plus
   `docs/adoption-manual-test-runbook.md`.

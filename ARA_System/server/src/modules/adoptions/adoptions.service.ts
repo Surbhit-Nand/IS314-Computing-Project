@@ -64,7 +64,11 @@ export const ADOPTION_STATUSES = [
 ] as const;
 export type AdoptionStatus = (typeof ADOPTION_STATUSES)[number];
 
-const ALLOWED_TRANSITIONS: Record<AdoptionStatus, AdoptionStatus[]> = {
+// Terminal statuses accept no further transitions. Exported so tests can assert
+// that every other list of "closed" statuses (e.g. the one the duplicate-
+// application check uses in adoptions.repository.ts) stays in step with the
+// lifecycle rather than drifting into a fourth hard-coded copy.
+export const ALLOWED_TRANSITIONS: Record<AdoptionStatus, AdoptionStatus[]> = {
 	submitted: ["under_review", "rejected", "withdrawn"],
 	under_review: ["approved", "rejected", "withdrawn"],
 	approved: ["completed"],
@@ -482,7 +486,20 @@ export async function withdrawAdoptionApplication(id: string, actorClerkUserId: 
 
 	await deleteIdDocumentBestEffort(application.idDocumentUrl);
 
-	return findAdoptionApplicationById(updated.id);
+	// Tell the applicant the cancellation is on record. Like every other status
+	// change this is best-effort (in-app row + email), so a mail outage or a
+	// Clerk lookup failure never fails the withdrawal that already committed.
+	const refreshed = await findAdoptionApplicationById(updated.id);
+	const animalName =
+		(refreshed as { animal?: { name?: string | null } } | undefined)?.animal?.name ?? null;
+	await notifyApplicantBestEffort({
+		recipientClerkUserId: actorClerkUserId,
+		animalName,
+		toStatus: "withdrawn",
+		applicationId: updated.id,
+	});
+
+	return refreshed;
 }
 
 // Best-effort removal of a hosted identity document. Rejected/withdrawn

@@ -116,6 +116,8 @@ function notificationTitle(toStatus: string, animalName: string | null) {
 			return `Adoption of ${who} is complete`;
 		case "rejected":
 			return `Update on your application for ${who}`;
+		case "withdrawn":
+			return `You withdrew your application for ${who}`;
 		default:
 			return `Update on your application for ${who}`;
 	}
@@ -140,6 +142,8 @@ function notificationBody(
 			return reviewNote?.trim()
 				? `Our team decided not to proceed: ${reviewNote.trim()}`
 				: `Our team decided not to proceed with your application for ${who}.`;
+		case "withdrawn":
+			return `Your application to adopt ${who} was withdrawn, so it is closed and will not be reviewed further. You may apply again if you change your mind.`;
 		default:
 			return `Your application for ${who} moved to ${toStatus}.`;
 	}

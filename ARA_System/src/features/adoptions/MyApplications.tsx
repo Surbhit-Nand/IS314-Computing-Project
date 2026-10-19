@@ -11,8 +11,9 @@ import {
 import {
   adoptionStatusClass,
   adoptionStatusLabel,
-  adoptionStatusShortLabel,
   adoptionStepIndex,
+  applicantClosureLabel,
+  applicantClosureShortLabel,
   ADOPTION_STATUS_STEPS,
   type AdoptionApplication,
   type AdoptionStatus,
@@ -174,16 +175,16 @@ function AdoptionApplicationDetailModal({
         <p className="adoption-status-line">
           <span
             className={`adoption-status-badge ${adoptionStatusClass(application.status)}`}
-            title={adoptionStatusLabel(application.status)}
+            title={applicantClosureLabel(application.status)}
           >
-            {adoptionStatusShortLabel(application.status)}
+            {applicantClosureShortLabel(application.status)}
           </span>
         </p>
 
         {application.status === "withdrawn" && (
           <p className="security-note">
-            {adoptionStatusLabel("withdrawn")}. This application is closed and
-            will not be reviewed further.
+            {applicantClosureLabel("withdrawn")}. This application is closed and
+            will not be reviewed further. You may apply again for this animal.
           </p>
         )}
 
@@ -265,7 +266,7 @@ function AdoptionApplicationDetailModal({
               {history.map((entry) => (
                 <li key={entry.id}>
                   <span className={`adoption-status-badge adoption-history-badge ${adoptionStatusClass(entry.status)}`}>
-                    {adoptionStatusLabel(entry.status)}
+                    {applicantClosureLabel(entry.status)}
                   </span>
                   <span className="adoption-history-when">{formatDate(entry.createdAt)}</span>
                   {entry.note && <span className="adoption-history-note">{entry.note}</span>}
@@ -479,9 +480,9 @@ export function MyApplications({ isLoaded, isSignedIn, onNavigate }: MyApplicati
                     <span className="adoption-track-when">{formatDate(application.createdAt)}</span>
                     <span
                       className={`adoption-status-badge ${adoptionStatusClass(application.status)}`}
-                      title={adoptionStatusLabel(application.status)}
+                      title={applicantClosureLabel(application.status)}
                     >
-                      {adoptionStatusShortLabel(application.status)}
+                      {applicantClosureShortLabel(application.status)}
                     </span>
                   </button>
                 ))}
