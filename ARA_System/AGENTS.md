@@ -162,6 +162,24 @@ npm test             # node:test via tsx — server + frontend suites
   number, so when you `db:generate` pick a fresh number and check
   `server/src/db/migrations/meta/_journal.json` for collisions. The approved
   reconciliation is written up in `docs/kara-merge-migration-review.md`.
+- **`db:generate` cannot produce a clean migration on this repo.** Kit 0.31.10's
+  catalog serializer renders expressions differently from `schema.ts`, so a
+  plain `npm run db:generate` re-emits unrelated drops/recreates (FK names
+  gaining a `_fk` suffix, partial unique indexes, the veterinary CHECKs) next to
+  your real change — verify this yourself before trusting any generated file.
+  Add migrations by hand, keep journal + snapshot consistent, and check with
+  `node node_modules/drizzle-kit/bin.cjs check --dialect postgresql --out ./server/src/db/migrations`.
+  Snapshot ids are deterministic — sha1 over the 16-byte namespace
+  `b9c25721f77548dc84ff150687a5f606` concatenated with
+  `ara:snapshot:v7:<idx>:<tag>:<when>`, then the version/variant bits patched —
+  so a hand-written snapshot can match what the tool itself would have emitted.
+  `docs/migration-snapshot-repair-20261019/` holds the reconstruction record
+  (its `validate-snapshots.mjs` still asserts the pre-0024 22-entry baseline).
+- The journal currently **ends** with `0024_adoption_status_check` (idx 24),
+  queued behind the unapproved `0021_remove_rapid_triage`. It adds only the
+  `adoption_status_valid` CHECK and cannot go live until `0021` is resolved.
+  Because the tip is no longer the cleanup, `retireTriageMigration.test.ts`
+  locates `0021` by tag instead of by position.
 - The API prints a **non-fatal** schema-drift warning at boot if `schema.ts`
   columns are missing on the live DB (`server/src/db/drift-check.ts`) — warns,
   never crashes. Its table list is fixed (`animals`, `rescueReports`,
@@ -315,10 +333,11 @@ can read the vet queue but cannot issue clearance).
     `applicantId`→`applicantClerkUserId`.
   - **`reviewNotes`** (text, nullable) + **`updatedAt`** (timestamp, notNull,
     defaultNow) added by migration `0006_lumpy_sabretooth.sql`. Statuses are
-    free text, not an enum - but `schema.ts` now declares a `check`
-    (`adoption_status_valid`) over the six known statuses. **No migration has
-    been generated for it**, so the constraint is declared but not live until a
-    `db:generate` migration is applied.
+    free text, not an enum - but `schema.ts` declares a `check`
+    (`adoption_status_valid`) over the six known statuses, added by the
+    hand-written migration `0024_adoption_status_check.sql` (see Database / Neon
+    gotchas). It is **not live yet**: `0024` sits behind the unapproved
+    `0021_remove_rapid_triage`.
 - **`adoptionStatusHistory`** table (migration `0006`): `id`,
   `applicationId` (FK), `fromStatus`, `toStatus`, `notes`, `changedBy`,
   `changedAt`. Joined in detail responses.

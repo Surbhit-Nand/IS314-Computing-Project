@@ -19,16 +19,26 @@ async function fixture() {
     INSERT INTO veterinary_emergency_responses(animal_id,updated_by_clerk_user_id) VALUES ('11111111-1111-4111-8111-111111111111','isolated-vet');`);
   return db;
 }
-it("prepares the next SQL migration with the exact installed journal/hash conventions", () => {
-  const journal = JSON.parse(readFileSync(new URL("meta/_journal.json", folder), "utf8"));
-  const previous = journal.entries.at(-2), current = journal.entries.at(-1);
+it("prepares the pending cleanup migration with the exact installed journal/hash conventions", () => {
+  const journal = JSON.parse(
+    readFileSync(new URL("meta/_journal.json", folder), "utf8"),
+  ) as { entries: { idx: number; version: string; when: number; tag: string }[] };
+  // Locate the cleanup by tag rather than by position: later migrations may queue
+  // behind it while it stays unapproved. It must remain the only guarded
+  // destructive step, and every later entry must still be strictly newer.
+  const index = journal.entries.findIndex((entry) => entry.tag === "0021_remove_rapid_triage");
+  assert(index > 0, "0021_remove_rapid_triage must be present in the journal");
+  const previous = journal.entries[index - 1], current = journal.entries[index];
   assert.equal(previous.tag, "0020_veterinary_emergency_responses");
   assert.equal(current.idx, previous.idx + 1); assert.equal(current.version, previous.version);
   assert(current.when > previous.when); assert.equal(current.tag, "0021_remove_rapid_triage");
+  for (const entry of journal.entries.slice(index + 1)) {
+    assert(entry.idx > current.idx); assert(entry.when > current.when);
+  }
   const migrations = readMigrationFiles({ migrationsFolder: "server/src/db/migrations" });
-  assert.equal(migrations.at(-1)?.hash, createHash("sha256").update(cleanup).digest("hex"));
-  assert.equal(migrations.at(-1)?.folderMillis, current.when);
-  assert.equal(migrations.at(-1)?.sql.length, 1);
+  const cleanupMigration = migrations.find((migration) => migration.folderMillis === current.when);
+  assert.equal(cleanupMigration?.hash, createHash("sha256").update(cleanup).digest("hex"));
+  assert.equal(cleanupMigration?.sql.length, 1);
 });
 it("refuses unapproved cleanup and leaves all assessment records intact", async () => {
   const db = await fixture();

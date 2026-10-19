@@ -145,3 +145,18 @@ explicitly approved repair; omitting it validates active metadata only.
 - Validation baseline was `ef16648`. Only approved snapshot metadata, the
   cleanup approval-document correction, and validation documentation/scripts
   are included in the repair commit. No push or Neon connection occurred.
+
+## Addendum — `0024_adoption_status_check` (19 October 2026)
+
+A later change queued an eighth migration, `0024_adoption_status_check`
+(journal idx 24), **behind** the still-unapproved `0021_remove_rapid_triage`. It
+adds only `ALTER TABLE "adoption_applications" ADD CONSTRAINT
+"adoption_status_valid" CHECK (...)` and leaves `0021` untouched.
+
+The reconstruction above remains valid for the 22 entries it covered, but
+`validate-snapshots.mjs` no longer runs unchanged: it asserts a 22-entry journal
+(`journal.entries.length === 22`) and treats `0021_remove_rapid_triage` as the
+last entry (`assert.equal(i, journal.entries.length - 1)`). Both assumptions
+predate `0024`, and `validation-results.json` still records 22 snapshots. Read
+this document as the record of the 19 October repair, not as a description of
+the current journal tip.
