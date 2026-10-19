@@ -10282,12 +10282,18 @@
   padding: 0;
 }
 
+/* flex-grow rather than a min-width: with only min-width the six steps sat at
+   their natural label width with a 12px gap, so they bunched into the left
+   ~450px of the panel's ~824px content box and left ~340px empty to the right.
+   Growing each step spreads them across the full width; the 96px basis is what
+   makes the wrapped layout below fall to three per row rather than five-then-one. */
 .wizard-progress li {
   display: flex;
+  flex: 1 1 96px;
   flex-direction: column;
   align-items: center;
   gap: 4px;
-  min-width: 64px;
+  min-width: 0;
 }
 
 .wizard-progress button {
@@ -10326,6 +10332,17 @@
 
 .wizard-progress li.active span {
   opacity: 1;
+}
+
+/* Below the tablet cut six labels no longer fit on one line. A fixed three
+   column grid keeps them in tidy rows (3+3 for the six adult steps); letting
+   flex-wrap handle it would stretch whatever lands on the last row across the
+   full width. Minors get a seventh step, so their last row holds one item. */
+@media (max-width: 620px) {
+  .wizard-progress {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 /* Phone input: flag country picker + national number in one row. Follows the
