@@ -111,11 +111,30 @@ export type AnimalFormInput = {
   veterinaryPriority: VeterinaryPriority | "";
 };
 
-// Turns "Available for Adoption" / "Adopted" into the simple two-value label
-// the brief asks for, derived from the richer lifecycle `status` enum rather
-// than storing a second, possibly-conflicting status field.
-export function adoptionStatusLabel(status: AnimalLifecycleStatus): "Available for Adoption" | "Adopted" {
-  return status === "adopted" ? "Adopted" : "Available for Adoption";
+// The adoption-availability label. `Adopted` and the not-yet-available state
+// join the "Available for Adoption" text the brief asks for, all derived from
+// the animal's own fields rather than a second, possibly-conflicting status.
+export type AdoptionAvailabilityLabel =
+  | "Available for Adoption"
+  | "Adopted"
+  | "Awaiting veterinary clearance";
+
+// Turns the lifecycle status (plus the vet-issued clearance flag) into the
+// availability label. Availability mirrors the public-listing gate in
+// AGENTS.md: an animal is advertised as adoptable only when it is medically
+// cleared, not adopted and not deleted. A deleted profile is never rendered
+// (the API excludes `deleted_at` rows), so `medicallyCleared` is the flag this
+// helper needs - without it an un-cleared animal (status "intake" /
+// "in_treatment") would falsely read as available while the public listing
+// hides it. The flag is required so no caller can accidentally advertise an
+// uncleared animal.
+export function adoptionStatusLabel(
+  status: AnimalLifecycleStatus,
+  medicallyCleared: boolean,
+): AdoptionAvailabilityLabel {
+  if (status === "adopted") return "Adopted";
+  if (!medicallyCleared) return "Awaiting veterinary clearance";
+  return "Available for Adoption";
 }
 
 export function vaccinationStatusLabel(status: VaccinationStatus): "Not yet vaccinated - open" | "Vaccinated" {

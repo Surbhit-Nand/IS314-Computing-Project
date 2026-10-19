@@ -54,11 +54,17 @@ export function StaffDashboard({ onNavigate }: StaffDashboardProps) {
   }, [isSignedIn, hasStaffAccess, refresh]);
   const backgroundRefresh = useCallback(() => { void refresh(); }, [refresh]);
   useAccountRefresh(Boolean(isSignedIn && hasStaffAccess), backgroundRefresh);
-  const queueItems = [
-    ["Rescue alerts", counts?.rescue == null ? "Unavailable" : `${counts.rescue} awaiting initial review`, "urgent"],
-    ["Animals awaiting intake", counts?.intake == null ? "Unavailable" : `${counts.intake} animals at intake`, "active"],
-    ["Adoption applications", counts?.applications == null ? "Unavailable" : `${counts.applications} awaiting review`, "pending"],
-    ["Animals in treatment", counts?.care == null ? "Unavailable" : `${counts.care} animals receiving care`, "medical"],
+  // Work-queue rows double as shortcuts to the screen that resolves them.
+  const queueItems: Array<{
+    title: string;
+    detail: string;
+    status: string;
+    view: SiteHeaderView;
+  }> = [
+    { title: "Rescue alerts", detail: counts?.rescue == null ? "Unavailable" : `${counts.rescue} awaiting initial review`, status: "urgent", view: "manage-rescue-reports" },
+    { title: "Animals awaiting intake", detail: counts?.intake == null ? "Unavailable" : `${counts.intake} animals at intake`, status: "active", view: "manage-animals" },
+    { title: "Adoption applications", detail: counts?.applications == null ? "Unavailable" : `${counts.applications} awaiting review`, status: "pending", view: "manage-adoption-applications" },
+    { title: "Animals in treatment", detail: counts?.care == null ? "Unavailable" : `${counts.care} animals receiving care`, status: "medical", view: "veterinary-dashboard" },
   ];
 
   if (!isLoaded || !isSignedIn) {
@@ -163,14 +169,20 @@ export function StaffDashboard({ onNavigate }: StaffDashboardProps) {
           <span className="panel-note">{updatedAt ? `Last checked ${updatedAt} Fiji time` : "Loading work queue…"}</span>
         </div>
         <div className="activity-list">
-          {queueItems.map(([title, detail, status]) => (
+          {queueItems.map(({ title, detail, status, view }) => (
             <div key={title}>
               <span className={`activity-dot ${status}`} />
               <p>
                 <strong>{title}</strong>
                 <span>{detail}</span>
               </p>
-              <span className="role-pill muted">Open queue</span>
+              <button
+                type="button"
+                className="mini-button"
+                onClick={() => onNavigate(view)}
+              >
+                Open queue
+              </button>
             </div>
           ))}
         </div>

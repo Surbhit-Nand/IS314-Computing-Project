@@ -224,7 +224,8 @@ npm test             # node:test via tsx — server + frontend suites
 - [x] Reporter tracks status — `MyReports.tsx`, `GET /api/rescue/mine`
 - [x] Registered user submits adoption application — `AdoptionApplicationForm.tsx`, `POST /api/adoptions`
 - [x] Staff review/approve/reject — `ManageAdoptionApplications.tsx`, `PATCH /api/adoptions/:id`
-- [x] Applicant tracks application status — `MyApplications.tsx`, `GET /api/adoptions/mine`
+- [x] Applicant tracks + withdraws their application — `MyApplications.tsx`,
+      `GET /api/adoptions/mine` (rows carry `history`), `POST /api/adoptions/:id/withdraw`
 - [x] Accepted application removes animal from public listings — partial unique index `adoption_animal_unique_active` on `(animal_id) WHERE status IN ('approved','completed')` + DB-level 23505 check in service
 - [x] My Animals owner portal — `/api/my-animals` (`myAnimals` module): an
       approved/completed applicant sees their animal's veterinary history and
@@ -314,43 +315,77 @@ can read the vet queue but cannot issue clearance).
     `applicantId`→`applicantClerkUserId`.
   - **`reviewNotes`** (text, nullable) + **`updatedAt`** (timestamp, notNull,
     defaultNow) added by migration `0006_lumpy_sabretooth.sql`. Statuses are
-    free text, not an enum.
+    free text, not an enum - but `schema.ts` now declares a `check`
+    (`adoption_status_valid`) over the six known statuses. **No migration has
+    been generated for it**, so the constraint is declared but not live until a
+    `db:generate` migration is applied.
 - **`adoptionStatusHistory`** table (migration `0006`): `id`,
   `applicationId` (FK), `fromStatus`, `toStatus`, `notes`, `changedBy`,
   `changedAt`. Joined in detail responses.
 - **Partial unique index** `adoption_animal_unique_active` on
   `adoption_applications(animal_id) WHERE status IN ('approved','completed')`
-  — prevents two concurrent approvals hitting 23505; service pre-checks via
-  `findAdoptionConflict` for friendly 409.
-- **Mounted at** `/api/adoptions`. Routes: `POST /`, `GET /mine`, `GET /`,
-  `GET /:id`, `PATCH /:id`. Auth: `requireClerkSession`, `requireStaffOrAbove`.
-- **Statuses**: `submitted → under_review → approved → completed`, or
-  `rejected`. `ALLOWED_TRANSITIONS` in `adoptions.service.ts` allows exactly
-  `submitted → {under_review, rejected}`, `under_review → {approved, rejected}`,
-  `approved → {completed}`, and nothing out of `completed`/`rejected`. Every
-  transition is timestamped in `adoptionStatusHistory` so both the adopter
-  stepper and the staff queue show *when*, not just *what*.
-- `rejected` requires `reviewNotes` shown to the applicant.
+  — prevents two concurrent approvals hitting 23505; the service pre-checks via
+  `findAdoptionConflict` for a friendly 409 and translates a genuine 23505 race
+  into the same 409 (`adoptionErrors.ts`).
+- **Mounted at** `/api/adoptions`. Routes: `POST /` (submit), `GET /mine`
+  (applicant's own - each row carries its `history`), `GET /` (staff queue),
+  `GET /:id`, `PATCH /:id` (staff status move), `POST /:id/withdraw`
+  (applicant-only), `POST /id-document` (ID photo upload). `GET /`, `GET /:id`
+  and `PATCH /:id` add `requireStaffOrAbove`; `/mine`, `/id-document` and
+  `/withdraw` are session-only.
+- **Statuses**: `submitted → under_review → approved → completed`, plus the
+  terminal branch states `rejected` and `withdrawn`. `ALLOWED_TRANSITIONS` in
+  `adoptions.service.ts` allows exactly `submitted → {under_review, rejected,
+  withdrawn}`, `under_review → {approved, rejected, withdrawn}`,
+  `approved → {completed}`, and nothing out of `completed` / `rejected` /
+  `withdrawn`. Every transition is timestamped in `adoptionStatusHistory` so
+  both the adopter stepper and the staff queue show *when*, not just *what*.
+  `withdrawn` is written only by the applicant's `POST /:id/withdraw`, so it is
+  not a reviewer status (`transitionSchema` = `z.enum(REVIEWER_STATUSES)`).
+- `rejected` requires `reviewNotes` shown to the applicant. A supplied review
+  note is preserved on same-status saves (a note-only save used to write a
+  history row with the note dropped).
+- **Typed business errors**: `modules/adoptions/adoptionErrors.ts` owns
+  `AdoptionBusinessError(status, message)` (400/403/404/409) and
+  `isUniqueViolation`; `businessErrorStatus` maps them to HTTP codes. Do not
+  reintroduce string-matched status mapping — it silently turned a reworded 409
+  (and the real 23505 double-approval) into a 500.
+- **Self-review guard**: `transitionAdoptionApplication` returns 403 when the
+  actor is the applicant and the move is `approved`/`completed`.
 - **Medical-clearance gate**: now a **hard gate**.
   `requireMedicallyCleared` reads `animals.medically_cleared` and throws
   "This animal is not yet medically cleared for adoption." on
-  `under_review -> approved`. Because `medically_cleared` is only ever written
-  by the vet-only `clearAnimal`, approval is genuinely vet-gated. The same
-  flag gates the public listing - see Data model guardrails.
+  `under_review -> approved`; `submitAdoptionApplication` applies the same gate
+  at submission. Because `medically_cleared` is only ever written by the
+  vet-only `clearAnimal`, approval is genuinely vet-gated. The same flag gates
+  the public listing - see Data model guardrails.
+- **ID documents**: `applicationSchema.idDocumentUrl` must be `https://`, and
+  `POST /id-document` checks the image magic bytes (JPEG/PNG), not just the
+  claimed mimetype. Rejected/withdrawn applications have their hosted document
+  deleted best-effort (`deleteIdDocumentBestEffort`, only when Cloudinary is
+  configured).
+- Both list endpoints accept optional `?limit=&offset=` (limit bounded 1–500);
+  absent limit keeps the "all rows" behaviour.
 - **Ownership transfer on approval**: `approved` and `completed` both call
   `updateAnimalProfile(animalId, { status: "adopted" })`, which removes the
   animal from public listings and hands it to the adopter (the My Animals
   portal reads ownership from the application). Approval is the real transfer;
   completion re-asserts it so applications approved before this rule still end
-  up correct. There is **no transaction** on neon-http, so the two statements
-  run in order and the partial unique index is what actually blocks a second
-  approval.
-- Notifications on stage change are wired (in-app + email, best-effort) — see
-  the Adoption checklist entry above.
-- **Test coverage**: 37 documented cases live in
-  `server/src/modules/adoptions/adoptions.service.test.ts` (34) and
-  `src/features/adoptions/adoptionQueue.test.ts` (3); the written-up case list,
-  expected results and traceability are in `docs/adoption-test-cases.md`.
+  up correct. neon-http has **no transactions**, so the two statements run in
+  order, the partial unique index is what actually blocks a second approval, and
+  a failed animal write restores the previous application status (best-effort
+  compensation).
+- Notifications on stage change are wired best-effort (in-app row + email), and
+  both the submission (`adoption.application.submitted`) and every status change
+  are written to the audit trail.
+- **Test coverage**: adoption is covered by
+  `server/src/modules/adoptions/adoptions.service.test.ts` (lifecycle and
+  guarantees), `adoptions.validation.test.ts` (request schemas +
+  `businessErrorStatus`) and `src/features/adoptions/adoptionQueue.test.ts`
+  (queue tabs). The written-up case list, expected results and traceability are
+  in `docs/adoption-test-cases.md`; the browser-level companion that needs real
+  Clerk sessions and a live database is `TestCases_Gr7.md` plus
+  `docs/adoption-manual-test-runbook.md`.
 
 ## Entities & role-based access
 
@@ -486,21 +521,27 @@ Every route/action is gated server-side by role, not just hidden in the UI
   neither the registration nor the edit zod schema accepts it, so clearance is
   genuinely vet-only. Do not add a staff path to set it.
 - On adoption acceptance the animal is removed from public listings by marking
-  it `adopted` **and** the DB-level guard is in place: the partial unique index
+  it `adopted` — approval performs the transfer and completion re-asserts it —
+  **and** the DB-level guard is in place: the partial unique index
   `adoption_animal_unique_active` on `(animal_id) WHERE status IN
   ('approved','completed')` makes a second approval fail with `23505`, and the
-  service pre-checks with `findAdoptionConflict` for a friendly 409. **Still
-  open**: the two writes (application status, then animal) are *not* one
-  transaction — neon-http has no interactive transactions here — and no row
-  lock is taken, so the unique index is the only concurrency guarantee. If you
-  touch this path, keep the ordering (status first, animal second) or move it
-  onto `server/src/db/transaction.ts` (`withSqlTransaction`).
+  service pre-checks with `findAdoptionConflict` for a friendly 409 (a genuine
+  race is translated into the same 409 by `adoptionErrors.ts`). **Still open**:
+  the two writes (application status, then animal) are *not* one transaction —
+  neon-http has no interactive transactions here — and no row lock is taken, so
+  the unique index is the only concurrency guarantee. The writes are
+  compensated: an animal-update failure restores the previous application
+  status, and a failed first-history write on submission deletes the
+  application row. If you touch this path, keep the ordering (status first,
+  animal second) or move it onto `server/src/db/transaction.ts`
+  (`withSqlTransaction`).
 - Rescue reports and vet bookings can arrive online *or* by phone — one
   schema/form path, distinguished by `source` (both are in
-  `rescue_reports`/`vet_appointments`). Same `source` field exists on the
-  adoptions flow to add.
-- Keep an **audit trail** — `auditLogs` table + `shared/audit/audit.service.ts`
-  (used by rescue/donations; reuse for adoption approvals).
+  `rescue_reports`/`vet_appointments`). The adoption request schema still has no
+  `source` field (Adoption.md's `source` add-on is not built).
+- Keep an **audit trail** — `auditLogs` table + `shared/audit/audit.service.ts`.
+  Adoption submission and every status change (including applicant withdrawal)
+  write to it.
 
 ## AI search
 

@@ -199,16 +199,19 @@ function App() {
       .then((response) => (response.ok ? (response.json() as Promise<Animal[]>) : []))
       .then((list) => {
         if (cancelled || !Array.isArray(list)) return;
+        // Single-use stash: consume it as soon as the listing (the evidence we
+        // need) comes back, so it can never be replayed. The animal then lives
+        // in the navigation state, and a reload/back-forward still lands on the
+        // form without it. A failed fetch keeps the stash for a later retry.
+        clearPendingAdoption();
         const found = list.find((item) => item.id === pendingAnimalId);
         if (found) {
           // The sign-in intent has been fulfilled; history now owns the form.
           clearPendingAdoption();
           navigateTo({ view: "adoption-apply", viewedAnimal: found });
-        } else {
-          // Adopted, removed, or otherwise gone: drop the stash so it can
-          // never resurface, and leave the visitor where they are.
-          clearPendingAdoption();
         }
+        // Not found (adopted, removed, or otherwise gone): the stash is already
+        // dropped above, so leave the visitor where they are.
       })
       .catch(() => undefined);
     return () => {

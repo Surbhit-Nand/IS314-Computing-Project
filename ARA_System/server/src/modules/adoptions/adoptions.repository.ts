@@ -68,25 +68,44 @@ const adoptionWithAnimal = {
 	},
 };
 
+// Optional windowing so the staff queue and "my applications" cannot pull an
+// unbounded result set as the shelter's history grows. Absent limit = all rows
+// (current behaviour); callers pass a limit to page.
+export interface ListQuery {
+	limit?: number;
+	offset?: number;
+}
+
 // Everything, newest first, for the staff review queue. The animal is
 // soft-deleted rather than hard-deleted (NOT-ACTION foreign key), so the join
 // always finds its row.
-export async function findAllAdoptionApplications() {
-	return db
+export async function findAllAdoptionApplications(query: ListQuery = {}) {
+	const rows = db
 		.select(adoptionWithAnimal)
 		.from(adoptionApplications)
 		.leftJoin(animals, eq(adoptionApplications.animalId, animals.id))
 		.orderBy(desc(adoptionApplications.createdAt));
+	if (query.limit === undefined) {
+		return rows;
+	}
+	return rows.limit(query.limit).offset(query.offset ?? 0);
 }
 
 // Every application belonging to one signed-in applicant, for "My applications".
-export async function findAdoptionApplicationsByApplicant(clerkUserId: string) {
-	return db
+export async function findAdoptionApplicationsByApplicant(
+	clerkUserId: string,
+	query: ListQuery = {},
+) {
+	const rows = db
 		.select(adoptionWithAnimal)
 		.from(adoptionApplications)
 		.leftJoin(animals, eq(adoptionApplications.animalId, animals.id))
 		.where(eq(adoptionApplications.applicantClerkUserId, clerkUserId))
 		.orderBy(desc(adoptionApplications.createdAt));
+	if (query.limit === undefined) {
+		return rows;
+	}
+	return rows.limit(query.limit).offset(query.offset ?? 0);
 }
 
 // An application that is still "in play" (not rejected/completed) for one
@@ -139,6 +158,14 @@ export async function createAdoptionApplication(input: typeof adoptionApplicatio
 	return application;
 }
 
+// Compensating action only: neon-http has no transactions, so when the first
+// status-history entry cannot be written the freshly created application is
+// removed rather than left history-less (which would break the applicant's
+// timeline and stepper).
+export async function deleteAdoptionApplication(id: string) {
+	await db.delete(adoptionApplications).where(eq(adoptionApplications.id, id));
+}
+
 // Moves an application to a new status, always refreshing updatedAt. The
 // transition rules themselves live in the service so routes stay dumb.
 // Approval is additionally guarded by the adoption_animal_unique_active
@@ -168,5 +195,19 @@ export async function findAdoptionStatusHistoryByApplication(applicationId: stri
 		.select()
 		.from(adoptionStatusHistory)
 		.where(eq(adoptionStatusHistory.applicationId, applicationId))
+		.orderBy(asc(adoptionStatusHistory.createdAt));
+}
+
+// Batch version of the above so "My applications" can attach every
+// application's history in one query, without the applicant calling the
+// staff-only per-id detail route.
+export async function findAdoptionStatusHistoryByApplications(applicationIds: string[]) {
+	if (applicationIds.length === 0) {
+		return [];
+	}
+	return db
+		.select()
+		.from(adoptionStatusHistory)
+		.where(inArray(adoptionStatusHistory.applicationId, applicationIds))
 		.orderBy(asc(adoptionStatusHistory.createdAt));
 }
