@@ -1,6 +1,7 @@
-import { SignInButton, UserButton, useAuth, useUser } from "@clerk/react";
+import { SignInButton, useAuth, useUser } from "@clerk/react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import spcaLogo from "../../assets/spca-logo.png";
+import { SiteHeader, type SiteHeaderView } from "../../components/SiteHeader";
 import {
   fetchAdoptionApplicationDetail,
   fetchAllAdoptionApplications,
@@ -8,7 +9,7 @@ import {
 } from "../../services/adoptionsApi";
 import {
   fetchMyNotifications,
-  markAllNotificationsRead,
+  markNotificationRead,
 } from "../../services/notificationsApi";
 import {
   adoptionStatusClass,
@@ -20,6 +21,7 @@ import {
 } from "../../types/adoption";
 import {
   isGiftAdoption,
+  isMinorApplication,
   questionnaireSections,
 } from "./AdoptionQuestionnaireAnswers";
 import {
@@ -31,10 +33,15 @@ import {
 } from "./adoptionQueue";
 import { SkeletonLoader } from "../../components/SkeletonLoader";
 import { isDevBypassEnabled } from "../../utils/devBypass";
+import { formatDate } from "../../utils/format";
 import { Breadcrumbs } from "../../components/Breadcrumbs";
 
 type ManageAdoptionApplicationsProps = {
-  onNavigate: (view: "home" | "staff-dashboard" | "adoption-apply") => void;
+  // Every staff-type role that can open this page has a dashboard it may
+  // visit: manager/admin -> "dashboard", veterinarian -> "veterinary-dashboard",
+  // staff -> "staff-dashboard". Mirrors the header's dashboardView() rule, so
+  // the shared SiteHeaderView union is the correct parameter type here.
+  onNavigate: (view: SiteHeaderView) => void;
 };
 
 const SHORT_STATUS_LABEL: Record<AdoptionStatus, string> = {
@@ -43,6 +50,7 @@ const SHORT_STATUS_LABEL: Record<AdoptionStatus, string> = {
   approved: "Approved",
   completed: "Completed",
   rejected: "Rejected",
+  withdrawn: "Withdrawn",
 };
 
 // Status filter value: "all" plus every lifecycle state (the dropdown
@@ -51,13 +59,15 @@ type QueueStatusFilter = "all" | AdoptionStatus;
 
 // Mirrors ALLOWED_TRANSITIONS in server/src/modules/adoptions/adoptions.service.ts:
 // submitted -> under_review/rejected, under_review -> approved/rejected,
-// approved -> completed, completed/rejected are terminal.
+// approved -> completed, completed/rejected/withdrawn are terminal. Withdrawal
+// is applicant-only, so it is never offered to a reviewer.
 const NEXT_STATUSES: Record<AdoptionStatus, AdoptionStatus[]> = {
   submitted: ["under_review", "rejected"],
   under_review: ["approved", "rejected"],
   approved: ["completed"],
   completed: [],
   rejected: [],
+  withdrawn: [],
 };
 
 // Copy for the "Medical clearance" row. Lifted out of the JSX because the
@@ -81,14 +91,6 @@ function transitionHint(status: AdoptionStatus, awaitingClearance: boolean) {
   return "";
 }
 
-function formatDate(value: string): string {
-  return new Date(value).toLocaleString(undefined, {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
-
 // Staff-only page: the adoption application review queue. Each application
 // expands into a review panel where staff read the applicant's answers and
 // status history, then move the application forward (or reject it with a
@@ -106,6 +108,16 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
     role === "manager" ||
     role === "admin";
 
+  // The breadcrumb targets a dashboard this role can actually visit - the
+  // header uses the same rule (see SiteHeader's dashboardView). Managers and
+  // admins cannot open "staff-dashboard", so they go to "dashboard".
+  const dashboardView: "dashboard" | "staff-dashboard" | "veterinary-dashboard" =
+    role === "manager" || role === "admin"
+      ? "dashboard"
+      : role === "veterinarian"
+        ? "veterinary-dashboard"
+        : "staff-dashboard";
+
   const [applications, setApplications] = useState<AdoptionApplication[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -117,10 +129,19 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
   const [detailById, setDetailById] = useState<Record<string, AdoptionApplication>>({});
   const [savingMessage, setSavingMessage] = useState("");
   const [savingError, setSavingError] = useState("");
+  // Controlled review form. Held in state (keyed by the expanded application)
+  // rather than left as uncontrolled defaultValue fields, which went stale
+  // after a save.
+  const [draftStatus, setDraftStatus] = useState<AdoptionStatus | "">("");
+  const [draftNotes, setDraftNotes] = useState("");
+  // Identifies which application (and which persisted revision of it) the
+  // draft values above belong to, so opening another row - or saving the
+  // current one - re-seeds the form.
+  const [draftOwner, setDraftOwner] = useState("");
   // Unread "new submission" notifications for the signed-in staffer. The
   // header bell lives on public pages only, so the queue surfaces its own
   // count that the reviewer can acknowledge once they've seen the list.
-  const [unreadSubmissions, setUnreadSubmissions] = useState(0);
+  const [unreadSubmissions, setUnreadSubmissions] = useState<string[]>([]);
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn || !hasStaffAccess) return;
@@ -145,7 +166,9 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
         if (!token) return;
         const inbox = await fetchMyNotifications(token);
         setUnreadSubmissions(
-          inbox.items.filter((item) => item.type === "adoption.submitted" && !item.readAt).length,
+          inbox.items
+            .filter((item) => item.type === "adoption.submitted" && !item.readAt)
+            .map((item) => item.id),
         );
       } catch {
         // The queue itself is the source of truth; a bell failure hides the
@@ -154,12 +177,18 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
     })();
   }, [getToken, hasStaffAccess, isLoaded, isSignedIn]);
 
+  // Acknowledge only the adoption-submission notifications this page loaded -
+  // marking the reviewer's whole inbox read would also clear unrelated items
+  // (e.g. rescue reports). Partial failures are tolerated: the count re-syncs
+  // on the next visit.
   async function acknowledgeSubmissions() {
     try {
       const token = await getToken();
       if (!token) return;
-      await markAllNotificationsRead(token);
-      setUnreadSubmissions(0);
+      await Promise.allSettled(
+        unreadSubmissions.map((id) => markNotificationRead(token, id)),
+      );
+      setUnreadSubmissions([]);
     } catch {
       // Count syncs on the next visit.
     }
@@ -192,6 +221,8 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
         return [
           application.animal?.name ?? "",
           application.animal?.publicId ?? "",
+          application.fullName ?? "",
+          application.applicantEmail ?? "",
           application.applicantClerkUserId,
         ]
           .join(" ")
@@ -220,11 +251,28 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
     }
   }
 
+  // The review form follows the expanded application. Rather than reset it from
+  // an effect (an extra render pass, and flagged by the set-state-in-effect
+  // lint rule), the draft is re-seeded during render whenever its owner key
+  // changes - React's documented "adjust state when a prop changes" pattern.
+  // The key includes the persisted status/review note so a save re-seeds too.
+  const expandedApplication = useMemo(
+    () => applications.find((item) => item.id === expandedId) ?? null,
+    [applications, expandedId],
+  );
+  const draftKey = expandedApplication
+    ? `${expandedApplication.id}:${expandedApplication.status}:${expandedApplication.reviewNotes ?? ""}`
+    : "";
+  if (draftOwner !== draftKey) {
+    setDraftOwner(draftKey);
+    setDraftStatus(expandedApplication ? expandedApplication.status : "");
+    setDraftNotes(expandedApplication?.reviewNotes ?? "");
+  }
+
   async function handleReview(event: FormEvent<HTMLFormElement>, application: AdoptionApplication) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    const nextStatus = String(form.get("status") ?? "") as AdoptionStatus;
-    const reviewNotes = String(form.get("reviewNotes") ?? "").trim();
+    const nextStatus = (draftStatus || application.status) as AdoptionStatus;
+    const reviewNotes = draftNotes.trim();
 
     if (nextStatus === "rejected" && reviewNotes === "") {
       setSavingError("Add a review note explaining the rejection so the applicant knows why.");
@@ -246,6 +294,9 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
       setDetailById((previous) =>
         previous[updated.id] ? { ...previous, [updated.id]: { ...previous[updated.id], ...updated } } : previous,
       );
+      // Reset the controlled review form to what was just persisted.
+      setDraftStatus(updated.status);
+      setDraftNotes(updated.reviewNotes ?? "");
       setSavingMessage(
         `Application for ${updated.animal?.name ?? "the animal"} moved to ${SHORT_STATUS_LABEL[updated.status]}.`,
       );
@@ -298,26 +349,12 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
 
   return (
     <main className="dashboard-page">
-      <header className="dashboard-header">
-        <div className="dashboard-brand">
-          <button type="button" className="brand-button" onClick={() => onNavigate("home")}>
-            <img src={spcaLogo} alt="SPCA Fiji logo" className="brand-logo" />
-          </button>
-          <div>
-            <p className="eyebrow">SPCA operations</p>
-            <h1>Adoption applications</h1>
-          </div>
-        </div>
-        <div className="dashboard-header-actions">
-          <div className="user-avatar-circle">
-            <UserButton />
-          </div>
-        </div>
-      </header>
+      <SiteHeader isLoaded={isLoaded} isSignedIn={isSignedIn} currentPage="manage-adoption-applications" onNavigate={onNavigate} />
+      <header className="workspace-section-head"><p className="eyebrow">SPCA operations</p><h1>Adoption applications</h1><p>Review applications and help each animal find the right home.</p></header>
 
       <Breadcrumbs
         trail={[
-          { label: "Staff Dashboard", onClick: () => onNavigate("staff-dashboard") },
+          { label: "Staff Dashboard", onClick: () => onNavigate(dashboardView) },
           { label: "Adoption applications" },
         ]}
       />
@@ -349,14 +386,14 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
               {queueTab === "active" ? "Needs review" : "Finished applications"}
             </p>
             <h2>{visibleApplications.length} application{visibleApplications.length === 1 ? "" : "s"}</h2>
-            {unreadSubmissions > 0 && (
+            {unreadSubmissions.length > 0 && (
               <button
                 type="button"
                 className="chip"
                 title="New submissions since you last acknowledged them - click to mark seen"
                 onClick={() => void acknowledgeSubmissions()}
               >
-                {unreadSubmissions} new
+                {unreadSubmissions.length} new
               </button>
             )}
           </div>
@@ -385,11 +422,19 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
           </div>
         </div>
 
-        {savingMessage && <p className="invite-feedback success">{savingMessage}</p>}
-        {savingError && <p className="invite-feedback error">{savingError}</p>}
+        {savingMessage && (
+          <p className="invite-feedback success" role="status" aria-live="polite">
+            {savingMessage}
+          </p>
+        )}
+        {savingError && (
+          <p className="invite-feedback error" role="alert">
+            {savingError}
+          </p>
+        )}
 
         {isLoading && <SkeletonLoader variant="card" />}
-        {!isLoading && loadError && <p className="dashboard-data-state error">{loadError}</p>}
+        {!isLoading && loadError && <p className="dashboard-data-state error" role="alert">{loadError}</p>}
         {!isLoading && !loadError && visibleApplications.length === 0 && (
           <p className="dashboard-data-state">
             {queueTab === "history"
@@ -451,6 +496,14 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
                           Gift - extra review
                         </span>
                       )}
+                      {isMinorApplication(application) && (
+                        <span
+                          className="adoption-clearance-badge"
+                          title="The applicant is under 18 - guardian details and consent are on file in the application."
+                        >
+                          Minor - guardian consent on file
+                        </span>
+                      )}
                       <span className={`adoption-status-badge ${adoptionStatusClass(application.status)}`}>
                         {SHORT_STATUS_LABEL[application.status]}
                       </span>
@@ -495,7 +548,14 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
                                 <dd>
                                   {section.rows.map((row) => (
                                     <p key={row.label} className="adoption-answer-row">
-                                      <strong>{row.label}:</strong> {row.value}
+                                      <strong>{row.label}:</strong>{" "}
+                                      {row.href ? (
+                                        <a href={row.href} target="_blank" rel="noreferrer">
+                                          {row.value}
+                                        </a>
+                                      ) : (
+                                        row.value
+                                      )}
                                     </p>
                                   ))}
                                 </dd>
@@ -540,7 +600,12 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
 
                           <label className="dispatch-field">
                             <span className="dispatch-label">Move to</span>
-                            <select name="status" defaultValue={application.status}>
+                            <select
+                              value={draftStatus || application.status}
+                              onChange={(event) =>
+                                setDraftStatus(event.target.value as AdoptionStatus)
+                              }
+                            >
                               <option value={application.status}>
                                 {SHORT_STATUS_LABEL[application.status]}
                               </option>
@@ -563,14 +628,14 @@ export function ManageAdoptionApplications({ onNavigate }: ManageAdoptionApplica
                               <em className="optional-hint">(shown to the applicant)</em>
                             </span>
                             <textarea
-                              name="reviewNotes"
                               rows={4}
+                              value={draftNotes}
+                              onChange={(event) => setDraftNotes(event.target.value)}
                               placeholder={
                                 nextStatuses.includes("rejected")
                                   ? "Required if rejecting - tell the applicant why."
                                   : "Optional note for the applicant."
                               }
-                              defaultValue={application.reviewNotes ?? ""}
                             />
                           </label>
 

@@ -1,3 +1,4 @@
+import { emergencyClosureStatement } from "../veterinary/emergency.lifecycle.js";
 import { and, asc, eq, getTableColumns, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import { db } from "../../db/client.js";
 import { animals } from "../../db/schema.js";
@@ -160,12 +161,12 @@ export async function findAnimalMissingSearchEmbedding(id: string) {
 // lost. See the comment on `deletedAt` in schema.ts for why this isn't a
 // hard DELETE.
 export async function softDeleteAnimal(id: string) {
-	const [animal] = await db
+	const [updated] = await db.batch([db
 		.update(animals)
 		.set({ deletedAt: new Date(), updatedAt: new Date() })
 		.where(eq(animals.id, id))
-		.returning(animalProfileColumns);
-	return animal;
+		.returning(animalProfileColumns), db.execute(emergencyClosureStatement(id))]);
+	return updated[0];
 }
 
 // Looks up a single animal by its internal id (used to pre-fill the edit form).
@@ -194,12 +195,12 @@ export async function createAnimal(input: typeof animals.$inferInsert) {
 
 // Updates only the fields provided in `input` and always refreshes updatedAt.
 export async function updateAnimal(id: string, input: Partial<typeof animals.$inferInsert>) {
-	const [animal] = await db
+	const [updated] = await db.batch([db
 		.update(animals)
 		.set({ ...input, updatedAt: new Date() })
 		.where(eq(animals.id, id))
-		.returning(animalProfileColumns);
-	return animal;
+		.returning(animalProfileColumns), db.execute(emergencyClosureStatement(id))]);
+	return updated[0];
 }
 
 // Stores (or clears, with null) one animal's search vector.

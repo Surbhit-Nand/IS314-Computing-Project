@@ -1,38 +1,48 @@
 ﻿import { SignInButton, useAuth, useUser } from "@clerk/react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { VeterinaryNavbar } from "./components/VeterinaryNavbar";
 import type { Animal } from "../../types/animal";
-import type { MedicalQueueAnimal, MedicalRecord, VeterinaryAppointment, VeterinaryDashboard as DashboardStats } from "../../types/veterinary";
+import type { MedicalQueueAnimal, MedicalRecord, VeterinaryEmergencyResponse, VeterinaryAppointment, VeterinaryDashboard as DashboardStats } from "../../types/veterinary";
 import { isDevBypassEnabled } from "../../utils/devBypass";
-import { fetchMedicalQueue, fetchMedicalRecord, fetchVeterinaryAppointments, fetchVeterinaryDashboard } from "../../services/veterinaryApi";
+import { fetchVeterinaryEmergencyResponses, fetchMedicalQueue, fetchMedicalRecord, fetchVeterinaryAppointments, fetchVeterinaryDashboard } from "../../services/veterinaryApi";
 import type { VeterinaryView } from "./vetTypes";
 import { VeterinaryDashboardPage } from "./pages/VeterinaryDashboardPage";
 import { VeterinaryCarePage } from "./pages/VeterinaryCarePage";
 import { FollowUpAppointmentPage } from "./FollowUpAppointmentPage";
+import type { CareScene } from "../../navigation/araNavigation";
+import { useAccountRefresh } from "../../utils/useAccountRefresh";
+import { isUpcomingAppointment } from "../../utils/appointments";
 
 type Props = {
   currentView: VeterinaryView;
   onNavigate: (view: VeterinaryView) => void;
   selectedAnimalId?: string | null;
   onSelectAnimal: (id: string) => void;
-  selectedAppointment?: VeterinaryAppointment | null;
+  selectedAppointmentId?: string;
+  careScene: CareScene;
+  onChangeCareScene: (scene: CareScene, replace?: boolean) => void;
+  onInvalidContext: () => void;
   onSelectAppointment: (appointment: VeterinaryAppointment) => void;
   onViewAnimalProfile?: (animal: Animal) => void;
 };
 
-export function VeterinaryDashboard({ currentView, onNavigate, selectedAnimalId, onSelectAnimal, selectedAppointment, onSelectAppointment, onViewAnimalProfile }: Props) {
-  const { isLoaded, isSignedIn, getToken } = useAuth();
+export function VeterinaryDashboard({ currentView, onNavigate, selectedAnimalId, onSelectAnimal, selectedAppointmentId, onSelectAppointment, onViewAnimalProfile, careScene, onChangeCareScene, onInvalidContext }: Props) {
+  const { isLoaded, isSignedIn, getToken, userId } = useAuth();
   const { user } = useUser();
   const allowed = isDevBypassEnabled || user?.publicMetadata.role === "veterinarian";
+  const [emergencyResponses, setEmergencyResponses] = useState<VeterinaryEmergencyResponse[]>([]);
+  const [coordinationUnavailable, setCoordinationUnavailable] = useState(true);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [queue, setQueue] = useState<MedicalQueueAnimal[]>([]);
   const [appointments, setAppointments] = useState<VeterinaryAppointment[]>([]);
   const [record, setRecord] = useState<MedicalRecord | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const requestVersion = useRef(0);
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
+  const refresh = useCallback(async (background = false) => {
+    const version = ++requestVersion.current;
+    if (!background) setLoading(true);
     try {
       const token = await getToken();
       if (!token) return;
@@ -41,42 +51,77 @@ export function VeterinaryDashboard({ currentView, onNavigate, selectedAnimalId,
         fetchMedicalQueue(token),
         fetchVeterinaryAppointments(token),
       ]);
+      if (version !== requestVersion.current) return;
       setStats(nextStats);
+      let nextResponses: VeterinaryEmergencyResponse[] = [];
+      let unavailable = false;
+      try { nextResponses = await fetchVeterinaryEmergencyResponses(token); } catch { unavailable = true; }
+      if (version !== requestVersion.current) return;
+      setEmergencyResponses(nextResponses);
+      setCoordinationUnavailable(unavailable);
       setQueue(nextQueue);
-      setAppointments(nextAppointments);
-      if (selectedAnimalId) setRecord(await fetchMedicalRecord(token, selectedAnimalId));
+      setAppointments(nextAppointments.filter((entry) => isUpcomingAppointment(entry.appointment)));
+      if (currentView === "vet-appointment-details" && !nextAppointments.some((entry) => entry.appointment.id === selectedAppointmentId)) {
+        onInvalidContext();
+        return;
+      }
+      if (currentView === "veterinary-record" && selectedAnimalId) {
+        const nextRecord = await fetchMedicalRecord(token, selectedAnimalId);
+        if (version !== requestVersion.current) return;
+        setRecord(nextRecord);
+      }
+      setError("");
+    } catch (value) {
+      if (version !== requestVersion.current) return;
+      if (value instanceof Error && /animal not found/i.test(value.message)) onInvalidContext();
+      else setError(value instanceof Error ? value.message : "Veterinary data could not be loaded.");
     } finally {
-      setLoading(false);
+      if (version === requestVersion.current) setLoading(false);
     }
-  }, [getToken, selectedAnimalId]);
+  }, [getToken, selectedAnimalId, selectedAppointmentId, currentView, onInvalidContext]);
 
   useEffect(() => {
     if (!isSignedIn || !allowed) return undefined;
     const timer = window.setTimeout(() => {
-      void refresh().catch((value: unknown) => setError(value instanceof Error ? value.message : "Veterinary data could not be loaded."));
+      void refresh();
     }, 0);
-    return () => window.clearTimeout(timer);
+    return () => { window.clearTimeout(timer); requestVersion.current += 1; };
   }, [allowed, isSignedIn, refresh]);
+
+  const backgroundRefresh = useCallback(() => { void refresh(true); }, [refresh]);
+  useAccountRefresh(Boolean(isSignedIn && allowed), backgroundRefresh);
 
   if (!isLoaded || !isSignedIn) return <LockedState signIn />;
   if (!allowed) return <LockedState onNavigate={() => onNavigate("home")} />;
 
-  if (selectedAppointment) {
-    return <FollowUpAppointmentPage appointment={selectedAppointment} getToken={getToken} onNavigate={onNavigate} onRefresh={refresh} />;
+  const selectedAppointment = appointments.find((entry) => entry.appointment.id === selectedAppointmentId);
+  if (currentView === "vet-appointment-details" && selectedAppointment) {
+    return <FollowUpAppointmentPage key={selectedAppointment.appointment.id} appointment={selectedAppointment} parentView="veterinary-dashboard" getToken={getToken} onNavigate={onNavigate} onRefresh={refresh} />;
   }
 
-  if (record) {
+  if (currentView === "veterinary-record" && record && record.animal.id === selectedAnimalId) {
     return (
       <VeterinaryCarePage
+        onNavigate={onNavigate}
         record={record}
+        scene={careScene}
+        onChangeScene={onChangeCareScene}
         getToken={getToken}
-        onBack={() => {
-          setRecord(null);
-          onSelectAnimal("");
-        }}
+        onBack={() => onNavigate("veterinary-dashboard")}
         onRefresh={refresh}
         onViewProfile={onViewAnimalProfile}
       />
+    );
+  }
+
+  if (currentView === "veterinary-record" || currentView === "vet-appointment-details") {
+    return (
+      <main className="vm-page">
+        <div className="vm-container">
+          <p className={error ? "form-error" : "vm-hint"}>{error || "Loading veterinary details..."}</p>
+          <button type="button" className="ghost-button" onClick={() => onNavigate("veterinary-dashboard")}>Back to dashboard</button>
+        </div>
+      </main>
     );
   }
 
@@ -85,18 +130,21 @@ export function VeterinaryDashboard({ currentView, onNavigate, selectedAnimalId,
       <VeterinaryNavbar currentView={currentView} onNavigate={onNavigate} />
       <div className="vm-container">
         <VeterinaryDashboardPage
+          emergencyResponses={emergencyResponses}
+          coordinationUnavailable={coordinationUnavailable}
+          currentVetId={userId ?? undefined}
+          onCoordinationChanged={() => refresh(true)}
           stats={stats}
           queue={queue}
           appointments={appointments}
           loading={loading}
           error={error}
-          onSelectAnimal={(id) => {
-            setRecord(null);
-            onSelectAnimal(id);
-          }}
+          onSelectAnimal={onSelectAnimal}
           onSelectAppointment={onSelectAppointment}
-            onBookAppointment={() => onNavigate("vet-booking")}
-          />
+          onBookAppointment={() => onNavigate("vet-booking")}
+          getToken={getToken}
+
+        />
       </div>
     </main>
   );

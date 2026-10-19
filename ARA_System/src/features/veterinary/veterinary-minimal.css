@@ -1,0 +1,180 @@
+/* One visual language for the queue, records, care stages, visits and dialogs.
+   Keep semantic tones and all existing control states. */
+#root :is(.vm-page, .vm-dtp-modal) {
+  --vm-shadow: none;
+  --vm-shadow-sm: none;
+  font-family: Arial, Helvetica, sans-serif;
+  color: var(--navy);
+  font-weight: 400;
+}
+#root .vm-page { background: var(--bg); }
+#root :is(.vm-page, .vm-dtp-modal) :is(h1, h2, h3, h4) {
+  font-family: inherit;
+  font-weight: 400;
+  letter-spacing: -.025em;
+  line-height: 1.25;
+}
+#root .vm-page h1 { font-size: clamp(1.7rem, 2.5vw, 2.2rem); }
+#root .vm-page h2 { font-size: 1.35rem; }
+#root .vm-page h3 { font-size: 1.05rem; }
+#root :is(.vm-page, .vm-dtp-modal) :is(button, input, select, textarea) { font-family: inherit; font-weight: 400; }
+#root :is(.vm-page, .vm-dtp-modal) :is(strong, b, .vm-label, .vm-animal-id, .vm-dtp-trigger-copy strong, .vm-dtp-head strong) { font-weight: 400; }
+#root .vm-page :is(.vm-eyebrow, .vm-stage-chip) { font-size: .65rem; font-weight: 400; letter-spacing: .08em; }
+#root .vm-page :is(.vm-subtitle, .vm-stage-head p) { font-size: .9rem; line-height: 1.65; }
+#root .vm-page :is(.vm-card-desc, .vm-hint, .vm-section-title-copy p) { line-height: 1.6; }
+
+/* Quiet surfaces; color stays in status indicators and small accents. */
+#root .vm-page :is(.vm-card, .vm-workspace-card, .vm-rail, .vm-animal-head, .vm-followup, .vm-summary-line, .vm-trows, .vm-exams) {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--white);
+  box-shadow: none;
+}
+#root .vm-page :is(.vm-card-head, .vm-card-body, .vm-workspace-card) { padding: 22px; }
+#root .vm-page .vm-card-head { background: transparent; }
+#root .vm-page .vm-animal-head { padding: 22px; }
+#root .vm-page .vm-animal-head::after { display: none; }
+#root .vm-page .vm-stage-chip { padding: 0; background: transparent; color: var(--teal-dark); border-radius: 0; }
+#root .vm-page .vm-section-icon { width: 30px; height: 30px; flex-basis: 30px; border-radius: 8px; }
+#root .vm-page .vm-notice { box-shadow: none; border-width: 0 0 0 2px; border-radius: 0 8px 8px 0; }
+#root .vm-page :is(.vm-detail-item, .vm-care-focus) { border-bottom-style: solid; }
+#root .vm-page .vm-fact-row dd { font-weight: 400; font-size: .85rem; line-height: 1.5; }
+#root .vm-page .vm-priority-cell { justify-items: start; gap: 8px; }
+#root .vm-page .vm-priority-cell > .vm-badge { width: fit-content; padding: 4px 9px; line-height: 1.3; border-radius: 6px; }
+
+/* Same compact buttons on every screen, including editing and confirmation. */
+#root :is(.vm-page, .vm-dtp-modal) :is(.teal-button, .ghost-button, .danger-button, .vm-queue-action) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 9px 15px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: .8rem;
+  line-height: 1.4;
+  letter-spacing: 0;
+  box-shadow: none;
+  text-shadow: none;
+  transform: none;
+  transition: background-color 150ms ease, border-color 150ms ease;
+}
+#root :is(.vm-page, .vm-dtp-modal) .teal-button { background: var(--teal-dark); border-color: var(--teal-dark); color: var(--white); }
+#root :is(.vm-page, .vm-dtp-modal) .teal-button:hover:not(:disabled) { background: var(--teal); border-color: var(--teal); }
+#root :is(.vm-page, .vm-dtp-modal) .ghost-button { background: var(--white); color: var(--navy); }
+#root :is(.vm-page, .vm-dtp-modal) .ghost-button:hover:not(:disabled) { background: var(--bg); border-color: var(--teal); }
+#root .vm-page .vm-queue-action { min-height: 32px; padding: 6px 11px; background: var(--teal-tint); border-color: transparent; color: var(--teal-dark); }
+#root .vm-page .vm-queue-action:hover:not(:disabled) { background: var(--bg); border-color: var(--teal); transform: none; }
+#root :is(.vm-page, .vm-dtp-modal) button:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
+#root :is(.vm-page, .vm-dtp-modal) button:disabled { cursor: not-allowed; }
+#root :is(.vm-page, .vm-dtp-modal) .modal-close { min-height: 32px; width: 32px; padding: 0; }
+
+/* Flat rows, readable labels and deliberate selection states. */
+#root .vm-page .vm-table-head { background: var(--bg); border-radius: 6px; }
+#root .vm-page :is(.vm-th, .vm-exam-line span, .vm-step-body em, .vm-detail-item > span) { text-transform: none; letter-spacing: 0; font-weight: 400; font-size: .75rem; }
+#root .vm-page :is(.vm-table-row, .vm-trow, .vm-exam) { box-shadow: none; }
+#root .vm-page :is(.vm-badge, .vm-chip) { font-size: .7rem; font-weight: 400; letter-spacing: 0; padding: 4px 8px; border-radius: 6px; }
+#root .vm-page .vm-tile { padding: 16px; border-radius: 10px; box-shadow: none; }
+#root .vm-page .vm-tile:hover { box-shadow: none; }
+#root .vm-page .vm-tile.selected { border-color: var(--tone); background: var(--tone-tint); }
+#root .vm-page .vm-stepper { height: 100%; padding: 20px; background: transparent; border: 0; border-radius: 0; }
+#root .vm-page .vm-rail { align-self: stretch; }
+#root .vm-page .vm-rail-title { font-size: .65rem; font-weight: 400; letter-spacing: .08em; margin-bottom: 22px; }
+#root .vm-page .vm-step-list { flex: 1; justify-content: space-between; }
+#root .vm-page .vm-step { flex: 1 1 0; }
+#root .vm-page .vm-step-hit { grid-template-columns: 48px minmax(0, 1fr); gap: 16px; height: 100%; padding: 0 0 28px; align-items: start; }
+#root .vm-page .vm-step:last-child .vm-step-hit { padding-bottom: 0; }
+#root .vm-page .vm-step-node { width: 48px; height: 48px; border-width: 1px; font-weight: 400; font-size: 1rem; }
+#root .vm-page .vm-step-hit::before { left: 23.5px; top: 52px; bottom: 4px; width: 1px; background: var(--line); }
+#root .vm-page .vm-step.completed .vm-step-hit::before { background: color-mix(in srgb, var(--success) 35%, var(--line)); }
+#root .vm-page .vm-step-body { padding-top: 3px; gap: 5px; }
+#root .vm-page .vm-step-body em { font-size: .7rem; line-height: 1.4; }
+#root .vm-page .vm-step.current .vm-step-node { box-shadow: none; }
+#root .vm-page .vm-step-body strong { font-size: .85rem; }
+#root .vm-page :is(.vm-input, .vm-select, .vm-textarea, .vm-dtp-trigger) { border: 1px solid var(--line); border-radius: 8px; background: var(--white); font-size: .85rem; box-shadow: none; }
+#root .vm-page :is(.vm-input, .vm-select, .vm-textarea):focus { border-color: var(--teal); outline: 2px solid var(--teal-tint); outline-offset: 1px; }
+#root .vm-page .vm-emergency-response { display: grid; gap: 5px; min-width: 200px; max-width: 300px; }
+#root .vm-page .vm-emergency-response > strong { font-size: .8rem; }
+.vm-emergency-response > span { color: var(--slate); font-size: .7rem; }
+#root .vm-page .vm-emergency-response .vm-emergency-support { color: var(--amber); }
+.vm-emergency-response-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+#root .vm-page .vm-emergency-response .vm-emergency-note { margin: 2px 0; font-size: .75rem; color: var(--slate); white-space: pre-wrap; overflow-wrap: anywhere; }
+.vm-emergency-response-form { display: grid; gap: 8px; margin-top: 8px; }
+.vm-emergency-response-form label { display: grid; gap: 5px; font-size: .75rem; }
+.vm-emergency-response-form textarea { width: 100%; padding: 8px; border: 1px solid var(--line); border-radius: 6px; resize: vertical; }
+.vm-emergency-response-form .vm-emergency-confirm { display: flex; align-items: flex-start; gap: 7px; }
+#root :is(.vm-dtp-modal) { border: 1px solid var(--line); border-radius: 14px; background: var(--white); }
+#root :is(.vm-dtp-modal) h2 { font-size: 1.3rem; }
+#root .vm-dtp-modal :is(.vm-dtp-day, .vm-dtp-preset, .vm-dtp-nav) { border-radius: 6px; box-shadow: none; font-size: .8rem; font-weight: 400; }
+#root .vm-dtp-modal .vm-dtp-day.selected { background: var(--teal-dark); color: var(--white); }
+#root .vm-dtp-modal .vm-dtp-preset.active { background: var(--teal-tint); color: var(--teal-dark); border-color: var(--teal); }
+@media (max-width: 620px) {
+  #root .vm-page :is(.vm-card-head, .vm-card-body, .vm-workspace-card, .vm-animal-head) { padding: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #root :is(.vm-page, .vm-dtp-modal) * { scroll-behavior: auto; transition: none; animation: none; }
+}
+.vm-assistance-receipt { color: #52697c; max-width: 36em; }
+
+#root .vm-page .vm-awaiting-critical { border-left: 0; background: transparent; }
+
+
+
+/* Compact four-column Medical Queue; appointment and record grids stay separate. */
+#root .vm-page .vm-queue-table { --vm-queue-cols: minmax(220px, 1.35fr) 88px minmax(112px, .65fr) minmax(220px, 1.1fr); }
+#root .vm-page .vm-queue-table .vm-table-row { min-height: 0; align-items: center; }
+#root .vm-page .vm-queue-table .vm-table-head { background: transparent; border-radius: 0; }
+#root .vm-page .vm-queue-table .vm-th { padding: 10px 12px; color: var(--slate); text-align: left; }
+#root .vm-page .vm-queue-table .vm-td { padding: 12px; }
+#root .vm-page .vm-queue-table .vm-animal-cell { gap: 10px; }
+#root .vm-page .vm-queue-table .vm-copy { gap: 3px; }
+#root .vm-page .vm-queue-table .vm-copy small { font-size: .7rem; line-height: 1.4; letter-spacing: 0; }
+#root .vm-page .vm-queue-table .vm-queue-attendance { color: var(--slate); }
+#root .vm-page .vm-queue-table .vm-priority-cell { gap: 0; }
+#root .vm-page .vm-queue-table .vm-td-actions { justify-content: flex-start; padding-left: 12px; }
+#root .vm-page .vm-queue-table .vm-emergency-response { min-width: 0; max-width: none; width: 100%; gap: 6px; }
+#root .vm-page .vm-queue-table .vm-emergency-response-actions { align-items: center; justify-content: flex-start; gap: 6px; margin: 0; }
+#root .vm-page .vm-queue-table .vm-queue-action { width: auto; height: auto; min-height: 30px; padding: 5px 9px; font-size: .72rem; line-height: 1.4; border-radius: 6px; white-space: normal; }
+#root .vm-page .vm-queue-table .vm-queue-action.is-primary { background: var(--teal-dark); color: var(--white); }
+#root .vm-page .vm-queue-table .vm-response-details { font-size: .7rem; color: var(--slate); }
+#root .vm-page .vm-queue-table .vm-response-details summary { cursor: pointer; width: fit-content; }
+#root .vm-page .vm-queue-table .vm-response-details p { margin: 6px 0 0; line-height: 1.5; }
+#root .vm-page .vm-queue-table .vm-awaiting-critical .vm-queue-attendance::before { content: ''; display: inline-block; width: 5px; height: 5px; border-radius: 50%; margin-right: 6px; vertical-align: middle; background: var(--red); }
+@media (max-width: 620px) {
+ #root .vm-page .vm-queue-table .vm-table-head { display: none; }
+ #root .vm-page .vm-queue-table .vm-table-row { grid-template-columns: 90px minmax(0, 1fr); padding: 12px 0; gap: 10px 4px; }
+ #root .vm-page .vm-queue-table .vm-animal-cell, #root .vm-page .vm-queue-table .vm-td-actions { grid-column: 1 / -1; }
+ #root .vm-page .vm-queue-table .vm-td { padding: 0 8px; }
+ #root .vm-page .vm-queue-table .vm-td[data-label='Priority']::before, #root .vm-page .vm-queue-table .vm-td[data-label='Care Stage']::before { content: attr(data-label); display: block; color: var(--slate); font-size: .65rem; margin-bottom: 5px; }
+}
+
+#root .vm-page .vm-queue-table :is(.vm-animal-thumb, .vm-animal-thumb-ph) { width: 42px; height: 42px; flex: 0 0 42px; border-radius: 8px; object-fit: cover; }
+
+/* Queue actions share fixed slots so medical actions align in every row. */
+#root .vm-page .vm-queue-table { --vm-queue-cols: minmax(220px, 1.35fr) 88px minmax(112px, .65fr) minmax(260px, 1.1fr); }
+#root .vm-page .vm-queue-table .vm-response-toolbar,
+#root .vm-page .vm-queue-table .vm-emergency-response > .vm-emergency-response-actions { display: grid; grid-template-columns: 68px minmax(112px, 1fr) auto; gap: 4px; align-items: center; }
+#root .vm-page .vm-queue-table .vm-response-standalone { padding-left: 72px; }
+#root .vm-page .vm-queue-table .vm-response-utilities { display: flex; align-items: center; gap: 2px; }
+#root .vm-page .vm-queue-table .vm-queue-action { height: 28px; min-height: 28px; padding: 0 7px; border: 1px solid var(--line); background: var(--white); color: var(--slate); font-size: .7rem; line-height: 1; white-space: nowrap; box-shadow: none; border-radius: 5px; }
+#root .vm-page .vm-queue-table .vm-response-owner-actions > .vm-queue-action { width: 68px; }
+#root .vm-page .vm-queue-table .vm-queue-action.is-primary { border-color: var(--teal-dark); background: var(--teal-dark); color: var(--white); }
+#root .vm-page .vm-queue-table .vm-medical-action { justify-content: flex-start; border-color: transparent; padding: 0 5px; color: var(--teal-dark); background: transparent; }
+#root .vm-page .vm-queue-table .vm-queue-action:hover:not(:disabled) { background: var(--bg); border-color: var(--line); }
+#root .vm-page .vm-queue-table .vm-queue-action.is-primary:hover:not(:disabled) { background: var(--teal); color: var(--white); border-color: var(--teal); }
+#root .vm-page .vm-queue-table :is(.vm-response-icon, .vm-response-delivery) { display: inline-flex; align-items: center; justify-content: center; width: 22px; min-width: 22px; height: 28px; padding: 0; color: var(--slate); border: 0; border-radius: 5px; background: transparent; box-shadow: none; }
+#root .vm-page .vm-queue-table .vm-response-icon { cursor: pointer; }
+#root .vm-page .vm-queue-table .vm-response-icon:hover { color: var(--teal-dark); background: var(--bg); }
+#root .vm-page .vm-queue-table .vm-response-delivery.is-sent { color: var(--slate); }
+#root .vm-page .vm-queue-table .vm-response-icon.needs-support { color: var(--amber); }
+#root .vm-page .vm-queue-table .vm-response-delivery:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+#root .vm-page .vm-queue-table .vm-response-note-content { padding: 8px 10px; border-left: 2px solid var(--line); color: var(--slate); font-size: .7rem; }
+#root .vm-page .vm-queue-table .vm-response-note-content p { margin: 0; line-height: 1.5; }
+#root .vm-page .vm-queue-table .vm-emergency-response-form .vm-emergency-response-actions { display: flex; gap: 4px; }
+
+/* Beginning care is the single queue action; ownership controls are contextual. */
+#root .vm-page .vm-queue-table .vm-emergency-response > .vm-response-toolbar { grid-template-columns: minmax(112px, 1fr) auto; }
+#root .vm-page .vm-queue-table .vm-response-standalone { padding-left: 0; }
+#root .vm-page .vm-queue-table .vm-response-context-menu { display: flex; flex-wrap: wrap; gap: 4px; padding: 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--white); }
+#root .vm-page .vm-queue-table .vm-emergency-response-form > p { margin: 0; color: var(--slate); font-size: .75rem; line-height: 1.5; }

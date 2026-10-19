@@ -9,4 +9,4 @@ export type VeterinaryView =
   | "vet-booking"
   | "vet-appointment-details";
 
-export type CareScene = "history" | "assessment" | "treatments" | "clearance";
+export type { CareScene } from "../../navigation/araNavigation";

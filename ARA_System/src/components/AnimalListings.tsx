@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Animal, AnimalSize } from "../types/animal";
-import { capitalize } from "../utils/format";
+import { breedLineLabel, capitalize, speciesLabel } from "../utils/format";
 import { useFavoriteAnimals } from "../utils/favorites";
 import { searchAnimalsWithAI } from "../services/animalsApi";
+import { ANIMAL_TRAITS, buildAnimalTags, extractTraits, type TraitGroup } from "../utils/animalTags";
+import { AnimalTagChips } from "./AnimalTagChips";
+import { apiBaseUrl } from "../services/apiClient.js";
 import { SiteFooter } from "./SiteFooter";
 import { SiteHeader, type SiteHeaderView } from "./SiteHeader";
+import { IconArrowLeft, IconArrowRight } from "./MedicalIcons";
 
 type AnimalListingsProps = {
   isLoaded: boolean;
@@ -13,8 +17,6 @@ type AnimalListingsProps = {
   onNavigate: (view: SiteHeaderView) => void;
   onViewAnimal: (animal: Animal) => void;
 };
-
-const apiBaseUrl = import.meta.env.VITE_API_URL ?? "http://localhost:8787";
 
 type Filters = {
   type: string;
@@ -36,16 +38,15 @@ const EMPTY_FILTERS: Filters = {
   vaccination: "all",
 };
 
-function behaviourKey(behaviour: string | null): string {
-  if (!behaviour) return "";
-  const lower = behaviour.toLowerCase();
-  if (/(good with children|family|kids)/.test(lower)) return "good-with-children";
-  if (/(calm|gentle|docile|quiet)/.test(lower)) return "calm";
-  if (/(energetic|active|playful|high.?energy)/.test(lower)) return "energetic";
-  if (/(house.?trained|housebroken)/.test(lower)) return "house-trained";
-  if (/(good with (other )?(dogs|pets|animals)|cat.?friendly|dog.?friendly)/.test(lower)) return "good-with-pets";
-  return "";
+// Behaviour filter matching, driven by the shared trait lexicon: an animal
+// matches the selected option when its trait set includes it. Single source
+// of truth with the card tags (see extractTraits) - a tag can never promise
+// a filter it does not apply.
+function animalTraits(animal: { behaviour: string | null; description: string | null }): string[] {
+  return extractTraits(animal.behaviour, animal.description);
 }
+
+const TRAIT_GROUPS: TraitGroup[] = ["Temperament", "Sociability", "Energy & lifestyle", "Training & care"];
 
 export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, onViewAnimal }: AnimalListingsProps) {
   const [animals, setAnimals] = useState<Animal[]>([]);
@@ -62,6 +63,7 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
   const [aiQuery, setAiQuery] = useState("");
   const [aiSearching, setAiSearching] = useState(false);
   const [aiSearchError, setAiSearchError] = useState("");
+  const [photoIndexes, setPhotoIndexes] = useState<Record<string, number>>({});
   // Guards against a slow earlier request overwriting a newer search's results.
   const searchRun = useRef(0);
 
@@ -71,7 +73,9 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
         if (!response.ok) throw new Error("Animal listings could not be loaded.");
         return (await response.json()) as Animal[];
       })
-      .then(setAnimals)
+      // Belt-and-braces with the API's own visibility predicate: adopted
+      // animals never belong in the public catalogue.
+      .then((data) => setAnimals(data.filter((animal) => animal.status !== "adopted")))
       .catch((error: unknown) =>
         setAnimalsError(
           error instanceof Error ? error.message : "Animal listings could not be loaded.",
@@ -88,6 +92,16 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
       if (animal.breed && animal.breed.trim()) set.add(animal.breed.trim());
     }
     return ["all", ...[...set].sort()];
+  }, [animals]);
+
+  // Typed species of the loaded "other" animals (Rabbit, Guinea Pig...), so
+  // the Species filter can offer each one by name, same idea as breeds.
+  const otherSpecies = useMemo(() => {
+    const set = new Set<string>();
+    for (const animal of animals) {
+      if (animal.type === "other" || animal.type === "rabbit") set.add(speciesLabel(animal));
+    }
+    return [...set].sort();
   }, [animals]);
 
   // Unique colour list derived from the loaded animals, same idea as breeds.
@@ -175,10 +189,16 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
     () =>
       ranked.filter((animal) => {
         if (filters.type !== "all") {
-          // "Other" groups anything that isn't a dog or cat (rabbits, birds,
-          // etc.) so those profiles show under a single species option.
-          const isOther = filters.type === "other" && animal.type !== "dog" && animal.type !== "cat";
-          if (!isOther && animal.type !== filters.type) return false;
+          const isOtherPet = animal.type !== "dog" && animal.type !== "cat";
+          if (filters.type.startsWith("species:")) {
+            // One typed species, e.g. "species:Rabbit".
+            if (!isOtherPet || speciesLabel(animal) !== filters.type.slice("species:".length)) return false;
+          } else if (filters.type === "other") {
+            // "All other pets" groups everything that isn't a dog or cat.
+            if (!isOtherPet) return false;
+          } else if (animal.type !== filters.type) {
+            return false;
+          }
         }
         if (filters.gender !== "all" && (animal.gender ?? "").toLowerCase() !== filters.gender)
           return false;
@@ -187,7 +207,7 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
           (animal.breed ?? "").trim().toLowerCase() !== filters.breed.toLowerCase()
         )
           return false;
-        if (filters.behaviour !== "all" && behaviourKey(animal.behaviour) !== filters.behaviour)
+        if (filters.behaviour !== "all" && !animalTraits(animal).includes(filters.behaviour))
           return false;
         if (filters.size !== "all" && animal.size !== filters.size) return false;
         if (
@@ -219,7 +239,7 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
   }
 
   return (
-    <div className="home-page">
+    <div className="home-page animal-catalog-page">
       <SiteHeader
         isLoaded={isLoaded}
         isSignedIn={isSignedIn}
@@ -287,7 +307,10 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
                 ["all", "All"],
                 ["dog", "Dogs"],
                 ["cat", "Cats"],
-                ["other", "Other Pets"],
+                // Each typed species of the "other" animals listed by name...
+                ...otherSpecies.map((species) => [`species:${species}`, species]),
+                // ...plus one option covering all of them.
+                ...(otherSpecies.length > 0 ? [["other", "All other pets"]] : []),
               ].map(([value, label]) => (
                 <label key={value} className="filter-option">
                   <input
@@ -400,23 +423,30 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
 
             <div className="filter-group">
               <h3>Behaviour</h3>
-              {[
-                ["all", "Any"],
-                ["good-with-children", "Good with children"],
-                ["calm", "Calm / gentle"],
-                ["energetic", "Energetic / playful"],
-                ["house-trained", "House-trained"],
-                ["good-with-pets", "Good with other pets"],
-              ].map(([value, label]) => (
-                <label key={value} className="filter-option">
-                  <input
-                    type="radio"
-                    name="behaviour"
-                    checked={filters.behaviour === value}
-                    onChange={() => setFilter("behaviour", value)}
-                  />
-                  <span>{label}</span>
-                </label>
+              <label className="filter-option">
+                <input
+                  type="radio"
+                  name="behaviour"
+                  checked={filters.behaviour === "all"}
+                  onChange={() => setFilter("behaviour", "all")}
+                />
+                <span>Any</span>
+              </label>
+              {TRAIT_GROUPS.map((group) => (
+                <div key={group} className="filter-subgroup">
+                  <h4 className="filter-subgroup-title">{group}</h4>
+                  {ANIMAL_TRAITS.filter((trait) => trait.group === group).map((trait) => (
+                    <label key={trait.key} className="filter-option">
+                      <input
+                        type="radio"
+                        name="behaviour"
+                        checked={filters.behaviour === trait.key}
+                        onChange={() => setFilter("behaviour", trait.key)}
+                      />
+                      <span>{trait.label}</span>
+                    </label>
+                  ))}
+                </div>
               ))}
             </div>
           </aside>
@@ -456,7 +486,18 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
                     : "No animals match your search. Try removing a filter or showing all animals."}
                 </p>
               )}
-              {visible.map((animal) => (
+              {visible.map((animal) => {
+                const activePhotoIndex = (photoIndexes[animal.id] ?? 0) % Math.max(1, animal.photoUrls.length);
+                const activePhoto = animal.photoUrls[activePhotoIndex];
+
+                function changePhoto(direction: -1 | 1) {
+                  setPhotoIndexes((previous) => ({
+                    ...previous,
+                    [animal.id]: (activePhotoIndex + direction + animal.photoUrls.length) % animal.photoUrls.length,
+                  }));
+                }
+
+                return (
                 <article
                   key={animal.id}
                   className="pet-card"
@@ -474,13 +515,41 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
                     className="pet-card-photo"
                     aria-label={`${animal.name} profile image`}
                     style={
-                      animal.photoUrls[0]
-                        ? { backgroundImage: `url(${animal.photoUrls[0]})` }
+                      activePhoto
+                        ? { backgroundImage: `url(${activePhoto})` }
                         : undefined
                     }
                   >
-                    {!animal.photoUrls[0] && (
-                      <span className="animal-image-label">{capitalize(animal.type)}</span>
+                    {!activePhoto && (
+                      <span className="animal-image-label">{speciesLabel(animal)}</span>
+                    )}
+                    {animal.photoUrls.length > 1 && (
+                      <>
+                        <button
+                          type="button"
+                          className="pet-card-photo-nav prev"
+                          aria-label={`Show previous photo of ${animal.name}`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            changePhoto(-1);
+                          }}
+                          onKeyDown={(event) => event.stopPropagation()}
+                        >
+                          <IconArrowLeft size={18} />
+                        </button>
+                        <button
+                          type="button"
+                          className="pet-card-photo-nav next"
+                          aria-label={`Show next photo of ${animal.name}`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            changePhoto(1);
+                          }}
+                          onKeyDown={(event) => event.stopPropagation()}
+                        >
+                          <IconArrowRight size={18} />
+                        </button>
+                      </>
                     )}
                     <button
                       type="button"
@@ -500,8 +569,13 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
                   </div>
                   <div className="pet-card-body">
                     <h3 className="pet-card-name">{animal.name}</h3>
-                    <p className="pet-card-breed">{animal.breed ?? "Breed not recorded"}</p>
-                    {animal.behaviour && <p className="pet-card-blurb">{animal.behaviour}</p>}
+                    <p className="pet-card-breed">{breedLineLabel(animal)}</p>
+                    <AnimalTagChips
+                      tags={buildAnimalTags(animal)}
+                      onSelectTag={(tag) =>
+                        setFilters((previous) => ({ ...previous, [tag.filterKey]: tag.filterValue }))
+                      }
+                    />
                     <p className="pet-card-line">
                       <span aria-hidden="true">🐾</span>
                       {animal.gender ?? "Gender unknown"} • {animal.estimatedAge ?? "Age unknown"}
@@ -509,7 +583,8 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
                     <p className="pet-card-check">✓ Available for adoption</p>
                   </div>
                 </article>
-              ))}
+                );
+              })}
             </div>
           </section>
         </div>

@@ -1,0 +1,261 @@
+/* Scoped to the registered-user dashboard; staff workspaces retain their theme. */
+.account-summary-error { max-width: 1200px; margin: 0 auto 20px; padding: 14px 18px; border-radius: 8px; background: var(--amber-tint); color: var(--navy); font-size: 0.8rem; }
+.account-activity-empty { color: var(--slate); padding: 24px 0; font-size: 0.85rem; line-height: 1.7; }
+.account-activity-link { padding: 0; border: 0; background: none; color: inherit; font: inherit; font-weight: 800; text-align: left; cursor: pointer; }
+.account-activity-link:hover { color: var(--teal-dark); }
+#root .user-dashboard-minimal .account-activity-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--navy);
+  box-shadow: none;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 800;
+  text-decoration: none;
+}
+#root .user-dashboard-minimal .account-activity-link:hover { color: var(--teal-dark); }
+#root .user-dashboard-minimal .account-activity-link .activity-link-arrow { display: inline; margin: 0; color: var(--slate); font-size: 0.8rem; }
+#root .user-dashboard-minimal.user-dashboard-page .user-status.cancelled { background: var(--bg); color: var(--slate); }
+.user-dashboard-page.user-dashboard-minimal {
+  padding: 0 24px 64px;
+  background: var(--bg);
+  color: var(--navy);
+}
+
+.user-dashboard-page.user-dashboard-minimal::before { display: none; }
+
+#root .user-dashboard-minimal.user-dashboard-page > .site-header {
+  width: 100%;
+  max-width: 1200px;
+  min-height: 96px;
+  margin: 0 auto;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+#root .user-dashboard-minimal.user-dashboard-page > .site-header .brand-logo {
+  height: 48px;
+  filter: none;
+}
+
+#root .user-dashboard-minimal.user-dashboard-page > .site-header .main-nav .nav-link {
+  color: var(--navy);
+  text-shadow: none;
+  font-weight: 400;
+}
+
+#root .user-dashboard-minimal.user-dashboard-page > .site-header .main-nav .nav-link::after {
+  background: var(--teal-dark);
+}
+
+#root .user-dashboard-minimal.user-dashboard-page > .site-header .main-nav .nav-link:hover,
+#root .user-dashboard-minimal.user-dashboard-page > .site-header .main-nav .nav-link.active {
+  color: var(--teal-dark);
+}
+
+#root .user-dashboard-minimal.user-dashboard-page > .site-header .header-actions .teal-button {
+  background: var(--navy);
+  border-radius: 6px;
+  box-shadow: none;
+}
+
+#root .user-dashboard-minimal.user-dashboard-page :is(.teal-button, .ghost-button) {
+  min-height: 42px;
+  padding: 10px 18px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--white);
+  color: var(--navy);
+  box-shadow: none;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  text-shadow: none;
+  transform: none;
+}
+
+#root .user-dashboard-minimal.user-dashboard-page .teal-button {
+  background: var(--navy);
+  border-color: var(--navy);
+  color: var(--white);
+}
+
+#root .user-dashboard-minimal.user-dashboard-page .teal-button:hover { background: var(--teal-dark); }
+#root .user-dashboard-minimal.user-dashboard-page .ghost-button:hover { background: var(--teal-tint); }
+
+#root .user-dashboard-minimal.user-dashboard-page .notification-bell {
+  color: var(--navy);
+  background: var(--white);
+  border-color: var(--line);
+  box-shadow: none;
+}
+
+#root .user-dashboard-minimal.user-dashboard-page .user-welcome {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 24px;
+  width: 100%;
+  max-width: 1200px;
+  min-height: 0;
+  margin: 0 auto;
+  padding: 40px 0 32px;
+}
+
+#root .user-dashboard-minimal.user-dashboard-page .user-welcome :is(h1, p) {
+  color: var(--navy);
+  text-shadow: none;
+}
+
+#root .user-dashboard-minimal.user-dashboard-page .eyebrow {
+  margin-bottom: 10px;
+  color: var(--slate);
+  font-size: 0.65rem;
+  letter-spacing: 0.14em;
+  font-weight: 800;
+}
+
+#root .user-dashboard-minimal.user-dashboard-page .user-welcome h1 {
+  margin: 0 0 12px;
+  font-size: clamp(1.8rem, 3vw, 2.5rem);
+  font-weight: 400;
+  letter-spacing: -0.04em;
+  line-height: 1.15;
+}
+
+#root .user-dashboard-minimal.user-dashboard-page .user-welcome p:last-child {
+  margin: 0;
+  color: var(--slate);
+  font-size: 0.9rem;
+}
+
+.user-dashboard-minimal .user-welcome-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+
+#root .user-dashboard-minimal.user-dashboard-page .user-dashboard-grid {
+  margin-top: 0;
+  gap: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--white);
+}
+
+#root .user-dashboard-minimal.user-dashboard-page .user-stat-card {
+  min-height: 148px;
+  padding: 24px;
+  gap: 16px;
+  border: 0;
+  border-right: 1px solid var(--line);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.user-dashboard-minimal .user-stat-card:last-child { border-right: 0; }
+#root .user-dashboard-minimal.user-dashboard-page .user-stat-card strong { color: var(--navy); font-weight: 400; font-size: 2.25rem; font-variant-numeric: tabular-nums; }
+#root .user-dashboard-minimal.user-dashboard-page .user-stat-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--slate);
+}
+#root .user-dashboard-minimal.user-dashboard-page .user-stat-label svg { color: var(--teal-dark); opacity: 0.7; }
+#root .user-dashboard-minimal.user-dashboard-page .user-stat-card:last-child { border-right: 0; }
+.user-dashboard-minimal .user-stat-card small { font-size: 0.7rem; }
+
+#root .user-dashboard-minimal.user-dashboard-page .user-dashboard-columns {
+  align-items: start;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  gap: 24px;
+  margin-top: 24px;
+}
+
+#root .user-dashboard-minimal.user-dashboard-page .dashboard-panel {
+  min-width: 0;
+  padding: 28px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--white);
+  box-shadow: none;
+}
+
+.user-dashboard-minimal .panel-heading { gap: 16px; align-items: center; margin-bottom: 20px; }
+.user-dashboard-minimal .panel-heading h2 { margin: 0; font-size: 1.1rem; letter-spacing: -0.02em; }
+.user-dashboard-minimal .text-button { font-size: 0.75rem; color: var(--teal-dark); }
+.user-dashboard-minimal .user-activity-list > div { padding-block: 24px; }
+.user-dashboard-minimal .user-activity-icon { border-radius: 8px; background: var(--bg); color: var(--slate); }
+.user-dashboard-minimal .user-status { font-size: 0.65rem; text-align: right; max-width: 120px; }
+
+#root .user-dashboard-minimal.user-dashboard-page .user-status {
+  max-width: 150px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: var(--teal-tint);
+  color: var(--teal-dark);
+  font-size: 0.65rem;
+  line-height: 1.5;
+  font-weight: 400;
+}
+#root .user-dashboard-minimal.user-dashboard-page .user-status.pending {
+  background: var(--amber-tint);
+  color: var(--navy);
+}
+#root .user-dashboard-minimal.user-dashboard-page .user-status.confirmed {
+  background: var(--success-tint);
+  color: var(--navy);
+}
+#root .user-dashboard-minimal.user-dashboard-page .user-activity-icon {
+  flex-basis: 36px;
+  width: 36px;
+  height: 36px;
+  background: var(--teal-tint);
+  color: var(--teal-dark);
+}
+#root .user-dashboard-minimal.user-dashboard-page .user-activity-list > div { gap: 14px; padding-block: 22px; }
+#root .user-dashboard-minimal.user-dashboard-page .user-actions-panel { background: var(--white); }
+
+#root .user-dashboard-minimal.user-dashboard-page .user-action-button {
+  position: relative;
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 14px 24px 14px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  text-align: left;
+  font-family: inherit;
+  transform: none;
+}
+
+.user-dashboard-minimal .user-action-button::after { content: '\2192'; position: absolute; top: 14px; right: 0; color: var(--slate); }
+.user-dashboard-minimal .user-action-button strong { display: block; font-size: 0.85rem; color: var(--navy); }
+.user-dashboard-minimal .user-action-button span { display: block; margin-top: 5px; color: var(--slate); font-size: 0.75rem; font-weight: 400; line-height: 1.6; }
+#root .user-dashboard-minimal.user-dashboard-page .user-action-button:hover { background: var(--bg); }
+.user-dashboard-minimal :is(button, a):focus-visible { outline: 2px solid var(--teal-dark); outline-offset: 4px; }
+
+@media (max-width: 900px) {
+  #root .user-dashboard-minimal.user-dashboard-page .user-dashboard-columns { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 620px) {
+  .user-dashboard-page.user-dashboard-minimal { padding-inline: 16px; }
+  #root .user-dashboard-minimal.user-dashboard-page .user-welcome { padding-block: 32px; }
+  #root .user-dashboard-minimal.user-dashboard-page .user-dashboard-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #root .user-dashboard-minimal.user-dashboard-page .user-stat-card { min-height: 125px; padding: 20px; }
+  #root .user-dashboard-minimal.user-dashboard-page .user-stat-card:nth-child(2) { border-right: 0; }
+  #root .user-dashboard-minimal.user-dashboard-page .user-stat-card:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
+  #root .user-dashboard-minimal.user-dashboard-page .dashboard-panel { padding: 20px; }
+  .user-dashboard-minimal .panel-heading { flex-wrap: wrap; }
+  .user-dashboard-minimal .user-activity-list > div { flex-wrap: wrap; }
+  .user-dashboard-minimal .user-activity-list p { min-width: 140px; }
+  #root .user-dashboard-minimal.user-dashboard-page .user-status { max-width: none; margin-left: 50px; text-align: left; }
+}

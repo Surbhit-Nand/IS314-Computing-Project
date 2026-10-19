@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { IconArrowLeft, IconCalendar, IconCheck, IconClock, IconNotes, IconUser } from "../../components/MedicalIcons";
-import { SiteHeader } from "../../components/SiteHeader";
+import { VeterinaryNavbar } from "./components/VeterinaryNavbar";
 import { completeAppointment, fetchMedicalRecord } from "../../services/veterinaryApi";
 import type { MedicalRecord, VeterinaryAppointment } from "../../types/veterinary";
 import type { VeterinaryView } from "./vetTypes";
@@ -14,32 +14,39 @@ type Props = {
   getToken: () => Promise<string | null>;
   onNavigate: (view: VeterinaryView) => void;
   onRefresh: () => Promise<void>;
+  parentView?: "veterinary-dashboard" | "vet-appointments";
 };
 
-export function FollowUpAppointmentPage({ appointment: entry, getToken, onNavigate, onRefresh }: Props) {
-  const { appointment, animal } = entry;
+export function FollowUpAppointmentPage({ appointment: entry, getToken, onNavigate, onRefresh, parentView = "veterinary-dashboard" }: Props) {
+ const { appointment, animal, adopterName } = entry;
   const [record, setRecord] = useState<MedicalRecord | null>(null);
   const [status, setStatus] = useState(appointment.status);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [completing, setCompleting] = useState(false);
+  const navigationVersion = useRef(0);
 
 
   
   useEffect(() => {
+    const version = navigationVersion.current;
     void (async () => {
       const token = await getToken();
       if (!token) return;
       try {
-        setRecord(await fetchMedicalRecord(token, animal.id));
+        const nextRecord = await fetchMedicalRecord(token, animal.id);
+        if (version === navigationVersion.current) setRecord(nextRecord);
       } catch (value) {
+        if (version !== navigationVersion.current) return;
         setError(value instanceof Error ? value.message : "Could not load the medical record.");
       }
     })();
+    return () => { navigationVersion.current += 1; };
   }, [getToken, animal.id]);
 
   async function handleComplete(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const version = navigationVersion.current;
     const data = new FormData(event.currentTarget);
     const token = await getToken();
     if (!token) return;
@@ -49,10 +56,13 @@ export function FollowUpAppointmentPage({ appointment: entry, getToken, onNaviga
         visitDetails: String(data.get("visitDetails") ?? "Follow-up visit completed"),
         treatmentPerformed: String(data.get("treatmentPerformed") ?? "Recorded in medical history"),
       });
+      if (version !== navigationVersion.current) return;
       await onRefresh();
+      if (version !== navigationVersion.current) return;
       setStatus("completed");
       setMessage("Visit marked as completed and saved to the medical history.");
     } catch (value) {
+      if (version !== navigationVersion.current) return;
       setError(value instanceof Error ? value.message : "Could not complete the appointment.");
     } finally {
       setCompleting(false);
@@ -63,10 +73,10 @@ export function FollowUpAppointmentPage({ appointment: entry, getToken, onNaviga
 
   return (
     <main className="vm-page">
-      <SiteHeader isLoaded isSignedIn currentPage="user-dashboard" onNavigate={onNavigate} hideSiteNav />
+      <VeterinaryNavbar currentView="vet-appointment-details" onNavigate={onNavigate} />
       <div className="vm-container">
         <div className="vm-record-top" style={{ marginBottom: 14 }}>
-          <button type="button" className="ghost-button compact-action" onClick={() => onNavigate("veterinary-dashboard")}><IconArrowLeft size={13} /> Back to dashboard</button>
+          <button type="button" className="ghost-button compact-action" onClick={() => onNavigate(parentView)}><IconArrowLeft size={13} /> Back to {parentView === "vet-appointments" ? "appointments" : "dashboard"}</button>
         </div>
 
         <AnimalMedicalHeader
@@ -88,7 +98,12 @@ export function FollowUpAppointmentPage({ appointment: entry, getToken, onNaviga
 
         <div className="vm-layout" style={{ marginTop: 20 }}>
           <div className="vm-main">
-            <Card title="Appointment details" detail="Follow-up veterinary visit booked for this animal.">
+            <Card
+              title="Appointment details"
+              detail={appointment.source === "owner_booked"
+                ? "Appointment booked by this animal's adopter."
+                : "Follow-up veterinary visit booked for this animal."}
+            >
               <div className="vm-detail-grid">
                 <div className="vm-detail-item">
                   <span><IconCalendar size={12} /> Date</span>
@@ -105,7 +120,7 @@ export function FollowUpAppointmentPage({ appointment: entry, getToken, onNaviga
                 </div>
                 <div className="vm-detail-item">
                   <span><IconUser size={12} /> Booked by</span>
-                  <strong>{appointment.notes ? appointment.notes.replace(/^Booked by\s*/i, "") : "SPCA account holder"}</strong>
+                  <strong>{adopterName ?? (appointment.notes ? appointment.notes.replace(/^Booked by\s*/i, "") : "SPCA account holder")}</strong>
                 </div>
               </div>
               {appointment.visitDetails ? <p className="vm-quote" style={{ marginTop: 14 }}>{appointment.visitDetails}</p> : null}
@@ -130,13 +145,13 @@ export function FollowUpAppointmentPage({ appointment: entry, getToken, onNaviga
                   </div>
                 </Card>
                 <div className="vm-form-actions">
-                  <button type="button" className="ghost-button" onClick={() => onNavigate("veterinary-dashboard")}>Back to dashboard</button>
+                  <button type="button" className="ghost-button" onClick={() => onNavigate(parentView)}>Back to {parentView === "vet-appointments" ? "appointments" : "dashboard"}</button>
                   <button type="submit" className="teal-button" disabled={completing}><IconCheck size={15} /> {completing ? "Saving…" : "Mark visit completed"}</button>
                 </div>
               </form>
             ) : (
               <div className="vm-form-actions">
-                <button type="button" className="ghost-button" onClick={() => onNavigate("veterinary-dashboard")}>Back to dashboard</button>
+                <button type="button" className="ghost-button" onClick={() => onNavigate(parentView)}>Back to {parentView === "vet-appointments" ? "appointments" : "dashboard"}</button>
               </div>
             )}
           </div>

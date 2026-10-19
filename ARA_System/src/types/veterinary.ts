@@ -28,6 +28,28 @@ export type MedicalQueueAnimal = {
   veterinaryPriority?: VeterinaryPriority | null;
 };
 
+export type VeterinaryEmergencyResponse = {
+  assistanceAlert?: { status: "sent" | "no_other_vets" | "unavailable" | "not_needed"; recipientCount: number; waitingAnimalIds: string[] };
+  id: string;
+  animalId: string;
+  attendingVeterinarianClerkUserId: string | null;
+  attendingVeterinarianName: string | null;
+  supportRequired: boolean;
+  coordinationNote: string | null;
+  version: number;
+  updatedByClerkUserId: string;
+  createdAt: string;
+  updatedAt: string;
+  closedAt: string | null;
+};
+
+type EmergencyExpectation = { responseId: string | null; version: number | null };
+export type VeterinaryEmergencyAction = EmergencyExpectation & (
+  | { action: "attend" | "release" }
+  | { action: "take_over"; handoffConfirmed: true; note: string }
+  | { action: "support"; supportRequired: boolean; note: string }
+);
+
 // A veterinary examination (initial or follow-up) recorded on an animal's
 // medical record. Mirrors the `veterinary_examinations` table returned by the
 // `GET /api/veterinary/animals/:animalId` endpoint.
@@ -110,6 +132,7 @@ export type MedicalRecord = {
 };
 
 export type VeterinaryAppointment = {
-  appointment: { id: string; appointmentDate: string; purpose: string; status: string; notes: string | null; visitDetails: string | null; treatmentPerformed: string | null; bookedByClerkUserId: string };
+  appointment: { id: string; appointmentDate: string; purpose: string; status: string; notes: string | null; visitDetails: string | null; treatmentPerformed: string | null; bookedByClerkUserId: string; source: string };
   animal: MedicalQueueAnimal;
+  adopterName?: string | null;
 };

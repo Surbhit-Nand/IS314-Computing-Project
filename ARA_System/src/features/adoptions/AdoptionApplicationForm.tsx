@@ -1,12 +1,19 @@
 import { SignInButton, useAuth, useUser } from "@clerk/react";
-import { useState, type FormEvent } from "react";
-import { submitAdoptionApplication } from "../../services/adoptionsApi";
+import { useState, type CSSProperties, type FormEvent } from "react";
+import { submitAdoptionApplication, uploadAdoptionIdDocument } from "../../services/adoptionsApi";
 import type { Animal } from "../../types/animal";
-import { ADULT_AGE, calculateAge } from "../../utils/age";
+import { clearPendingAdoption } from "../../utils/pendingAdoption";
+import { DEFAULT_DIAL_CODE, dialCodeByCode, expectedLengthLabel, formatPhone, isValidPhoneNational } from "../../utils/phone";
+import { PhoneInput } from "../../components/PhoneInput";
 import { Breadcrumbs } from "../../components/Breadcrumbs";
 import { SiteFooter } from "../../components/SiteFooter";
 import { SiteHeader, type SiteHeaderView } from "../../components/SiteHeader";
 import { SkeletonLoader } from "../../components/SkeletonLoader";
+import {
+  answerLabel,
+  yesNoLabel,
+  type AnswerSection,
+} from "./AdoptionQuestionnaireAnswers";
 
 type AdoptionApplicationFormProps = {
   // The animal being applied for (the one whose profile "Adopt" was clicked
@@ -21,67 +28,157 @@ type AdoptionApplicationFormProps = {
 
 type FormState = {
   fullName: string;
+  contactCode: string;
   contactNumber: string;
   applicantEmail: string;
-  residentialAddress: string;
-  dateOfBirth: string;
-  housingType: "" | "house" | "apartment" | "other";
-  tenure: "" | "own" | "rent";
-  landlordPetsAllowed: "" | "yes" | "no" | "not_sure";
-  fencedYard: "" | "yes" | "no" | "na";
-  householdSize: string;
-  childrenAges: string;
+  ageBracket: "" | "adult" | "minor";
+  guardianName: string;
+  guardianCode: string;
+  guardianContact: string;
+  guardianRelationship: "" | "parent" | "guardian" | "other";
+  guardianConsent: boolean;
+  idDocumentType: "" | "voter_card" | "passport" | "drivers_licence" | "other";
+  idDocumentUrl: string;
   petAllergies: "" | "yes" | "no";
+  respiratoryIssues: "" | "yes" | "no";
   ownedPetsBefore: "" | "yes" | "no";
   previousPetOutcome: string;
   hasCurrentPets: "" | "yes" | "no";
   currentPetsDetails: string;
-  aloneHours: string;
-  primaryCaregiver: string;
-  dailyRoutine: string;
   vetCostPlan: string;
-  travelCarePlan: string;
-  adoptionMotivation: string;
+  nextOfKinName: string;
+  nextOfKinCode: string;
+  nextOfKinContact: string;
   adoptionFor: "" | "self" | "gift";
-  householdAgreement: "" | "yes" | "no";
-  consentHomeVisit: boolean;
-  agreeReturnToSpca: boolean;
-  confirmAccurate: boolean;
 };
 
 const emptyForm: FormState = {
   fullName: "",
+  contactCode: DEFAULT_DIAL_CODE,
   contactNumber: "",
   applicantEmail: "",
-  residentialAddress: "",
-  dateOfBirth: "",
-  housingType: "",
-  tenure: "",
-  landlordPetsAllowed: "",
-  fencedYard: "",
-  householdSize: "",
-  childrenAges: "",
+  ageBracket: "",
+  guardianName: "",
+  guardianCode: DEFAULT_DIAL_CODE,
+  guardianContact: "",
+  guardianRelationship: "",
+  guardianConsent: false,
+  idDocumentType: "",
+  idDocumentUrl: "",
   petAllergies: "",
+  respiratoryIssues: "",
   ownedPetsBefore: "",
   previousPetOutcome: "",
   hasCurrentPets: "",
   currentPetsDetails: "",
-  aloneHours: "",
-  primaryCaregiver: "",
-  dailyRoutine: "",
   vetCostPlan: "",
-  travelCarePlan: "",
-  adoptionMotivation: "",
+  nextOfKinName: "",
+  nextOfKinCode: DEFAULT_DIAL_CODE,
+  nextOfKinContact: "",
   adoptionFor: "",
-  householdAgreement: "",
-  consentHomeVisit: false,
-  agreeReturnToSpca: false,
-  confirmAccurate: false,
 };
 
-// Public, signed-in apply-to-adopt questionnaire for one animal: six sections
-// (applicant, household, experience, care plan, motivation, acknowledgements)
-// with conditional follow-ups. Reuses the shared animal-form CSS so the form
+// One screen of the wizard. The guardian step only exists for minors, so the
+// visible step list is derived from the applicant's age bracket.
+type StepId = "applicant" | "guardian" | "identification" | "household" | "experience" | "care" | "review";
+
+const STEP_TITLES: Record<StepId, string> = {
+  applicant: "About you",
+  guardian: "Parent or guardian",
+  identification: "Identification",
+  household: "Your home",
+  experience: "Pet experience",
+  care: "Care plan",
+  review: "Review & submit",
+};
+
+function visibleSteps(form: FormState): StepId[] {
+  const steps: StepId[] = ["applicant"];
+  if (form.ageBracket === "minor") steps.push("guardian");
+  steps.push("identification", "household", "experience", "care", "review");
+  return steps;
+}
+
+// Permissive client-side check mirroring the server's message; the server
+// remains authoritative (it also rejects disposable/undeliverable domains).
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Matches the multer limit on POST /api/adoptions/id-document (8 MB).
+const MAX_ID_PHOTO_BYTES = 8 * 1024 * 1024;
+
+// Read-only recap of everything entered so far, shown on the final step so
+// "Review & submit" actually reviews something before the applicant commits.
+// Labels come from AdoptionQuestionnaireAnswers so the wording matches the
+// staff review queue.
+function reviewSummary(form: FormState): AnswerSection[] {
+  const text = (value: string) => value.trim() || "Not provided";
+  const phone = (code: string, national: string) =>
+    national.trim() ? formatPhone(code, national) : "Not provided";
+
+  return [
+    {
+      title: "1. Applicant",
+      rows: [
+        { label: "Full name", value: text(form.fullName) },
+        { label: "Contact number", value: phone(form.contactCode, form.contactNumber) },
+        { label: "Email", value: text(form.applicantEmail) },
+        { label: "Age", value: answerLabel("ageBracket", form.ageBracket) ?? "Not provided" },
+        ...(form.ageBracket === "minor"
+          ? [
+              { label: "Guardian name", value: text(form.guardianName) },
+              { label: "Guardian contact", value: phone(form.guardianCode, form.guardianContact) },
+              {
+                label: "Guardian relationship",
+                value:
+                  answerLabel("guardianRelationship", form.guardianRelationship) ?? "Not provided",
+              },
+              { label: "Guardian consent", value: form.guardianConsent ? "Given" : "Not given" },
+            ]
+          : []),
+        {
+          label: "Identification",
+          value: answerLabel("idDocumentType", form.idDocumentType) ?? "Not provided",
+        },
+        { label: "ID photo", value: form.idDocumentUrl ? "Photo uploaded" : "Not uploaded yet" },
+      ],
+    },
+    {
+      title: "2. Household",
+      rows: [
+        { label: "Pet allergies", value: yesNoLabel(form.petAllergies) ?? "Not provided" },
+        {
+          label: "Asthma / respiratory condition",
+          value: yesNoLabel(form.respiratoryIssues) ?? "Not provided",
+        },
+      ],
+    },
+    {
+      title: "3. Experience",
+      rows: [
+        { label: "Owned pets before", value: yesNoLabel(form.ownedPetsBefore) ?? "Not provided" },
+        ...(form.ownedPetsBefore === "yes"
+          ? [{ label: "Previous pet outcome", value: text(form.previousPetOutcome) }]
+          : []),
+        { label: "Current pets", value: yesNoLabel(form.hasCurrentPets) ?? "Not provided" },
+        ...(form.hasCurrentPets === "yes"
+          ? [{ label: "Current pet details", value: text(form.currentPetsDetails) }]
+          : []),
+      ],
+    },
+    {
+      title: "4. Care plan",
+      rows: [
+        { label: "Vet cost plan", value: text(form.vetCostPlan) },
+        { label: "Next of kin", value: text(form.nextOfKinName) },
+        { label: "Next of kin contact", value: phone(form.nextOfKinCode, form.nextOfKinContact) },
+      ],
+    },
+  ];
+}
+
+// Public, signed-in apply-to-adopt wizard for one animal: one question group
+// per screen (no scrolling), Back/Next with per-page checks, and a review
+// screen before submitting. Reuses the shared animal-form CSS so the wizard
 // needs no new layout styles.
 export function AdoptionApplicationForm({
   animal,
@@ -93,7 +190,9 @@ export function AdoptionApplicationForm({
   const { getToken } = useAuth();
   const { user } = useUser();
   const [form, setForm] = useState<FormState>(emptyForm);
+  const [stepIndex, setStepIndex] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploadingId, setIsUploadingId] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [submittedAnimal, setSubmittedAnimal] = useState<string | null>(null);
 
@@ -112,77 +211,178 @@ export function AdoptionApplicationForm({
     }));
   }
 
+  const steps = visibleSteps(form);
+  const step = steps[Math.min(stepIndex, steps.length - 1)] as StepId;
+
   function setField<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((previous) => ({ ...previous, [key]: value }));
   }
 
+  // Returns the first problem on the given page, or null when it is complete.
+  // The cat/asthma health gate is checked here (up front, before typing
+  // further) and again server-side, which is the layer that enforces it.
+  function pageError(page: StepId): string | null {
+    switch (page) {
+      case "applicant":
+        if (!form.fullName.trim()) return "Tell us your full name.";
+        if (!isValidPhoneNational(form.contactNumber, form.contactCode)) {
+          const band = dialCodeByCode(form.contactCode);
+          return `Enter a valid ${band.name} contact number (${expectedLengthLabel(form.contactCode)}).`;
+        }
+        if (!EMAIL_PATTERN.test(form.applicantEmail.trim())) {
+          return "Enter a valid email address.";
+        }
+        if (!form.ageBracket) return "Tell us whether you are 18 or older.";
+        return null;
+      case "guardian":
+        if (!form.guardianName.trim()) return "Tell us your parent or guardian's full name.";
+        if (!isValidPhoneNational(form.guardianContact, form.guardianCode)) {
+          const band = dialCodeByCode(form.guardianCode);
+          return `Enter a valid ${band.name} guardian number (${expectedLengthLabel(form.guardianCode)}).`;
+        }
+        if (!form.guardianRelationship) return "Choose their relationship to you.";
+        if (!form.guardianConsent) return "Your parent or guardian must consent to this adoption.";
+        return null;
+      case "identification":
+        if (!form.idDocumentType) return "Choose your identification document type.";
+        if (!form.idDocumentUrl) return "Upload a photo of your identification document.";
+        return null;
+      case "household":
+        if (!form.petAllergies) return "Tell us whether anyone has pet allergies.";
+        if (!form.respiratoryIssues) return "Tell us about asthma or respiratory conditions.";
+        if (animal?.type === "cat" && form.respiratoryIssues === "yes") {
+          return "Applicants with asthma or a respiratory condition cannot adopt cats, for health and safety. Our team can suggest a dog, rabbit or other pet instead.";
+        }
+        return null;
+      case "experience":
+        if (!form.ownedPetsBefore) return "Tell us whether you have owned pets before.";
+        if (form.ownedPetsBefore === "yes" && !form.previousPetOutcome.trim()) {
+          return "Tell us what happened to your previous pet(s).";
+        }
+        if (!form.hasCurrentPets) return "Tell us whether you currently have other pets.";
+        if (form.hasCurrentPets === "yes" && !form.currentPetsDetails.trim()) {
+          return "Tell us about your current pets.";
+        }
+        return null;
+      case "care":
+        if (!form.vetCostPlan.trim()) return "Tell us how you will cover veterinary costs.";
+        if (!form.nextOfKinName.trim()) {
+          return "Tell us who looks after the animal when you are unavailable.";
+        }
+        if (!isValidPhoneNational(form.nextOfKinContact, form.nextOfKinCode)) {
+          const band = dialCodeByCode(form.nextOfKinCode);
+          return `Enter a valid ${band.name} next-of-kin number (${expectedLengthLabel(form.nextOfKinCode)}).`;
+        }
+        return null;
+      case "review":
+        if (!form.adoptionFor) return "Choose who this adoption is for.";
+        return null;
+    }
+  }
+
+  function goNext() {
+    const problem = pageError(step);
+    if (problem) {
+      setErrorMessage(problem);
+      return;
+    }
+    setErrorMessage("");
+    setStepIndex((index) => Math.min(index + 1, steps.length - 1));
+  }
+
+  function goBack() {
+    setErrorMessage("");
+    setStepIndex((index) => Math.max(index - 1, 0));
+  }
+
+  async function handleIdPhoto(file: File | undefined) {
+    // Uploads immediately on selection so the review page never waits: the
+    // hosted URL is what the final submit sends. Content is not judged here -
+    // staff decide at review, and the applicant always continues.
+    if (!file) return;
+    if (file.type !== "image/png" && file.type !== "image/jpeg") {
+      setErrorMessage("Upload a photo of your identification document (JPG or PNG).");
+      return;
+    }
+    if (file.size > MAX_ID_PHOTO_BYTES) {
+      setErrorMessage(
+        "Your identification photo must be 8 MB or smaller. Please upload a JPG or PNG under 8 MB.",
+      );
+      return;
+    }
+    setErrorMessage("");
+    setIsUploadingId(true);
+    try {
+      const token = await getToken();
+      if (!token) throw new Error("Your sign-in session has expired. Please sign in again.");
+      const url = await uploadAdoptionIdDocument(file, token);
+      setField("idDocumentUrl", url);
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : "The identification photo could not be uploaded.",
+      );
+    } finally {
+      setIsUploadingId(false);
+    }
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const problem = pageError("review");
+    if (problem) {
+      setErrorMessage(problem);
+      return;
+    }
     setErrorMessage("");
     setIsSubmitting(true);
     try {
       const token = await getToken();
       if (!token) throw new Error("Your sign-in session has expired. Please sign in again.");
       if (!animal) throw new Error("This animal is not available for adoption right now.");
-      const householdSize = Number.parseInt(form.householdSize, 10);
-      if (!Number.isInteger(householdSize) || householdSize < 1) {
-        throw new Error("Enter the number of people in your household.");
+      if (!form.ageBracket) throw new Error("Tell us whether you are 18 or older.");
+      if (!form.idDocumentType || !form.idDocumentUrl) {
+        throw new Error("Upload your identification document before submitting.");
       }
-      // Age is derived from the calendar date at submit time, so staff always
-      // see how old the applicant was when they applied. Must be an adult.
-      const age = calculateAge(form.dateOfBirth);
-      if (age === null) {
-        throw new Error("Choose your date of birth from the calendar.");
+      if (!form.petAllergies || !form.respiratoryIssues) {
+        throw new Error("Answer every household question before submitting.");
       }
-      if (age < ADULT_AGE) {
-        throw new Error("Adoption applicants must be at least 18 years old.");
-      }
-      if (
-        !form.housingType ||
-        !form.tenure ||
-        !form.fencedYard ||
-        !form.petAllergies ||
-        !form.ownedPetsBefore ||
-        !form.hasCurrentPets ||
-        !form.adoptionFor ||
-        !form.householdAgreement
-      ) {
+      if (!form.ownedPetsBefore || !form.hasCurrentPets || !form.adoptionFor) {
         throw new Error("Answer every required question before submitting.");
       }
       await submitAdoptionApplication(
         {
           animalId: animal.id,
           fullName: form.fullName.trim(),
-          contactNumber: form.contactNumber.trim(),
+          contactNumber: formatPhone(form.contactCode, form.contactNumber),
           applicantEmail: form.applicantEmail.trim(),
-          residentialAddress: form.residentialAddress.trim(),
-          dateOfBirth: form.dateOfBirth.trim(),
-          housingType: form.housingType,
-          tenure: form.tenure,
-          landlordPetsAllowed: form.landlordPetsAllowed || undefined,
-          fencedYard: form.fencedYard,
-          householdSize,
-          childrenAges: form.childrenAges.trim() || undefined,
+          ageBracket: form.ageBracket,
+          ...(form.ageBracket === "minor"
+            ? {
+                guardianName: form.guardianName.trim(),
+                guardianContact: formatPhone(form.guardianCode, form.guardianContact),
+                guardianRelationship: form.guardianRelationship as "parent" | "guardian" | "other",
+                guardianConsent: true as const,
+              }
+            : {}),
+          idDocumentType: form.idDocumentType,
+          idDocumentUrl: form.idDocumentUrl,
           petAllergies: form.petAllergies,
+          respiratoryIssues: form.respiratoryIssues,
           ownedPetsBefore: form.ownedPetsBefore,
           previousPetOutcome: form.previousPetOutcome.trim() || undefined,
           hasCurrentPets: form.hasCurrentPets,
           currentPetsDetails: form.currentPetsDetails.trim() || undefined,
-          aloneHours: form.aloneHours.trim(),
-          primaryCaregiver: form.primaryCaregiver.trim(),
-          dailyRoutine: form.dailyRoutine.trim(),
           vetCostPlan: form.vetCostPlan.trim(),
-          travelCarePlan: form.travelCarePlan.trim(),
-          adoptionMotivation: form.adoptionMotivation.trim(),
+          nextOfKinName: form.nextOfKinName.trim(),
+          nextOfKinContact: formatPhone(form.nextOfKinCode, form.nextOfKinContact),
           adoptionFor: form.adoptionFor,
-          householdAgreement: form.householdAgreement,
-          consentHomeVisit: true,
-          agreeReturnToSpca: true,
-          confirmAccurate: true,
         },
         token,
       );
       setSubmittedAnimal(animal.name);
+      // The stashed Adopt intent has now been fulfilled - it must not
+      // resurface on the visitor's next sign-in.
+      clearPendingAdoption();
     } catch (error) {
       const message =
         error instanceof Error
@@ -195,7 +395,10 @@ export function AdoptionApplicationForm({
   }
 
   return (
-    <div className="home-page">
+    <div
+      className="home-page adoption-public-page"
+      style={animal?.photoUrls[0] ? ({ "--adoption-backdrop": `url("${animal.photoUrls[0]}")` } as CSSProperties) : undefined}
+    >
       <SiteHeader
         isLoaded={isLoaded}
         isSignedIn={isSignedIn}
@@ -260,7 +463,7 @@ export function AdoptionApplicationForm({
           </section>
         ) : submittedAnimal ? (
           <section className="rescue-form-panel">
-            <div className="rescue-success">
+            <div className="rescue-success" role="status" aria-live="polite">
               <p className="eyebrow">Application received</p>
               <h2>Thank you for applying to adopt {submittedAnimal}.</h2>
               <p>
@@ -292,461 +495,438 @@ export function AdoptionApplicationForm({
               </div>
             </div>
 
-            {errorMessage && <p className="invite-feedback error">{errorMessage}</p>}
-            <p className="security-note">
-              Signed in as {user?.primaryEmailAddress?.emailAddress ?? "your account"}. Your
-              application is saved against your account so you can track it.
-            </p>
+            {/* Wizard progress: one dot per visible page. Completed pages are
+                clickable so applicants can go back and fix an answer. */}
+            <ol className="wizard-progress" aria-label="Application progress">
+              {steps.map((id, index) => (
+                <li
+                  key={id}
+                  className={index === steps.indexOf(step) ? "active" : index < steps.indexOf(step) ? "done" : ""}
+                  aria-current={index === steps.indexOf(step) ? "step" : undefined}
+                >
+                  <button
+                    type="button"
+                    disabled={index >= steps.indexOf(step)}
+                    onClick={() => {
+                      setErrorMessage("");
+                      setStepIndex(index);
+                    }}
+                    aria-label={`${STEP_TITLES[id]}${index < steps.indexOf(step) ? " (completed)" : ""}`}
+                  >
+                    {index + 1}
+                  </button>
+                  <span>{STEP_TITLES[id]}</span>
+                </li>
+              ))}
+            </ol>
+
+            {errorMessage && (
+              <p className="invite-feedback error" role="alert">
+                {errorMessage}
+              </p>
+            )}
 
             <form className="animal-form rescue-form" onSubmit={(event) => void handleSubmit(event)}>
               <div className="animal-form-grid">
-                <h3 className="animal-form-full form-section-title">1. Applicant information</h3>
-                <label>
-                  <span className="form-label-text">Full name</span>
-                  <input
-                    type="text"
-                    placeholder="e.g. Mere Koro"
-                    value={form.fullName}
-                    onChange={(event) => setField("fullName", event.target.value)}
-                    required
-                  />
-                </label>
-                <label>
-                  <span className="form-label-text">Contact number</span>
-                  <input
-                    type="tel"
-                    placeholder="e.g. 9900000"
-                    value={form.contactNumber}
-                    onChange={(event) => setField("contactNumber", event.target.value)}
-                    required
-                  />
-                </label>
-                <label>
-                  <span className="form-label-text">Email address</span>
-                  <input
-                    type="email"
-                    placeholder="you@example.com"
-                    value={form.applicantEmail}
-                    onChange={(event) => setField("applicantEmail", event.target.value)}
-                    required
-                  />
-                </label>
-                <label>
-                  <span className="form-label-text">
-                    Date of birth
-                    {(() => {
-                      const age = calculateAge(form.dateOfBirth);
-                      return age === null ? null : (
-                        <em className="optional-hint"> (age {age} at application)</em>
-                      );
-                    })()}
-                  </span>
-                  <input
-                    type="date"
-                    max={new Date().toISOString().slice(0, 10)}
-                    value={form.dateOfBirth}
-                    onChange={(event) => setField("dateOfBirth", event.target.value)}
-                    required
-                  />
-                </label>
-                <label className="animal-form-full">
-                  <span className="form-label-text">Residential address</span>
-                  <input
-                    type="text"
-                    placeholder="Street, town / village"
-                    value={form.residentialAddress}
-                    onChange={(event) => setField("residentialAddress", event.target.value)}
-                    required
-                  />
-                </label>
-
-                <h3 className="animal-form-full form-section-title">2. Household &amp; living situation</h3>
-                <label>
-                  <span className="form-label-text">Housing type</span>
-                  <select
-                    value={form.housingType}
-                    onChange={(event) => setField("housingType", event.target.value as FormState["housingType"])}
-                    required
-                  >
-                    <option value="">Choose...</option>
-                    <option value="house">House</option>
-                    <option value="apartment">Apartment</option>
-                    <option value="other">Other</option>
-                  </select>
-                </label>
-                <fieldset className="radio-group">
-                  <legend className="form-label-text">Do you own or rent?</legend>
-                  <label className="radio-option">
-                    <input
-                      type="radio"
-                      name="tenure"
-                      value="own"
-                      checked={form.tenure === "own"}
-                      onChange={() => setField("tenure", "own")}
-                      required
-                    />
-                    Own
-                  </label>
-                  <label className="radio-option">
-                    <input
-                      type="radio"
-                      name="tenure"
-                      value="rent"
-                      checked={form.tenure === "rent"}
-                      onChange={() => setField("tenure", "rent")}
-                    />
-                    Rent
-                  </label>
-                </fieldset>
-                {form.tenure === "rent" && (
-                  <fieldset className="radio-group">
-                    <legend className="form-label-text">Does your landlord / lease allow pets?</legend>
-                    <label className="radio-option">
+                {step === "applicant" && (
+                  <>
+                    <h3 className="animal-form-full form-section-title">About you</h3>
+                    <label>
+                      <span className="form-label-text">Full name</span>
                       <input
-                        type="radio"
-                        name="landlordPetsAllowed"
-                        value="yes"
-                        checked={form.landlordPetsAllowed === "yes"}
-                        onChange={() => setField("landlordPetsAllowed", "yes")}
-                        required={form.tenure === "rent"}
+                        type="text"
+                        placeholder="e.g. Mere Koro"
+                        value={form.fullName}
+                        onChange={(event) => setField("fullName", event.target.value)}
                       />
-                      Yes
                     </label>
-                    <label className="radio-option">
+                    <PhoneInput
+                      label="Contact number"
+                      code={form.contactCode}
+                      number={form.contactNumber}
+                      onCodeChange={(code) => setField("contactCode", code)}
+                      onNumberChange={(value) => setField("contactNumber", value)}
+                    />
+                    <label>
+                      <span className="form-label-text">Email address</span>
                       <input
-                        type="radio"
-                        name="landlordPetsAllowed"
-                        value="no"
-                        checked={form.landlordPetsAllowed === "no"}
-                        onChange={() => setField("landlordPetsAllowed", "no")}
+                        type="email"
+                        placeholder="you@example.com"
+                        value={form.applicantEmail}
+                        onChange={(event) => setField("applicantEmail", event.target.value)}
                       />
-                      No
                     </label>
-                    <label className="radio-option">
+                    <fieldset className="radio-group animal-form-full">
+                      <legend className="form-label-text">Are you 18 or older?</legend>
+                      <label className="radio-option">
+                        <input
+                          type="radio"
+                          name="ageBracket"
+                          value="adult"
+                          checked={form.ageBracket === "adult"}
+                          onChange={() => setField("ageBracket", "adult")}
+                        />
+                        Adult (18+)
+                      </label>
+                      <label className="radio-option">
+                        <input
+                          type="radio"
+                          name="ageBracket"
+                          value="minor"
+                          checked={form.ageBracket === "minor"}
+                          onChange={() => setField("ageBracket", "minor")}
+                        />
+                        Under 18
+                      </label>
+                    </fieldset>
+                    {form.ageBracket === "minor" && (
+                      <p className="animal-form-full security-note">
+                        Because you are under 18, the next page asks for your
+                        parent or guardian&apos;s details and consent.
+                      </p>
+                    )}
+                  </>
+                )}
+
+                {step === "guardian" && (
+                  <>
+                    <h3 className="animal-form-full form-section-title">Parent or guardian</h3>
+                    <p className="animal-form-full security-note">
+                      Adoptions for under-18s need a parent or guardian who
+                      agrees to take legal responsibility for the animal.
+                    </p>
+                    <label>
+                      <span className="form-label-text">Guardian full name</span>
                       <input
-                        type="radio"
-                        name="landlordPetsAllowed"
-                        value="not_sure"
-                        checked={form.landlordPetsAllowed === "not_sure"}
-                        onChange={() => setField("landlordPetsAllowed", "not_sure")}
+                        type="text"
+                        placeholder="e.g. Jone Koro"
+                        value={form.guardianName}
+                        onChange={(event) => setField("guardianName", event.target.value)}
                       />
-                      Not sure
                     </label>
-                  </fieldset>
-                )}
-                <fieldset className="radio-group">
-                  <legend className="form-label-text">Fenced yard or secure outdoor space?</legend>
-                  <label className="radio-option">
-                    <input
-                      type="radio"
-                      name="fencedYard"
-                      value="yes"
-                      checked={form.fencedYard === "yes"}
-                      onChange={() => setField("fencedYard", "yes")}
-                      required
+                    <PhoneInput
+                      label="Guardian contact number"
+                      code={form.guardianCode}
+                      number={form.guardianContact}
+                      onCodeChange={(code) => setField("guardianCode", code)}
+                      onNumberChange={(value) => setField("guardianContact", value)}
                     />
-                    Yes
-                  </label>
-                  <label className="radio-option">
-                    <input
-                      type="radio"
-                      name="fencedYard"
-                      value="no"
-                      checked={form.fencedYard === "no"}
-                      onChange={() => setField("fencedYard", "no")}
-                    />
-                    No
-                  </label>
-                  <label className="radio-option">
-                    <input
-                      type="radio"
-                      name="fencedYard"
-                      value="na"
-                      checked={form.fencedYard === "na"}
-                      onChange={() => setField("fencedYard", "na")}
-                    />
-                    N/A
-                  </label>
-                </fieldset>
-                <label>
-                  <span className="form-label-text">People in household</span>
-                  <input
-                    type="number"
-                    min={1}
-                    step={1}
-                    placeholder="e.g. 4"
-                    value={form.householdSize}
-                    onChange={(event) => setField("householdSize", event.target.value)}
-                    required
-                  />
-                </label>
-                <label>
-                  <span className="form-label-text">
-                    Ages of children <em className="optional-hint">(if any)</em>
-                  </span>
-                  <input
-                    type="text"
-                    placeholder="e.g. 6 and 10"
-                    value={form.childrenAges}
-                    onChange={(event) => setField("childrenAges", event.target.value)}
-                  />
-                </label>
-                <fieldset className="radio-group">
-                  <legend className="form-label-text">Pet allergies in the household?</legend>
-                  <label className="radio-option">
-                    <input
-                      type="radio"
-                      name="petAllergies"
-                      value="yes"
-                      checked={form.petAllergies === "yes"}
-                      onChange={() => setField("petAllergies", "yes")}
-                      required
-                    />
-                    Yes
-                  </label>
-                  <label className="radio-option">
-                    <input
-                      type="radio"
-                      name="petAllergies"
-                      value="no"
-                      checked={form.petAllergies === "no"}
-                      onChange={() => setField("petAllergies", "no")}
-                    />
-                    No
-                  </label>
-                </fieldset>
-
-                <h3 className="animal-form-full form-section-title">3. Pet experience</h3>
-                <fieldset className="radio-group">
-                  <legend className="form-label-text">Have you owned pets before?</legend>
-                  <label className="radio-option">
-                    <input
-                      type="radio"
-                      name="ownedPetsBefore"
-                      value="yes"
-                      checked={form.ownedPetsBefore === "yes"}
-                      onChange={() => setField("ownedPetsBefore", "yes")}
-                      required
-                    />
-                    Yes
-                  </label>
-                  <label className="radio-option">
-                    <input
-                      type="radio"
-                      name="ownedPetsBefore"
-                      value="no"
-                      checked={form.ownedPetsBefore === "no"}
-                      onChange={() => setField("ownedPetsBefore", "no")}
-                    />
-                    No
-                  </label>
-                </fieldset>
-                {form.ownedPetsBefore === "yes" && (
-                  <label className="animal-form-full">
-                    <span className="form-label-text">What happened to your previous pet(s)?</span>
-                    <textarea
-                      rows={3}
-                      placeholder="e.g. lived with us for 12 years until old age"
-                      value={form.previousPetOutcome}
-                      onChange={(event) => setField("previousPetOutcome", event.target.value)}
-                      required={form.ownedPetsBefore === "yes"}
-                    />
-                  </label>
-                )}
-                <fieldset className="radio-group">
-                  <legend className="form-label-text">Do you currently have other pets?</legend>
-                  <label className="radio-option">
-                    <input
-                      type="radio"
-                      name="hasCurrentPets"
-                      value="yes"
-                      checked={form.hasCurrentPets === "yes"}
-                      onChange={() => setField("hasCurrentPets", "yes")}
-                      required
-                    />
-                    Yes
-                  </label>
-                  <label className="radio-option">
-                    <input
-                      type="radio"
-                      name="hasCurrentPets"
-                      value="no"
-                      checked={form.hasCurrentPets === "no"}
-                      onChange={() => setField("hasCurrentPets", "no")}
-                    />
-                    No
-                  </label>
-                </fieldset>
-                {form.hasCurrentPets === "yes" && (
-                  <label className="animal-form-full">
-                    <span className="form-label-text">Species, breed, age, vaccination / spay-neuter status</span>
-                    <textarea
-                      rows={3}
-                      placeholder="e.g. desexed female tabby, 3 years, fully vaccinated"
-                      value={form.currentPetsDetails}
-                      onChange={(event) => setField("currentPetsDetails", event.target.value)}
-                      required={form.hasCurrentPets === "yes"}
-                    />
-                  </label>
+                    <label>
+                      <span className="form-label-text">Relationship to you</span>
+                      <select
+                        value={form.guardianRelationship}
+                        onChange={(event) =>
+                          setField("guardianRelationship", event.target.value as FormState["guardianRelationship"])
+                        }
+                      >
+                        <option value="">Choose...</option>
+                        <option value="parent">Parent</option>
+                        <option value="guardian">Guardian</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </label>
+                    <label className="animal-form-full checkbox-option">
+                      <input
+                        type="checkbox"
+                        checked={form.guardianConsent}
+                        onChange={(event) => setField("guardianConsent", event.target.checked)}
+                      />
+                      My parent or guardian agrees to this adoption and will take
+                      legal responsibility for the animal.
+                    </label>
+                  </>
                 )}
 
-                <h3 className="animal-form-full form-section-title">4. Lifestyle &amp; care plan</h3>
-                <label>
-                  <span className="form-label-text">Hours alone per day</span>
-                  <input
-                    type="text"
-                    placeholder="e.g. 4 hours on weekdays"
-                    value={form.aloneHours}
-                    onChange={(event) => setField("aloneHours", event.target.value)}
-                    required
-                  />
-                </label>
-                <label>
-                  <span className="form-label-text">Primary caregiver</span>
-                  <input
-                    type="text"
-                    placeholder="Who feeds, walks, and handles vet visits?"
-                    value={form.primaryCaregiver}
-                    onChange={(event) => setField("primaryCaregiver", event.target.value)}
-                    required
-                  />
-                </label>
-                <label className="animal-form-full">
-                  <span className="form-label-text">Daily routine for exercise and care</span>
-                  <textarea
-                    rows={3}
-                    placeholder="Morning walk, feeding times, play, night routine..."
-                    value={form.dailyRoutine}
-                    onChange={(event) => setField("dailyRoutine", event.target.value)}
-                    required
-                  />
-                </label>
-                <label className="animal-form-full">
-                  <span className="form-label-text">How will you cover veterinary costs and emergencies?</span>
-                  <textarea
-                    rows={3}
-                    placeholder="Savings, pet insurance, family support..."
-                    value={form.vetCostPlan}
-                    onChange={(event) => setField("vetCostPlan", event.target.value)}
-                    required
-                  />
-                </label>
-                <label className="animal-form-full">
-                  <span className="form-label-text">Care plan when you travel</span>
-                  <textarea
-                    rows={3}
-                    placeholder="Who looks after the animal when you are away?"
-                    value={form.travelCarePlan}
-                    onChange={(event) => setField("travelCarePlan", event.target.value)}
-                    required
-                  />
-                </label>
-
-                <h3 className="animal-form-full form-section-title">5. Motivation</h3>
-                <label className="animal-form-full">
-                  <span className="form-label-text">Why do you want to adopt {animal.name}?</span>
-                  <textarea
-                    rows={4}
-                    placeholder="Tell us what draws you to this animal"
-                    value={form.adoptionMotivation}
-                    onChange={(event) => setField("adoptionMotivation", event.target.value)}
-                    required
-                  />
-                </label>
-                <fieldset className="radio-group">
-                  <legend className="form-label-text">Is this adoption for yourself or someone else?</legend>
-                  <label className="radio-option">
-                    <input
-                      type="radio"
-                      name="adoptionFor"
-                      value="self"
-                      checked={form.adoptionFor === "self"}
-                      onChange={() => setField("adoptionFor", "self")}
-                      required
-                    />
-                    Myself
-                  </label>
-                  <label className="radio-option">
-                    <input
-                      type="radio"
-                      name="adoptionFor"
-                      value="gift"
-                      checked={form.adoptionFor === "gift"}
-                      onChange={() => setField("adoptionFor", "gift")}
-                    />
-                    Gift for someone else
-                  </label>
-                </fieldset>
-                {form.adoptionFor === "gift" && (
-                  <p className="animal-form-full security-note">
-                    Gift adoptions get an extra review step - our team will
-                    confirm the recipient is ready for a pet.
-                  </p>
+                {step === "identification" && (
+                  <>
+                    <h3 className="animal-form-full form-section-title">Identification</h3>
+                    <p className="animal-form-full security-note">
+                      Upload a photo of your voter ID card, passport,
+                      driver&apos;s licence, or another photo ID so our team can
+                      verify who is applying. Our staff review every document -
+                      uploading never blocks your application.
+                    </p>
+                    <label>
+                      <span className="form-label-text">Document type</span>
+                      <select
+                        value={form.idDocumentType}
+                        onChange={(event) =>
+                          setField("idDocumentType", event.target.value as FormState["idDocumentType"])
+                        }
+                      >
+                        <option value="">Choose...</option>
+                        <option value="voter_card">Voter ID card</option>
+                        <option value="passport">Passport</option>
+                        <option value="drivers_licence">Driver&apos;s licence</option>
+                        <option value="other">Other photo ID</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span className="form-label-text">Document photo</span>
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg"
+                        onChange={(event) => void handleIdPhoto(event.target.files?.[0])}
+                        disabled={isUploadingId}
+                      />
+                    </label>
+                    {isUploadingId && (
+                      <p className="animal-form-full dashboard-data-state">Uploading photo...</p>
+                    )}
+                    {form.idDocumentUrl && (
+                      <div className="animal-form-full">
+                        <img
+                          src={form.idDocumentUrl}
+                          alt="Uploaded identification document"
+                          className="adoption-form-photo"
+                        />
+                        <p className="security-note">Photo uploaded. You can choose another file to replace it.</p>
+                      </div>
+                    )}
+                  </>
                 )}
-                <fieldset className="radio-group">
-                  <legend className="form-label-text">Do all household members agree?</legend>
-                  <label className="radio-option">
-                    <input
-                      type="radio"
-                      name="householdAgreement"
-                      value="yes"
-                      checked={form.householdAgreement === "yes"}
-                      onChange={() => setField("householdAgreement", "yes")}
-                      required
-                    />
-                    Yes
-                  </label>
-                  <label className="radio-option">
-                    <input
-                      type="radio"
-                      name="householdAgreement"
-                      value="no"
-                      checked={form.householdAgreement === "no"}
-                      onChange={() => setField("householdAgreement", "no")}
-                    />
-                    No
-                  </label>
-                </fieldset>
 
-                <h3 className="animal-form-full form-section-title">6. Acknowledgements</h3>
-                <label className="animal-form-full checkbox-option">
-                  <input
-                    type="checkbox"
-                    checked={form.consentHomeVisit}
-                    onChange={(event) => setField("consentHomeVisit", event.target.checked)}
-                    required
-                  />
-                  I consent to a potential home visit or follow-up check-in.
-                </label>
-                <label className="animal-form-full checkbox-option">
-                  <input
-                    type="checkbox"
-                    checked={form.agreeReturnToSpca}
-                    onChange={(event) => setField("agreeReturnToSpca", event.target.checked)}
-                    required
-                  />
-                  I agree to return the animal to SPCA Fiji rather than
-                  rehoming it independently if the adoption doesn&apos;t work out.
-                </label>
-                <label className="animal-form-full checkbox-option">
-                  <input
-                    type="checkbox"
-                    checked={form.confirmAccurate}
-                    onChange={(event) => setField("confirmAccurate", event.target.checked)}
-                    required
-                  />
-                  I confirm the information provided is accurate.
-                </label>
+                {step === "household" && (
+                  <>
+                    <h3 className="animal-form-full form-section-title">Your home</h3>
+                    <fieldset className="radio-group">
+                      <legend className="form-label-text">Pet allergies in the household?</legend>
+                      <label className="radio-option">
+                        <input
+                          type="radio"
+                          name="petAllergies"
+                          value="yes"
+                          checked={form.petAllergies === "yes"}
+                          onChange={() => setField("petAllergies", "yes")}
+                        />
+                        Yes
+                      </label>
+                      <label className="radio-option">
+                        <input
+                          type="radio"
+                          name="petAllergies"
+                          value="no"
+                          checked={form.petAllergies === "no"}
+                          onChange={() => setField("petAllergies", "no")}
+                        />
+                        No
+                      </label>
+                    </fieldset>
+                    <fieldset className="radio-group animal-form-full">
+                      <legend className="form-label-text">
+                        Do you have asthma or a respiratory condition?
+                      </legend>
+                      <label className="radio-option">
+                        <input
+                          type="radio"
+                          name="respiratoryIssues"
+                          value="yes"
+                          checked={form.respiratoryIssues === "yes"}
+                          onChange={() => setField("respiratoryIssues", "yes")}
+                        />
+                        Yes
+                      </label>
+                      <label className="radio-option">
+                        <input
+                          type="radio"
+                          name="respiratoryIssues"
+                          value="no"
+                          checked={form.respiratoryIssues === "no"}
+                          onChange={() => setField("respiratoryIssues", "no")}
+                        />
+                        No
+                      </label>
+                    </fieldset>
+                    {animal.type === "cat" && (
+                      <p className="animal-form-full security-note">
+                        {animal.name} is a cat: applicants with asthma or a
+                        respiratory condition cannot adopt cats, for health and
+                        safety. Our team can suggest a dog, rabbit or other pet.
+                      </p>
+                    )}
+                  </>
+                )}
+
+                {step === "experience" && (
+                  <>
+                    <h3 className="animal-form-full form-section-title">Pet experience</h3>
+                    <fieldset className="radio-group">
+                      <legend className="form-label-text">Have you owned pets before?</legend>
+                      <label className="radio-option">
+                        <input
+                          type="radio"
+                          name="ownedPetsBefore"
+                          value="yes"
+                          checked={form.ownedPetsBefore === "yes"}
+                          onChange={() => setField("ownedPetsBefore", "yes")}
+                        />
+                        Yes
+                      </label>
+                      <label className="radio-option">
+                        <input
+                          type="radio"
+                          name="ownedPetsBefore"
+                          value="no"
+                          checked={form.ownedPetsBefore === "no"}
+                          onChange={() => setField("ownedPetsBefore", "no")}
+                        />
+                        No
+                      </label>
+                    </fieldset>
+                    {form.ownedPetsBefore === "yes" && (
+                      <label className="animal-form-full">
+                        <span className="form-label-text">What happened to your previous pet(s)?</span>
+                        <textarea
+                          rows={3}
+                          placeholder="e.g. lived with us for 12 years until old age"
+                          value={form.previousPetOutcome}
+                          onChange={(event) => setField("previousPetOutcome", event.target.value)}
+                        />
+                      </label>
+                    )}
+                    <fieldset className="radio-group">
+                      <legend className="form-label-text">Do you currently have other pets?</legend>
+                      <label className="radio-option">
+                        <input
+                          type="radio"
+                          name="hasCurrentPets"
+                          value="yes"
+                          checked={form.hasCurrentPets === "yes"}
+                          onChange={() => setField("hasCurrentPets", "yes")}
+                        />
+                        Yes
+                      </label>
+                      <label className="radio-option">
+                        <input
+                          type="radio"
+                          name="hasCurrentPets"
+                          value="no"
+                          checked={form.hasCurrentPets === "no"}
+                          onChange={() => setField("hasCurrentPets", "no")}
+                        />
+                        No
+                      </label>
+                    </fieldset>
+                    {form.hasCurrentPets === "yes" && (
+                      <label className="animal-form-full">
+                        <span className="form-label-text">Species, breed, age, vaccination / spay-neuter status</span>
+                        <textarea
+                          rows={3}
+                          placeholder="e.g. desexed female tabby, 3 years, fully vaccinated"
+                          value={form.currentPetsDetails}
+                          onChange={(event) => setField("currentPetsDetails", event.target.value)}
+                        />
+                      </label>
+                    )}
+                  </>
+                )}
+
+                {step === "care" && (
+                  <>
+                    <h3 className="animal-form-full form-section-title">Care plan</h3>
+                    <label className="animal-form-full">
+                      <span className="form-label-text">How will you cover veterinary costs and emergencies?</span>
+                      <textarea
+                        rows={3}
+                        placeholder="Savings, pet insurance, family support..."
+                        value={form.vetCostPlan}
+                        onChange={(event) => setField("vetCostPlan", event.target.value)}
+                      />
+                    </label>
+                    <label>
+                      <span className="form-label-text">Next of kin full name</span>
+                      <input
+                        type="text"
+                        placeholder="Who looks after the animal when you are unavailable?"
+                        value={form.nextOfKinName}
+                        onChange={(event) => setField("nextOfKinName", event.target.value)}
+                      />
+                    </label>
+                    <PhoneInput
+                      label="Next of kin contact"
+                      code={form.nextOfKinCode}
+                      number={form.nextOfKinContact}
+                      onCodeChange={(code) => setField("nextOfKinCode", code)}
+                      onNumberChange={(value) => setField("nextOfKinContact", value)}
+                    />
+                  </>
+                )}
+
+                {step === "review" && (
+                  <>
+                    <h3 className="animal-form-full form-section-title">Review & submit</h3>
+                    <div className="animal-form-full">
+                      <h4 className="rescue-card-subtitle">Your answers so far</h4>
+                      <dl className="rescue-detail-grid">
+                        {reviewSummary(form).map((section) => (
+                          <div key={section.title} className="rescue-detail-item full">
+                            <dt>{section.title}</dt>
+                            <dd>
+                              {section.rows.map((row) => (
+                                <p key={row.label} className="adoption-answer-row">
+                                  <strong>{row.label}:</strong> {row.value}
+                                </p>
+                              ))}
+                            </dd>
+                          </div>
+                        ))}
+                      </dl>
+                      <p className="security-note">
+                        Use the numbered steps above to go back and change any answer.
+                      </p>
+                    </div>
+                    <fieldset className="radio-group animal-form-full">
+                      <legend className="form-label-text">Is this adoption for yourself or someone else?</legend>
+                      <label className="radio-option">
+                        <input
+                          type="radio"
+                          name="adoptionFor"
+                          value="self"
+                          checked={form.adoptionFor === "self"}
+                          onChange={() => setField("adoptionFor", "self")}
+                        />
+                        Myself
+                      </label>
+                      <label className="radio-option">
+                        <input
+                          type="radio"
+                          name="adoptionFor"
+                          value="gift"
+                          checked={form.adoptionFor === "gift"}
+                          onChange={() => setField("adoptionFor", "gift")}
+                        />
+                        Gift for someone else
+                      </label>
+                    </fieldset>
+                    {form.adoptionFor === "gift" && (
+                      <p className="animal-form-full security-note">
+                        Gift adoptions get an extra review step - our team will
+                        confirm the recipient is ready for a pet.
+                      </p>
+                    )}
+                  </>
+                )}
               </div>
 
               <div className="rescue-form-actions">
-                <button
-                  type="submit"
-                  className="teal-button rescue-submit-button"
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting ? "Submitting application..." : "Submit adoption application"}
-                </button>
+                {steps.indexOf(step) > 0 && (
+                  <button type="button" className="ghost-button" onClick={goBack} disabled={isSubmitting}>
+                    Back
+                  </button>
+                )}
+                {step !== "review" ? (
+                  <button type="button" className="teal-button rescue-submit-button" onClick={goNext} disabled={isSubmitting}>
+                    Next
+                  </button>
+                ) : (
+                  <button
+                    type="submit"
+                    className="teal-button rescue-submit-button"
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting ? "Submitting application..." : "Submit adoption application"}
+                  </button>
+                )}
               </div>
             </form>
           </section>

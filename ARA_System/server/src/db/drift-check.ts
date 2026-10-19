@@ -4,6 +4,7 @@ import {
 	adoptionApplications,
 	animals,
 	auditLogs,
+	breeds,
 	donations,
 	notifications,
 	rescueReports,
@@ -16,6 +17,7 @@ import {
 // table once shipped without our columns while drift stayed silent.
 const tables = [
 	animals,
+	breeds,
 	rescueReports,
 	adoptionApplications,
 	vetAppointments,

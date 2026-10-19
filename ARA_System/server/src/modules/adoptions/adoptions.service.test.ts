@@ -34,12 +34,9 @@ function currentImpl(name: string) {
 	return fn;
 }
 
-// node:test's mock.module takes an options object. The installed @types/node
-// still types it with the older `namedExports` key, but the runtime prefers
-// `exports` (passing `namedExports` prints a deprecation warning on every
-// run), so the options are cast through unknown to use the current shape.
-function moduleMock(specifier: string | URL, exports: Record<string, unknown>) {
-	mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
+// node:test's mock.module exposes ESM named exports through `namedExports`.
+function moduleMock(specifier: string | URL, namedExports: Record<string, unknown>) {
+	mock.module(specifier, { namedExports });
 }
 
 moduleMock("./adoptions.repository.js", {
@@ -51,11 +48,14 @@ moduleMock("./adoptions.repository.js", {
 	findAdoptionConflict: (animalId: string, excludeId: string) =>
 		currentImpl("findAdoptionConflict")(animalId, excludeId),
 	createAdoptionApplication: (input: unknown) => currentImpl("createAdoptionApplication")(input),
+	deleteAdoptionApplication: (id: string) => currentImpl("deleteAdoptionApplication")(id),
 	updateAdoptionApplicationStatus: (id: string, input: unknown) =>
 		currentImpl("updateAdoptionApplicationStatus")(id, input),
 	createAdoptionStatusHistoryEntry: (input: unknown) => currentImpl("createAdoptionStatusHistoryEntry")(input),
 	findAdoptionStatusHistoryByApplication: (applicationId: string) =>
 		currentImpl("findAdoptionStatusHistoryByApplication")(applicationId),
+	findAdoptionStatusHistoryByApplications: (applicationIds: string[]) =>
+		currentImpl("findAdoptionStatusHistoryByApplications")(applicationIds),
 });
 
 moduleMock("../animals/animals.service.js", {
@@ -103,6 +103,8 @@ const {
 	listMyAdoptionApplications,
 	submitAdoptionApplication,
 	transitionAdoptionApplication,
+	uploadAdoptionIdDocument,
+	withdrawAdoptionApplication,
 } = await import("./adoptions.service.js");
 
 const APPLICATION_ID = "11111111-1111-1111-1111-111111111111";
@@ -117,6 +119,7 @@ const notificationSpy: Array<Record<string, unknown>> = [];
 const emailSpy: Array<Record<string, unknown>> = [];
 const staffNotificationSpy: Array<Record<string, unknown>> = [];
 const staffEmailSpy: Array<Record<string, unknown>> = [];
+const deletedApplicationSpy: string[] = [];
 
 function baseApplication(overrides: Record<string, unknown> = {}) {
 	return {
@@ -131,24 +134,28 @@ function baseApplication(overrides: Record<string, unknown> = {}) {
 		contactNumber: "9900000",
 		applicantEmail: "mere@example.com",
 		residentialAddress: "Suva",
-		dateOfBirth: "1995",
+		ageBracket: "adult",
+		guardianName: null,
+		guardianContact: null,
+		guardianRelationship: null,
+		guardianConsent: false,
+		idDocumentType: "voter_card",
+		idDocumentUrl: "https://res.cloudinary.com/demo/id.jpg",
 		housingType: "house",
-		tenure: "own",
-		landlordPetsAllowed: null,
 		fencedYard: "yes",
-		householdSize: 4,
-		childrenAges: null,
 		petAllergies: "no",
+		respiratoryIssues: "no",
 		ownedPetsBefore: "no",
 		previousPetOutcome: null,
 		hasCurrentPets: "no",
 		currentPetsDetails: null,
-		aloneHours: "4 hours",
-		primaryCaregiver: "Mere Koro",
-		dailyRoutine: "Morning walk",
+		aloneHours: null,
+		primaryCaregiver: null,
+		dailyRoutine: null,
 		vetCostPlan: "Savings",
-		travelCarePlan: "Neighbour",
-		adoptionMotivation: "Companion",
+		travelCarePlan: null,
+		nextOfKinName: "Jone Koro",
+		nextOfKinContact: "+679 9900001",
 		adoptionFor: "self",
 		householdAgreement: "yes",
 		consentHomeVisit: true,
@@ -172,6 +179,9 @@ function baseAnimal(overrides: Record<string, unknown> = {}) {
 		breed: null,
 		status: "intake",
 		deletedAt: null,
+		// Most submit tests use this directly; the clearance gate is exercised
+		// explicitly by tests that override it to false.
+		medicallyCleared: true,
 		...overrides,
 	};
 }
@@ -198,6 +208,7 @@ function resetImpls() {
 	emailSpy.length = 0;
 	staffNotificationSpy.length = 0;
 	staffEmailSpy.length = 0;
+	deletedApplicationSpy.length = 0;
 
 	repo("findAllAdoptionApplications", async () => []);
 	repo("findAdoptionApplicationsByApplicant", async () => []);
@@ -205,6 +216,10 @@ function resetImpls() {
 	repo("findActiveAdoptionApplication", async () => undefined);
 	repo("findAdoptionConflict", async () => undefined);
 	repo("findAdoptionStatusHistoryByApplication", async () => []);
+	repo("findAdoptionStatusHistoryByApplications", async () => []);
+	repo("deleteAdoptionApplication", async (id: string) => {
+		deletedApplicationSpy.push(id);
+	});
 	// Approval is gated on veterinary clearance, so the default animal is
 	// cleared. Tests that exercise the gate stub this out explicitly.
 	repo("getAnimalById", async () => baseAnimal({ medicallyCleared: true }));
@@ -255,6 +270,7 @@ describe("adoptions.service", () => {
 			"approved",
 			"completed",
 			"rejected",
+			"withdrawn",
 		]);
 	});
 
@@ -269,15 +285,34 @@ describe("adoptions.service", () => {
 	});
 
 	describe("listMyAdoptionApplications", () => {
-		it("queries by the caller's clerk user id", async () => {
+		it("queries by the caller's clerk user id and attaches each application's history", async () => {
 			const rows = [baseApplication()];
+			const history = [
+				{ applicationId: APPLICATION_ID, status: "submitted", createdAt: new Date() },
+				{ applicationId: APPLICATION_ID, status: "under_review", createdAt: new Date() },
+			];
 			repo("findAdoptionApplicationsByApplicant", async (id: string) => {
 				assert.equal(id, APPLICANT_ID);
 				return rows;
 			});
+			repo("findAdoptionStatusHistoryByApplications", async (ids: string[]) => {
+				assert.deepEqual(ids, [APPLICATION_ID]);
+				return history;
+			});
 
 			const result = await listMyAdoptionApplications(APPLICANT_ID);
-			assert.equal(result, rows);
+
+			assert.equal(result.length, 1);
+			assert.equal(result[0].id, APPLICATION_ID);
+			assert.deepEqual(result[0].history, history);
+		});
+
+		it("skips the history lookup when the applicant has no applications", async () => {
+			repo("findAdoptionApplicationsByApplicant", async () => []);
+
+			const result = await listMyAdoptionApplications(APPLICANT_ID);
+
+			assert.deepEqual(result, []);
 		});
 	});
 
@@ -306,32 +341,21 @@ describe("adoptions.service", () => {
 			animalId: ANIMAL_ID,
 			fullName: "Mere Koro",
 			contactNumber: "9900000",
-			applicantEmail: "mere@example.com",
-			residentialAddress: "Suva",
-			dateOfBirth: "1995",
-			housingType: "house",
-			tenure: "own",
-			landlordPetsAllowed: undefined,
-			fencedYard: "yes",
-			householdSize: 4,
-			childrenAges: undefined,
-			petAllergies: "no",
-			ownedPetsBefore: "no",
-			previousPetOutcome: undefined,
-			hasCurrentPets: "no",
-			currentPetsDetails: undefined,
-			aloneHours: "4 hours",
-			primaryCaregiver: "Mere Koro",
-			dailyRoutine: "Morning walk",
-			vetCostPlan: "Savings",
-			travelCarePlan: "Neighbour",
-			adoptionMotivation: "Companion",
-			adoptionFor: "self",
-			householdAgreement: "yes",
-			consentHomeVisit: true,
-			agreeReturnToSpca: true,
-			confirmAccurate: true,
-		};
+		applicantEmail: "mere@example.com",
+		ageBracket: "adult",
+		idDocumentType: "voter_card",
+		idDocumentUrl: "https://res.cloudinary.com/demo/id.jpg",
+		petAllergies: "no",
+		respiratoryIssues: "no",
+		ownedPetsBefore: "no",
+		previousPetOutcome: undefined,
+		hasCurrentPets: "no",
+		currentPetsDetails: undefined,
+		vetCostPlan: "Savings",
+		nextOfKinName: "Jone Koro",
+		nextOfKinContact: "+679 9900001",
+		adoptionFor: "self",
+	};
 
 		it("creates a submitted application and its first history entry", async () => {
 			repo("getAnimalById", async () => baseAnimal());
@@ -346,7 +370,8 @@ describe("adoptions.service", () => {
 			assert.equal(app.status, "submitted");
 			assert.equal(app.fullName, "Mere Koro");
 			assert.equal(app.adoptionFor, "self");
-			assert.equal(app.consentHomeVisit, true);
+			assert.equal(app.vetCostPlan, "Savings");
+			assert.equal(app.nextOfKinName, "Jone Koro");
 			assert.equal(historySpy.length, 1);
 			assert.deepEqual(historySpy[0], {
 				applicationId: APPLICATION_ID,
@@ -379,6 +404,94 @@ describe("adoptions.service", () => {
 			repo("findActiveAdoptionApplication", async () => baseApplication());
 
 			await assert.rejects(submitAdoptionApplication(input, APPLICANT_ID), /already applied/);
+		});
+
+		it("blocks a cat adoption for an applicant with a respiratory condition", async () => {
+			repo("getAnimalById", async () => baseAnimal({ type: "cat" }));
+
+			await assert.rejects(
+				submitAdoptionApplication({ ...input, respiratoryIssues: "yes" }, APPLICANT_ID),
+				/respiratory condition/,
+			);
+		});
+
+		it("allows a dog adoption for an applicant with a respiratory condition", async () => {
+			repo("getAnimalById", async () => baseAnimal({ type: "dog" }));
+			repo("findActiveAdoptionApplication", async () => undefined);
+			repo("createAdoptionApplication", async (data: Record<string, unknown>) => ({ id: APPLICATION_ID, ...data }));
+
+			const app = await submitAdoptionApplication(
+				{ ...input, respiratoryIssues: "yes" },
+				APPLICANT_ID,
+			);
+
+			assert.equal(app.id, APPLICATION_ID);
+		});
+
+		it("stores guardian details for a minor applicant", async () => {
+			repo("getAnimalById", async () => baseAnimal());
+			repo("findActiveAdoptionApplication", async () => undefined);
+			let stored: Record<string, unknown> = {};
+			repo("createAdoptionApplication", async (data: Record<string, unknown>) => {
+				stored = data;
+				return { id: APPLICATION_ID, ...data };
+			});
+
+			await submitAdoptionApplication(
+				{
+					...input,
+					ageBracket: "minor",
+					guardianName: "Jone Koro",
+					guardianContact: "9900001",
+					guardianRelationship: "parent",
+					guardianConsent: true,
+				},
+				APPLICANT_ID,
+			);
+
+			assert.equal(stored.guardianName, "Jone Koro");
+			assert.equal(stored.guardianConsent, true);
+		});
+
+		it("stores the identification document on submit", async () => {
+			repo("getAnimalById", async () => baseAnimal());
+			repo("findActiveAdoptionApplication", async () => undefined);
+			let stored: Record<string, unknown> = {};
+			repo("createAdoptionApplication", async (data: Record<string, unknown>) => {
+				stored = data;
+				return { id: APPLICATION_ID, ...data };
+			});
+
+			await submitAdoptionApplication(input, APPLICANT_ID);
+
+			assert.equal(stored.idDocumentType, "voter_card");
+			assert.equal(stored.idDocumentUrl, "https://res.cloudinary.com/demo/id.jpg");
+		});
+
+		it("stores the next-of-kin backup contact on submit", async () => {
+			repo("getAnimalById", async () => baseAnimal());
+			repo("findActiveAdoptionApplication", async () => undefined);
+			let stored: Record<string, unknown> = {};
+			repo("createAdoptionApplication", async (data: Record<string, unknown>) => {
+				stored = data;
+				return { id: APPLICATION_ID, ...data };
+			});
+
+			await submitAdoptionApplication(input, APPLICANT_ID);
+
+			assert.equal(stored.nextOfKinName, "Jone Koro");
+			assert.equal(stored.nextOfKinContact, "+679 9900001");
+		});
+
+		it("uploads an ID photo through the injected uploader", async () => {
+			const seen: Buffer[] = [];
+			const url = await uploadAdoptionIdDocument(Buffer.from("fake-image"), async (file) => {
+				seen.push(file);
+				return "https://res.cloudinary.com/demo/uploaded.jpg";
+			});
+
+			assert.equal(url, "https://res.cloudinary.com/demo/uploaded.jpg");
+			assert.equal(seen.length, 1);
 		});
 
 		it("notifies the applicant in-app and by email on submit", async () => {
@@ -424,6 +537,42 @@ describe("adoptions.service", () => {
 			assert.equal(notificationSpy.length, 1);
 			assert.equal(staffNotificationSpy.length, 0);
 		});
+
+		it("rejects an application for an animal that is not medically cleared", async () => {
+			repo("getAnimalById", async () => baseAnimal({ medicallyCleared: false }));
+
+			await assert.rejects(
+				submitAdoptionApplication(input, APPLICANT_ID),
+				/not yet medically cleared/,
+			);
+		});
+
+		it("audits the submission", async () => {
+			repo("getAnimalById", async () => baseAnimal());
+			repo("findActiveAdoptionApplication", async () => undefined);
+			repo("createAdoptionApplication", async (data: Record<string, unknown>) => ({ id: APPLICATION_ID, ...data }));
+
+			await submitAdoptionApplication(input, APPLICANT_ID);
+
+			assert.equal(auditSpy.length, 1);
+			assert.equal(auditSpy[0].action, "adoption.application.submitted");
+			assert.deepEqual(auditSpy[0].metadata, { animalId: ANIMAL_ID });
+		});
+
+		it("removes the application if its first history entry cannot be written", async () => {
+			repo("getAnimalById", async () => baseAnimal());
+			repo("findActiveAdoptionApplication", async () => undefined);
+			repo("createAdoptionApplication", async (data: Record<string, unknown>) => ({ id: APPLICATION_ID, ...data }));
+			repo("createAdoptionStatusHistoryEntry", async () => {
+				throw new Error("history insert failed");
+			});
+
+			await assert.rejects(
+				submitAdoptionApplication(input, APPLICANT_ID),
+				/history insert failed/,
+			);
+			assert.deepEqual(deletedApplicationSpy, [APPLICATION_ID]);
+		});
 	});
 
 	describe("transitionAdoptionApplication", () => {
@@ -455,14 +604,14 @@ describe("adoptions.service", () => {
 			assert.equal(current.status, "under_review");
 		});
 
-		it("moves under_review -> approved when the animal is cleared and no conflict exists", async () => {
+		it("approves the application and assigns the animal to the adopter", async () => {
 			const current = statefulApplication("under_review");
 
 			const result = await transitionAdoptionApplication(APPLICATION_ID, { status: "approved" }, ACTOR_ID);
 
 			assert.equal(result?.status, "approved");
 			assert.equal(current.status, "approved");
-			assert.equal(animalUpdateSpy.length, 0);
+			assert.deepEqual(animalUpdateSpy, [{ status: "adopted" }]);
 		});
 
 		it("blocks approval when the animal is not medically cleared", async () => {
@@ -478,7 +627,7 @@ describe("adoptions.service", () => {
 			assert.equal(animalUpdateSpy.length, 0);
 		});
 
-		it("moves approved -> completed and marks the animal adopted", async () => {
+		it("moves approved -> completed and keeps the animal adopted", async () => {
 			const current = statefulApplication("approved");
 
 			const result = await transitionAdoptionApplication(APPLICATION_ID, { status: "completed" }, ACTOR_ID);
@@ -597,6 +746,104 @@ describe("adoptions.service", () => {
 			assert.equal(result?.status, "under_review");
 			assert.equal(historySpy.length, 1);
 			assert.equal(auditSpy.length, 1);
+		});
+
+		it("turns a unique-violation from a concurrent approval into a conflict", async () => {
+			statefulApplication("under_review");
+			repo("updateAdoptionApplicationStatus", async () => {
+				throw Object.assign(
+					new Error("duplicate key value violates unique constraint admission_animal"),
+					{ code: "23505" },
+				);
+			});
+
+			await assert.rejects(
+				transitionAdoptionApplication(APPLICATION_ID, { status: "approved" }, ACTOR_ID),
+				/Another applicant has already been approved/,
+			);
+		});
+
+		it("refuses to let a reviewer approve their own application", async () => {
+			statefulApplication("under_review");
+
+			await assert.rejects(
+				transitionAdoptionApplication(APPLICATION_ID, { status: "approved" }, APPLICANT_ID),
+				/your own adoption application/,
+			);
+		});
+
+		it("restores the previous status if marking the animal adopted fails", async () => {
+			const current = statefulApplication("approved");
+			repo("updateAnimalProfile", async () => {
+				throw new Error("animal update failed");
+			});
+
+			await assert.rejects(
+				transitionAdoptionApplication(APPLICATION_ID, { status: "completed" }, ACTOR_ID),
+				/animal update failed/,
+			);
+			assert.equal(current.status, "approved");
+		});
+	});
+
+	describe("withdrawAdoptionApplication", () => {
+		it("withdraws the applicant's own submitted application", async () => {
+			const current = statefulApplication("submitted");
+
+			const result = await withdrawAdoptionApplication(APPLICATION_ID, APPLICANT_ID);
+
+			assert.equal(result?.status, "withdrawn");
+			assert.equal(current.status, "withdrawn");
+			assert.equal(historySpy[0].status, "withdrawn");
+			assert.equal(auditSpy[0].action, "adoption.application.withdrawn");
+		});
+
+		it("notifies the applicant that their withdrawal was recorded", async () => {
+			statefulApplication("submitted");
+
+			await withdrawAdoptionApplication(APPLICATION_ID, APPLICANT_ID);
+
+			// Withdrawal is a status change, so it must reach the applicant the
+			// same way every staff transition does: an in-app row plus email.
+			assert.equal(notificationSpy.length, 1);
+			assert.equal(notificationSpy[0].recipientClerkUserId, APPLICANT_ID);
+			assert.equal(notificationSpy[0].toStatus, "withdrawn");
+			assert.equal(emailSpy.length, 1);
+			assert.equal(emailSpy[0].toStatus, "withdrawn");
+		});
+
+		it("still records the withdrawal when the notification or email fails", async () => {
+			const current = statefulApplication("submitted");
+			repo("createAdoptionStatusNotification", async () => {
+				throw new Error("notification store down");
+			});
+			repo("sendAdoptionStatusEmail", async () => {
+				throw new Error("mail down");
+			});
+
+			const result = await withdrawAdoptionApplication(APPLICATION_ID, APPLICANT_ID);
+
+			assert.equal(result?.status, "withdrawn");
+			assert.equal(current.status, "withdrawn");
+			assert.equal(auditSpy[0].action, "adoption.application.withdrawn");
+		});
+
+		it("refuses to withdraw someone else's application", async () => {
+			statefulApplication("submitted");
+
+			await assert.rejects(
+				withdrawAdoptionApplication(APPLICATION_ID, "user-someone-else"),
+				/your own adoption application/,
+			);
+		});
+
+		it("refuses to withdraw an application that is already decided", async () => {
+			statefulApplication("rejected");
+
+			await assert.rejects(
+				withdrawAdoptionApplication(APPLICATION_ID, APPLICANT_ID),
+				/terminal state/,
+			);
 		});
 	});
 });

@@ -67,6 +67,14 @@ export function ManagerDashboard({ onNavigate }: ManagerDashboardProps) {
 
   const userRole = user?.publicMetadata.role;
   const hasManagerAccess = userRole === "manager" || userRole === "admin";
+  const isAdmin = userRole === "admin";
+  // Managers may invite staff/veterinarian/dispatcher only - the Manager and
+  // Admin options are admin-only (enforced server-side too; this just keeps
+  // the dropdown honest). INVITABLE_ROLES itself stays complete so the
+  // frontend/backend parity test keeps passing.
+  const inviteRoleOptions = Object.entries(INVITABLE_ROLES).filter(
+    ([value]) => isAdmin || (value !== "manager" && value !== "admin"),
+  );
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn || !hasManagerAccess) return;
@@ -103,7 +111,6 @@ export function ManagerDashboard({ onNavigate }: ManagerDashboardProps) {
     event.preventDefault();
     setIsSubmitting(true);
     setInvitationError("");
-    setIsSubmitting(true);
 
     try {
       const token = await getToken();
@@ -123,7 +130,10 @@ export function ManagerDashboard({ onNavigate }: ManagerDashboardProps) {
       });
       const result = await readApiResponse<{
         error?: string;
+        id?: string;
         emailAddress?: string;
+        role?: unknown;
+        status?: string;
       }>(response);
 
       if (!response.ok) {
@@ -134,6 +144,18 @@ export function ManagerDashboard({ onNavigate }: ManagerDashboardProps) {
         `Invitation sent to ${result.emailAddress ?? emailAddress}.`,
       );
       setEmailAddress("");
+      // Show the new invitation immediately instead of waiting for a reload.
+      if (result.id) {
+        setPendingInvitations((previous) => [
+          ...previous,
+          {
+            id: result.id as string,
+            emailAddress: result.emailAddress ?? emailAddress,
+            role: result.role ?? role,
+            status: "Pending" as const,
+          },
+        ]);
+      }
     } catch (error) {
       setInvitationError(
         error instanceof Error
@@ -447,7 +469,15 @@ export function ManagerDashboard({ onNavigate }: ManagerDashboardProps) {
               })}
             {!staffLoading &&
               !staffError &&
-              pendingInvitations.map((invitation) => (
+              pendingInvitations.map((invitation) => {
+                // Managers may not revoke manager/admin invitations (server
+                // enforces this too); hide the button from them entirely.
+                const invitationIsAdminOnly =
+                  String(invitation.role) === "manager" ||
+                  String(invitation.role) === "admin";
+                const canRevokeInvite =
+                  (isAdmin || !invitationIsAdminOnly) && !isSubmitting;
+                return (
                 <div className="staff-row" key={invitation.id}>
                   <div className="staff-avatar">?</div>
                   <div className="staff-details">
@@ -461,12 +491,13 @@ export function ManagerDashboard({ onNavigate }: ManagerDashboardProps) {
                     type="button"
                     className="danger-button small-button"
                     onClick={() => void revokePendingInvite(invitation)}
-                    disabled={isSubmitting}
+                    disabled={!canRevokeInvite}
                   >
                     Revoke
                   </button>
                 </div>
-              ))}
+                );
+              })}
           </div>
           <p className="security-note">
             Use the dropdown to change a member&apos;s role or revoke their
@@ -499,7 +530,7 @@ export function ManagerDashboard({ onNavigate }: ManagerDashboardProps) {
                 value={role}
                 onChange={(event) => setRole(event.target.value)}
               >
-                {Object.entries(INVITABLE_ROLES).map(([value, label]) => (
+                {inviteRoleOptions.map(([value, label]) => (
                   <option key={value} value={value}>
                     {label}
                   </option>

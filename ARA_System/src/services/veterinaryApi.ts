@@ -1,5 +1,7 @@
 import type { MedicalQueueAnimal, MedicalRecord, VeterinaryAppointment, VeterinaryDashboard } from "../types/veterinary";
 
+import { notifyAccountDataChanged } from "../utils/appointments";
+import type { VeterinaryEmergencyAction, VeterinaryEmergencyResponse } from "../types/veterinary";
 const apiBaseUrl = import.meta.env.VITE_API_URL ?? "http://localhost:8787";
 
 async function request<T>(path: string, token: string, options?: RequestInit): Promise<T> {
@@ -9,6 +11,7 @@ async function request<T>(path: string, token: string, options?: RequestInit): P
   });
   const result = (await response.json()) as T | { error?: string };
   if (!response.ok) throw new Error((result as { error?: string }).error ?? "Veterinary request failed");
+  if (options?.method && options.method !== "GET") notifyAccountDataChanged();
   return result as T;
 }
 
@@ -18,6 +21,9 @@ export const fetchMedicalRecords = (token: string) => request<MedicalQueueAnimal
 export const fetchAppointmentAnimals = (token: string) => request<MedicalQueueAnimal[]>("/booking-animals", token);
 export const fetchMedicalRecord = (token: string, animalId: string) => request<MedicalRecord>(`/animals/${animalId}`, token);
 export const fetchVeterinaryAppointments = (token: string) => request<VeterinaryAppointment[]>("/appointments", token);
+export const fetchVeterinaryEmergencyResponses = (token: string) => request<VeterinaryEmergencyResponse[]>("/emergency-responses", token);
+export const coordinateVeterinaryEmergency = (token: string, animalId: string, input: VeterinaryEmergencyAction) =>
+  request<VeterinaryEmergencyResponse>(`/emergency-responses/${animalId}`, token, { method: "POST", body: JSON.stringify(input) });
 
 export function createExamination(token: string, animalId: string, input: Record<string, unknown>) {
   return request(`/animals/${animalId}/examination`, token, { method: "POST", body: JSON.stringify(input) });

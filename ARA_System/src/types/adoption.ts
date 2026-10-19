@@ -6,7 +6,8 @@ export type AdoptionStatus =
   | "under_review"
   | "approved"
   | "completed"
-  | "rejected";
+  | "rejected"
+  | "withdrawn";
 
 export type AdoptionStatusHistoryEntry = {
   id: string;
@@ -40,12 +41,22 @@ export type AdoptionApplication = {
   familyDetails: string | null;
   existingPets: string | null;
   animalExperience: string | null;
-  // Section 1: applicant information.
+  // Section 1: applicant information (self-declared adult/minor bracket;
+  // guardian fields required for minors, null for adults).
   fullName: string | null;
   contactNumber: string | null;
   applicantEmail: string | null;
   residentialAddress: string | null;
   dateOfBirth: string | null;
+  ageBracket: "adult" | "minor" | null;
+  guardianName: string | null;
+  guardianContact: string | null;
+  guardianRelationship: "parent" | "guardian" | "other" | null;
+  guardianConsent: boolean;
+  // Identification document (type + hosted photo URL). Required on new
+  // applications; staff judge the document at review.
+  idDocumentType: "voter_card" | "passport" | "drivers_licence" | "other" | null;
+  idDocumentUrl: string | null;
   // Section 2: household & living situation.
   housingType: "house" | "apartment" | "other" | null;
   tenure: "own" | "rent" | null;
@@ -54,19 +65,22 @@ export type AdoptionApplication = {
   householdSize: number | null;
   childrenAges: string | null;
   petAllergies: "yes" | "no" | null;
+  respiratoryIssues: "yes" | "no" | null;
   // Section 3: pet experience.
   ownedPetsBefore: "yes" | "no" | null;
   previousPetOutcome: string | null;
   hasCurrentPets: "yes" | "no" | null;
   currentPetsDetails: string | null;
-  // Section 4: lifestyle & care plan.
+  // Section 4: care plan (vet costs + next-of-kin backup contact).
   aloneHours: string | null;
   primaryCaregiver: string | null;
   dailyRoutine: string | null;
   vetCostPlan: string | null;
   travelCarePlan: string | null;
-  // Section 5: motivation.
-  adoptionMotivation: string | null;
+  nextOfKinName: string | null;
+  nextOfKinContact: string | null;
+  // Section 5: who the adoption is for (+ household agreement, the
+  // self-declared household check backed by the home-visit consent).
   adoptionFor: "self" | "gift" | null;
   householdAgreement: "yes" | "no" | null;
   // Section 6: acknowledgements.
@@ -82,36 +96,29 @@ export type AdoptionApplication = {
   history?: AdoptionStatusHistoryEntry[];
 };
 
-// The fields an applicant fills in on the apply form (6 sections).
+// The fields an applicant fills in on the apply wizard.
 export type AdoptionApplicationInput = {
   animalId: string;
   fullName: string;
   contactNumber: string;
   applicantEmail: string;
-  residentialAddress: string;
-  dateOfBirth: string;
-  housingType: "house" | "apartment" | "other";
-  tenure: "own" | "rent";
-  landlordPetsAllowed?: "yes" | "no" | "not_sure";
-  fencedYard: "yes" | "no" | "na";
-  householdSize: number;
-  childrenAges?: string;
+  ageBracket: "adult" | "minor";
+  guardianName?: string;
+  guardianContact?: string;
+  guardianRelationship?: "parent" | "guardian" | "other";
+  guardianConsent?: true;
+  idDocumentType: "voter_card" | "passport" | "drivers_licence" | "other";
+  idDocumentUrl: string;
   petAllergies: "yes" | "no";
+  respiratoryIssues: "yes" | "no";
   ownedPetsBefore: "yes" | "no";
   previousPetOutcome?: string;
   hasCurrentPets: "yes" | "no";
   currentPetsDetails?: string;
-  aloneHours: string;
-  primaryCaregiver: string;
-  dailyRoutine: string;
   vetCostPlan: string;
-  travelCarePlan: string;
-  adoptionMotivation: string;
+  nextOfKinName: string;
+  nextOfKinContact: string;
   adoptionFor: "self" | "gift";
-  householdAgreement: "yes" | "no";
-  consentHomeVisit: true;
-  agreeReturnToSpca: true;
-  confirmAccurate: true;
 };
 
 // The forward path shown to applicants as a stepper. Rejection is a branch
@@ -134,6 +141,8 @@ export function adoptionStatusLabel(status: AdoptionStatus): string {
       return "Approved - one step to go";
     case "completed":
       return "Adopted - welcome home!";
+    case "withdrawn":
+      return "Withdrawn by you";
     default:
       return "Not approved";
   }
@@ -152,9 +161,24 @@ export function adoptionStatusShortLabel(status: AdoptionStatus): string {
       return "Approved";
     case "completed":
       return "Adopted";
+    case "withdrawn":
+      return "Withdrawn";
     default:
       return "Not approved";
   }
+}
+
+// Applicant-facing closure wording. An applicant never sees "withdrawn" as a
+// lifecycle status: withdrawing is an action they take, so the resulting state
+// reads as a cancellation. The staff queue keeps the "Withdrawn" wording (it
+// needs to find and count those records), so these wrappers are used only by
+// the applicant's own views.
+export function applicantClosureLabel(status: AdoptionStatus): string {
+  return status === "withdrawn" ? "Cancelled by you" : adoptionStatusLabel(status);
+}
+
+export function applicantClosureShortLabel(status: AdoptionStatus): string {
+  return status === "withdrawn" ? "Cancelled" : adoptionStatusShortLabel(status);
 }
 
 export function adoptionStatusClass(status: AdoptionStatus): string {

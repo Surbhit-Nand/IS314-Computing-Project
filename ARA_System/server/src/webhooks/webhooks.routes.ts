@@ -2,7 +2,7 @@ import express, { Router } from "express";
 import type { Request as ExpressRequest } from "express";
 import { verifyWebhook } from "@clerk/backend/webhooks";
 import { env } from "../config/env.js";
-import { handleUserCreated } from "./webhooks.service.js";
+import { handleUserSync } from "./webhooks.service.js";
 
 export const webhooksRouter = Router();
 
@@ -50,8 +50,13 @@ webhooksRouter.post(
 		}
 
 		try {
-			if (event.type === "user.created") {
-				await handleUserCreated(
+			// Both events run the same idempotent sync: user.created covers new
+			// sign-ups; user.updated covers an EXISTING account accepting an
+			// invitation (only user.updated fires for them - user.created never
+			// does) and also re-fires when we stamp metadata ourselves, which
+			// the handler's skip-if-role-present guard makes safe.
+			if (event.type === "user.created" || event.type === "user.updated") {
+				await handleUserSync(
 					event.data.id,
 					event.data.email_addresses,
 					event.data.public_metadata,

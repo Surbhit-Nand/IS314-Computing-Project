@@ -32,7 +32,7 @@ if (!databaseUrl) {
 // in production, where it should never be set). Lets a developer without
 // Clerk dashboard access skip the staff-role check locally - see
 // requireRole() in middleware/rbac.ts for where this is actually applied.
-// The value only ever comes from server/.env, which is gitignored, so this
+// The value only ever comes from local env files, which are gitignored, so this
 // can't turn on by accident from anything checked into version control.
 const devBypassAuth = process.env.DEV_BYPASS_AUTH === "true";
 

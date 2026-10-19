@@ -6,6 +6,7 @@ import { requireManagerOrAdmin } from "../../middleware/rbac.js";
 import {
 	inviteStaffMember,
 	listStaffAccess,
+	reconcileOwnRoleFromInvitation,
 	revokeInvitation,
 	revokeStaffRole,
 	staffRoles,
@@ -101,6 +102,7 @@ staffRouter.post(
 
 		try {
 			const invitation = await inviteStaffMember(
+				request.clerkUserId as string,
 				parsed.data.emailAddress,
 				parsed.data.role,
 			);
@@ -111,7 +113,24 @@ staffRouter.post(
 				status: invitation.status,
 			});
 		} catch (error) {
-			console.error("[INVITATION_ERROR]", error instanceof Error ? error.message : error);
+			// Server-side only detail (status/code/trace id) - the client
+			// still gets the generic message below, never raw provider output.
+			const clerkErr = error as {
+				status?: unknown;
+				clerkTraceId?: unknown;
+				errors?: Array<{ code?: unknown }>;
+			};
+			console.error(
+				"[INVITATION_ERROR]",
+				error instanceof Error ? error.message : error,
+				JSON.stringify({
+					status: clerkErr?.status ?? null,
+					code: clerkErr?.errors?.[0]?.code ?? null,
+					traceId: clerkErr?.clerkTraceId ?? null,
+				}),
+			);
+
+			if (handleStaffActionError(error, response)) return;
 
 			const mapped = mapInvitationError(error);
 			if (mapped) {
@@ -119,12 +138,7 @@ staffRouter.post(
 				return;
 			}
 
-			// Unknown error - return the actual error details for debugging
-			const errorMessage = error instanceof Error ? error.message : String(error);
-			response.status(500).json({
-				error: "Invitation failed",
-				details: errorMessage,
-			});
+			response.status(500).json({ error: "Invitation failed" });
 		}
 	},
 );
@@ -169,6 +183,25 @@ staffRouter.delete(
 				getIdParam(request.params.id),
 			);
 			response.json(result);
+		} catch (error) {
+			if (handleStaffActionError(error, response)) return;
+			next(error);
+		}
+	},
+);
+
+// Self-service role reconcile for the signed-in caller only. Deliberately
+// NOT manager/admin-gated: any registered user may trigger it, but the
+// service only ever stamps a role from an invitation matching their own
+// email and never overwrites an existing one, so it cannot escalate anyone.
+// Exists because the Clerk user.created webhook can't reach localhost in
+// dev, leaving invitees without publicMetadata.role (and thus 403'd).
+staffRouter.post(
+	"/invitations/reconcile",
+	requireClerkSession,
+	async (request, response, next) => {
+		try {
+			response.json(await reconcileOwnRoleFromInvitation(request.clerkUserId as string));
 		} catch (error) {
 			if (handleStaffActionError(error, response)) return;
 			next(error);

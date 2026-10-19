@@ -1,5 +1,4 @@
-import { clerkClient } from "../services/clerkClient.js";
-import { logAuditEntry } from "../shared/audit/audit.service.js";
+import { findInvitationRole, stampInvitationRole } from "../services/invitationRole.js";
 import { invitationalStaffRoles } from "../shared/types/roles.js";
 
 type StaffRole = (typeof invitationalStaffRoles)[number];
@@ -12,36 +11,21 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-// The admin invite route stores the chosen role on the *invitation*'s
-// publicMetadata. Clerk is supposed to copy that onto the new user's
-// publicMetadata at sign-up, but that is not reliable (pre-existing accounts,
-// social sign-up). requireRole() in middleware/rbac.ts reads the role ONLY
-// from the user record, so an invitee missing it is 403'd everywhere. This
-// reconciliation is what actually delivers the role to the user.
-async function findInvitationRole(emailAddress: string): Promise<StaffRole | undefined> {
-	// getInvitationList returns pending + accepted invitations (only revoked
-	// are excluded), newest first - matching on email recovers the role even
-	// after the user has accepted and the invitation is no longer pending.
-	const invitations = await clerkClient.invitations.getInvitationList({ limit: 100 });
-
-	for (const invitation of invitations.data) {
-		if (invitation.emailAddress.toLowerCase() !== emailAddress.toLowerCase()) {
-			continue;
-		}
-		const role = isRecord(invitation.publicMetadata) ? invitation.publicMetadata.role : undefined;
-		if (isStaffRole(role)) {
-			return role;
-		}
-	}
-	return undefined;
-}
-
-// Fired by POST /api/webhooks on Clerk's user.created. Stamps the role from
-// the matching staff invitation into the user's publicMetadata so role-gated
-// routes authorise the new team member. Idempotent: skips when a valid role
-// is already present (e.g. Clerk's own propagation worked, or an admin has
-// already assigned one), so webhook retries are safe.
-export async function handleUserCreated(
+// Fired by POST /api/webhooks on Clerk's user.created / user.updated. Stamps
+// the role from the matching staff invitation into the user's publicMetadata
+// so role-gated routes authorise the new team member. Clerk is supposed to
+// copy the invitation's publicMetadata onto the user at accept, but that is
+// not reliable (pre-existing accounts, social sign-up), and requireRole() in
+// middleware/rbac.ts reads the role ONLY from the user record - so without
+// this reconciliation an invitee missing the role is 403'd everywhere.
+//
+// Idempotent: skips when a valid role is already present (e.g. Clerk's own
+// propagation worked, an admin has already assigned one, or a previous
+// delivery of this event succeeded), so webhook retries and the user.updated
+// echo of our own metadata write are safe. The same handler covers both
+// events because an existing account accepting an invitation only ever fires
+// user.updated - user.created never arrives for them.
+export async function handleUserSync(
 	userId: string,
 	emailAddresses: Array<{ email_address?: string }>,
 	existingPublicMetadata: unknown,
@@ -61,17 +45,11 @@ export async function handleUserCreated(
 		return;
 	}
 
-	await clerkClient.users.updateUserMetadata(userId, { publicMetadata: { role } });
-
-	try {
-		await logAuditEntry({
-			actorClerkUserId: "system:clerk-webhook",
-			action: "staff.role.provisioned",
-			entityType: "user",
-			entityId: userId,
-			metadata: { emailAddress: email, role },
-		});
-	} catch (error) {
-		console.error("[WEBHOOK_AUDIT_FAILED]", error instanceof Error ? error.message : error);
-	}
+	await stampInvitationRole({
+		userId,
+		role,
+		emailAddress: email,
+		auditActor: "system:clerk-webhook",
+		source: "clerk-webhook",
+	});
 }

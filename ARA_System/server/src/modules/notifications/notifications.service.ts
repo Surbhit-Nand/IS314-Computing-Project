@@ -5,13 +5,50 @@ import {
 	markAllNotificationsRead,
 	markNotificationRead,
 } from "./notifications.repository.js";
+import { clerkClient } from "../../services/clerkClient.js";
+import { normalizeRole } from "../../shared/types/roles.js";
+import { findTakeoverRequestById } from "../rescue/rescue.repository.js";
 
-export async function listMyNotifications(clerkUserId: string) {
+async function hasVeterinaryAccess(userId: string) {
+	try { const user = await clerkClient.users.getUser(userId); return normalizeRole(user.publicMetadata.role) === "veterinarian" && !user.banned && !user.locked; }
+	catch { return false; } // Fail closed for emergency details; ordinary inbox remains available.
+}
+
+export async function listMyNotifications(clerkUserId: string, dependencies: {
+	access: typeof hasVeterinaryAccess;
+	find: typeof findNotificationsByRecipient;
+	count: typeof countUnreadNotifications;
+	takeover?: typeof findTakeoverRequestById;
+} = {
+	access: hasVeterinaryAccess, find: findNotificationsByRecipient, count: countUnreadNotifications,
+}) {
+	const veterinaryAccess = await dependencies.access(clerkUserId);
 	const [items, unreadCount] = await Promise.all([
-		findNotificationsByRecipient(clerkUserId),
-		countUnreadNotifications(clerkUserId),
+		dependencies.find(clerkUserId, 30, veterinaryAccess),
+		dependencies.count(clerkUserId, veterinaryAccess),
 	]);
-	return { items, unreadCount };
+	const enrichedItems = await Promise.all(
+		items.map(async (item) => {
+			if (!item.actionId || !item.type.startsWith("rescue.takeover_")) {
+				return {
+					...item,
+					takeoverRequestStatus: null,
+					takeoverRequestMissionId: null,
+				};
+			}
+			const request = await (dependencies.takeover ?? findTakeoverRequestById)(item.actionId);
+			const belongsToRecipient =
+				request &&
+				(request.assignedToClerkUserId === clerkUserId ||
+					request.requestedByClerkUserId === clerkUserId);
+			return {
+				...item,
+				takeoverRequestStatus: belongsToRecipient ? request.status : null,
+				takeoverRequestMissionId: belongsToRecipient ? request.reportId : null,
+			};
+		}),
+	);
+	return { items: enrichedItems, unreadCount };
 }
 
 export async function createAdoptionStatusNotification(input: {
@@ -33,11 +70,11 @@ export async function createAdoptionStatusNotification(input: {
 }
 
 export async function markOneNotificationRead(id: string, clerkUserId: string) {
-	return markNotificationRead(id, clerkUserId);
+	return markNotificationRead(id, clerkUserId, await hasVeterinaryAccess(clerkUserId));
 }
 
 export async function markEveryNotificationRead(clerkUserId: string) {
-	await markAllNotificationsRead(clerkUserId);
+	await markAllNotificationsRead(clerkUserId, await hasVeterinaryAccess(clerkUserId));
 }
 
 // Staff-facing: a new adoption application needs review. One row per staff
@@ -79,6 +116,8 @@ function notificationTitle(toStatus: string, animalName: string | null) {
 			return `Adoption of ${who} is complete`;
 		case "rejected":
 			return `Update on your application for ${who}`;
+		case "withdrawn":
+			return `You withdrew your application for ${who}`;
 		default:
 			return `Update on your application for ${who}`;
 	}
@@ -103,6 +142,8 @@ function notificationBody(
 			return reviewNote?.trim()
 				? `Our team decided not to proceed: ${reviewNote.trim()}`
 				: `Our team decided not to proceed with your application for ${who}.`;
+		case "withdrawn":
+			return `Your application to adopt ${who} was withdrawn, so it is closed and will not be reviewed further. You may apply again if you change your mind.`;
 		default:
 			return `Your application for ${who} moved to ${toStatus}.`;
 	}

@@ -1,5 +1,5 @@
 import { SignInButton, useAuth } from "@clerk/react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { IconCalendar, IconCalendarPlus, IconNotes, IconUser } from "../../components/MedicalIcons";
 import { fetchVeterinaryAppointments } from "../../services/veterinaryApi";
 import type { VeterinaryAppointment } from "../../types/veterinary";
@@ -8,39 +8,56 @@ import { VeterinaryNavbar } from "./components/VeterinaryNavbar";
 import { AnimalThumb, Badge, Card, EmptyState } from "./components/VetUi";
 import { fmtDate, fmtTime, label } from "./components/vetHelpers";
 import { FollowUpAppointmentPage } from "./FollowUpAppointmentPage";
+import { useAccountRefresh } from "../../utils/useAccountRefresh";
+import { isUpcomingAppointment } from "../../utils/appointments";
 
 type Props = {
   currentView: VeterinaryView;
+  selectedAppointmentId?: string;
+  onSelectAppointment: (appointment: VeterinaryAppointment) => void;
+  onInvalidContext: () => void;
   onNavigate: (view: VeterinaryView) => void;
 };
 
-export function VeterinaryUpcomingAppointments({ currentView, onNavigate }: Props) {
+export function VeterinaryUpcomingAppointments({ currentView, onNavigate, selectedAppointmentId, onSelectAppointment, onInvalidContext }: Props) {
   const { isLoaded, isSignedIn, getToken } = useAuth();
   const [appointments, setAppointments] = useState<VeterinaryAppointment[]>([]);
-  const [selected, setSelected] = useState<VeterinaryAppointment | null>(null);
+  const requestVersion = useRef(0);
+  const selected = appointments.find((entry) => entry.appointment.id === selectedAppointmentId);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const load = useCallback(async () => {
-    const token = await getToken();
-    if (!token) return;
-    setLoading(true);
+  const load = useCallback(async (background = false) => {
+    const version = ++requestVersion.current;
+    if (!background) setLoading(true);
     try {
-      setAppointments(await fetchVeterinaryAppointments(token));
+      const token = await getToken();
+      if (!token || version !== requestVersion.current) return;
+      const entries = await fetchVeterinaryAppointments(token);
+      if (version !== requestVersion.current) return;
+      if (selectedAppointmentId && !entries.some((entry) => entry.appointment.id === selectedAppointmentId)) {
+        onInvalidContext();
+        return;
+      }
+      setAppointments(entries.filter((entry) => isUpcomingAppointment(entry.appointment)));
       setError("");
     } catch (value) {
+      if (version !== requestVersion.current) return;
       setError(value instanceof Error ? value.message : "Could not load upcoming appointments.");
     } finally {
-      setLoading(false);
+      if (version === requestVersion.current) setLoading(false);
     }
-  }, [getToken]);
+  }, [getToken, selectedAppointmentId, onInvalidContext]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
       void load();
     }, 0);
-    return () => window.clearTimeout(timer);
+    return () => { window.clearTimeout(timer); requestVersion.current += 1; };
   }, [load]);
+
+  const backgroundRefresh = useCallback(() => { void load(true); }, [load]);
+  useAccountRefresh(Boolean(isLoaded && isSignedIn), backgroundRefresh);
 
   if (!isLoaded || !isSignedIn) {
     return (
@@ -58,7 +75,18 @@ export function VeterinaryUpcomingAppointments({ currentView, onNavigate }: Prop
   }
 
   if (selected) {
-    return <FollowUpAppointmentPage appointment={selected} getToken={getToken} onNavigate={onNavigate} onRefresh={load} />;
+    return <FollowUpAppointmentPage key={selected.appointment.id} appointment={selected} parentView="vet-appointments" getToken={getToken} onNavigate={onNavigate} onRefresh={load} />;
+  }
+
+  if (selectedAppointmentId) {
+    return (
+      <main className="vm-page">
+        <div className="vm-container">
+          <p className={error ? "form-error" : "vm-hint"}>{error || "Loading appointment..."}</p>
+          <button type="button" className="ghost-button" onClick={() => onNavigate("vet-appointments")}>Back to appointments</button>
+        </div>
+      </main>
+    );
   }
 
   return (
@@ -69,7 +97,7 @@ export function VeterinaryUpcomingAppointments({ currentView, onNavigate }: Prop
           <div>
             <p className="vm-eyebrow">Appointments</p>
             <h1>Upcoming appointments</h1>
-            <p className="vm-subtitle">Follow-up visits already booked for animals in care, nearest first.</p>
+            <p className="vm-subtitle">Upcoming follow-up visits and owner-booked appointments, nearest first.</p>
           </div>
           <div className="vm-page-head-actions">
             <button type="button" className="teal-button" onClick={() => onNavigate("vet-booking")}><IconCalendarPlus size={15} /> Book follow-up</button>
@@ -85,7 +113,7 @@ export function VeterinaryUpcomingAppointments({ currentView, onNavigate }: Prop
             <EmptyState
               icon={<IconCalendar size={20} />}
               title="No upcoming appointments"
-              detail="There are no follow-up visits booked right now. Book one to keep each animal on track."
+              detail="There are no upcoming follow-ups or owner bookings on the clinic schedule."
               action={<button type="button" className="teal-button compact-primary" onClick={() => onNavigate("vet-booking")}>Book follow-up</button>}
             />
           ) : (
@@ -97,7 +125,7 @@ export function VeterinaryUpcomingAppointments({ currentView, onNavigate }: Prop
                   <span className="vm-th">When</span>
                   <span className="vm-th">Action</span>
                 </div>
-                {appointments.map(({ appointment, animal }) => (
+                {appointments.map(({ appointment, animal, adopterName }) => (
                   <div className="vm-table-row" key={appointment.id}>
                     <div className="vm-td vm-animal-cell">
                       <AnimalThumb photoUrl={animal.photoUrls?.[0]} name={animal.name} />
@@ -108,7 +136,14 @@ export function VeterinaryUpcomingAppointments({ currentView, onNavigate }: Prop
                     </div>
                     <div className="vm-td">
                       <strong>{appointment.purpose}</strong>
-                      <small><IconNotes size={11} /> {appointment.notes?.replace(/^Booked by\s*/i, "") ?? "Follow-up visit"}</small>
+                      {appointment.source === "owner_booked" ? (
+                        <small><IconUser size={11} /> Owner booking · {adopterName ?? "Adopter"}</small>
+                      ) : (
+                        <small><IconNotes size={11} /> {appointment.notes?.replace(/^Booked by\s*/i, "") ?? "Follow-up visit"}</small>
+                      )}
+                      {appointment.notes && appointment.source === "owner_booked" ? (
+                        <small><IconNotes size={11} /> {appointment.notes}</small>
+                      ) : null}
                       <Badge tone={appointment.status === "completed" ? "green" : "blue"}>{label(appointment.status)}</Badge>
                     </div>
                     <div className="vm-td">
@@ -116,7 +151,7 @@ export function VeterinaryUpcomingAppointments({ currentView, onNavigate }: Prop
                       <small><IconUser size={11} /> {fmtTime(appointment.appointmentDate)}</small>
                     </div>
                     <div className="vm-td vm-td-actions">
-                      <button type="button" className="vm-queue-action is-primary" onClick={() => setSelected({ appointment, animal })}>View</button>
+                      <button type="button" className="vm-queue-action is-primary" onClick={() => onSelectAppointment({ appointment, animal, adopterName })}>View</button>
                     </div>
                   </div>
                 ))}

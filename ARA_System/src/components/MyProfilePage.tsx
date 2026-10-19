@@ -5,6 +5,7 @@ import { Breadcrumbs } from "./Breadcrumbs";
 import { SiteFooter } from "./SiteFooter";
 import { SiteHeader, type SiteHeaderView } from "./SiteHeader";
 import { SuccessToast } from "./SuccessToast";
+import "./MyProfilePage.css";
 
 type MyProfilePageProps = {
   onNavigate: (view: SiteHeaderView) => void;
@@ -201,7 +202,7 @@ export function MyProfilePage({ onNavigate }: MyProfilePageProps) {
   }
 
   return (
-    <div className="home-page">
+    <div className="home-page account-profile-page">
       <SiteHeader
         isLoaded={isLoaded}
         isSignedIn={isSignedIn}
@@ -218,14 +219,25 @@ export function MyProfilePage({ onNavigate }: MyProfilePageProps) {
           <p className="eyebrow">Your SPCA account</p>
           <h1>My profile</h1>
           <p className="lead-copy">
-            Signed in as {user.primaryEmailAddress?.emailAddress ?? "your account"}. Changes
-            here update your login profile everywhere - dashboards, greetings, and
-            future reports. Past activity records keep the name they were saved with.
+            Manage your name, photo and sign-in details.
           </p>
         </section>
 
+        <div className="account-profile-layout">
+          <aside className="account-profile-summary">
+            <img src={user.imageUrl} alt="" className="account-profile-avatar" />
+            <h2>{user.fullName || user.firstName || "Your account"}</h2>
+            <p>{user.primaryEmailAddress?.emailAddress}</p>
+            <span className="chip">SPCA Fiji account</span>
+            <nav aria-label="Profile sections">
+              <a href="#profile-name">Personal details <span aria-hidden="true">↗</span></a>
+              <a href="#profile-photo">Profile photo <span aria-hidden="true">↗</span></a>
+              <a href="#profile-emails">Email &amp; sign-in <span aria-hidden="true">↗</span></a>
+            </nav>
+            <small>Saved changes update your account across the app.</small>
+          </aside>
         <div className="profile-sections">
-          <section className="dashboard-panel" aria-label="Display name">
+          <section id="profile-name" className="dashboard-panel" aria-label="Display name">
             <div className="panel-heading">
               <div>
                 <p className="eyebrow">Profile</p>
@@ -263,7 +275,7 @@ export function MyProfilePage({ onNavigate }: MyProfilePageProps) {
             </button>
           </section>
 
-          <section className="dashboard-panel" aria-label="Profile photo">
+          <section id="profile-photo" className="dashboard-panel" aria-label="Profile photo">
             <div className="panel-heading">
               <div>
                 <p className="eyebrow">Profile</p>
@@ -298,7 +310,7 @@ export function MyProfilePage({ onNavigate }: MyProfilePageProps) {
             </button>
           </section>
 
-          <section className="dashboard-panel" aria-label="Email addresses">
+          <section id="profile-emails" className="dashboard-panel" aria-label="Email addresses">
             <div className="panel-heading">
               <div>
                 <p className="eyebrow">Profile</p>
@@ -386,6 +398,7 @@ export function MyProfilePage({ onNavigate }: MyProfilePageProps) {
               New addresses need a verification code before they can sign you in.
             </p>
           </section>
+        </div>
         </div>
       </main>
 

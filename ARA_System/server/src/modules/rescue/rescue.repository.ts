@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import { db } from "../../db/client.js";
 import {
 	rescueDebriefs,
@@ -6,6 +6,7 @@ import {
 	rescueMissionUpdates,
 	rescueReports,
 	rescueReportStatusHistory,
+	rescueTakeoverRequests,
 } from "../../db/schema.js";
 
 // Newest reports first so the staff dispatch queue always shows the latest
@@ -28,7 +29,9 @@ export async function findActiveReports() {
 	return db
 		.select()
 		.from(rescueReports)
-		.where(inArray(rescueReports.status, ["submitted", "assigned", "in_progress"]))
+		.where(
+			inArray(rescueReports.status, ["submitted", "assigned", "in_progress", "awaiting_reassignment"]),
+		)
 		.orderBy(desc(rescueReports.createdAt));
 }
 
@@ -394,4 +397,349 @@ export async function markIntakeHandoffReceived(id: string, receivedAt: Date) {
 		.where(eq(rescueIntakeHandoffs.id, id))
 		.returning();
 	return handoff;
+}
+
+// ---- Mission takeover requests ----
+
+export async function createTakeoverRequest(input: typeof rescueTakeoverRequests.$inferInsert) {
+	const [request] = await db.insert(rescueTakeoverRequests).values(input).returning();
+	return request;
+}
+
+export async function findTakeoverRequestById(id: string) {
+	const [request] = await db
+		.select()
+		.from(rescueTakeoverRequests)
+		.where(eq(rescueTakeoverRequests.id, id));
+	return request;
+}
+
+// Every pending request on a set of reports - attached to the owner's list so
+// the UI can badge "Takeover Requested" and offer Approve/Decline.
+export async function findPendingTakeoversByReportIds(reportIds: string[]) {
+	if (reportIds.length === 0) return [];
+	return db
+		.select()
+		.from(rescueTakeoverRequests)
+		.where(
+			and(
+				inArray(rescueTakeoverRequests.reportId, reportIds),
+				eq(rescueTakeoverRequests.status, "pending"),
+			),
+		)
+		.orderBy(desc(rescueTakeoverRequests.createdAt));
+}
+
+// The pending requests one dispatcher has already made across the given
+// reports - drives the "Request Pending" indicator + Withdraw action on the
+// "Assigned to Others" list.
+export async function findPendingTakeoversByRequester(
+	reportIds: string[],
+	requesterClerkUserId: string,
+) {
+	if (reportIds.length === 0) return [];
+	return db
+		.select()
+		.from(rescueTakeoverRequests)
+		.where(
+			and(
+				inArray(rescueTakeoverRequests.reportId, reportIds),
+				eq(rescueTakeoverRequests.requestedByClerkUserId, requesterClerkUserId),
+				eq(rescueTakeoverRequests.status, "pending"),
+			),
+		);
+}
+
+export async function findPendingTakeoverForReportAndRequester(
+	reportId: string,
+	requesterClerkUserId: string,
+) {
+	const [request] = await db
+		.select()
+		.from(rescueTakeoverRequests)
+		.where(
+			and(
+				eq(rescueTakeoverRequests.reportId, reportId),
+				eq(rescueTakeoverRequests.requestedByClerkUserId, requesterClerkUserId),
+				eq(rescueTakeoverRequests.status, "pending"),
+			),
+		);
+	return request;
+}
+
+// Conditional decision: only a still-pending request whose target is still the
+// deciding dispatcher can be decided. A stale or forged decide returns no row.
+export async function decideTakeoverRequest(
+	id: string,
+	decidingClerkUserId: string,
+	status: "approved" | "declined",
+	decisionNote: string | null,
+) {
+	const [request] = await db
+		.update(rescueTakeoverRequests)
+		.set({
+			status,
+			decidedByClerkUserId: decidingClerkUserId,
+			decidedAt: new Date(),
+			decisionNote,
+		})
+		.where(
+			and(
+				eq(rescueTakeoverRequests.id, id),
+				eq(rescueTakeoverRequests.status, "pending"),
+				eq(rescueTakeoverRequests.assignedToClerkUserId, decidingClerkUserId),
+			),
+		)
+		.returning();
+	return request;
+}
+
+// Requester withdraws their own pending request. Conditional on the requester
+// AND on the request still being pending.
+export async function withdrawTakeoverRequest(id: string, requesterClerkUserId: string) {
+	const [request] = await db
+		.update(rescueTakeoverRequests)
+		.set({
+			status: "withdrawn",
+			decidedByClerkUserId: requesterClerkUserId,
+			decidedAt: new Date(),
+		})
+		.where(
+			and(
+				eq(rescueTakeoverRequests.id, id),
+				eq(rescueTakeoverRequests.status, "pending"),
+				eq(rescueTakeoverRequests.requestedByClerkUserId, requesterClerkUserId),
+			),
+		)
+		.returning();
+	return request;
+}
+
+// Closes every pending request for a mission once it has moved on (approved,
+// started, released, or resolved) so requesters are never left waiting on a
+// mission that is no longer up for grabs. Optionally preserves the request
+// that just won, and returns the closed rows so the caller can notify them.
+export async function cancelPendingTakeoversForReport(
+	reportId: string,
+	exceptRequestId?: string,
+) {
+	return db
+		.update(rescueTakeoverRequests)
+		.set({ status: "cancelled", decidedAt: new Date() })
+		.where(
+			and(
+				eq(rescueTakeoverRequests.reportId, reportId),
+				eq(rescueTakeoverRequests.status, "pending"),
+				exceptRequestId ? ne(rescueTakeoverRequests.id, exceptRequestId) : undefined,
+			),
+		)
+		.returning();
+}
+
+// Assigned missions held by another dispatcher - the "Assigned to Others"
+// list. Only "assigned" (accepted, not started) missions qualify, matching the
+// rule that takeover requests apply to Assigned missions only.
+export async function findAssignedReportsByOtherDispatcher(clerkUserId: string) {
+	return db
+		.select()
+		.from(rescueReports)
+		.where(
+			and(
+				eq(rescueReports.status, "assigned"),
+				isNotNull(rescueReports.assignedToClerkUserId),
+				ne(rescueReports.assignedToClerkUserId, clerkUserId),
+			),
+		)
+		.orderBy(desc(rescueReports.createdAt));
+}
+
+// Atomic transfer: reassigns a currently-assigned mission from its owner to
+// the requesting dispatcher in ONE conditional UPDATE, keeping the status at
+// "assigned". The WHERE pins the current owner AND the "assigned" status, so a
+// stale approval (owner or status changed under it) touches nothing and
+// returns no row - the same race guard the claim/release updates use.
+export async function transferRescueReportAssignment(
+	id: string,
+	fromClerkUserId: string,
+	toClerkUserId: string,
+	toName: string,
+) {
+	const [report] = await db
+		.update(rescueReports)
+		.set({
+			assignedTo: toName,
+			assignedToClerkUserId: toClerkUserId,
+			assignedAt: new Date(),
+			status: "assigned",
+			updatedAt: new Date(),
+		})
+		.where(
+			and(
+				eq(rescueReports.id, id),
+				eq(rescueReports.assignedToClerkUserId, fromClerkUserId),
+				eq(rescueReports.status, "assigned"),
+			),
+		)
+		.returning();
+	return report;
+}
+
+// The pending request that lost the race for a mission, reduced to just what a
+// cancellation notification needs (who to tell, and which mission).
+export type TakeoverClosedRequest = {
+	reportId: string;
+	requestedByClerkUserId: string;
+};
+
+export type TakeoverApprovalOutcome = {
+	transferred: boolean;
+	approvedRequestId: string | null;
+	closed: TakeoverClosedRequest[];
+};
+
+// Approve a takeover as ONE server-side statement, so the transfer, the
+// approval, the cancellation of every competing pending request, and the
+// timeline entry either all land or none do. This is the atomicity the old
+// multi-call service path lacked: a failure after the transfer could leave the
+// mission moved but the request still pending, or the reverse.
+//
+// The `target` CTE pins every precondition - the request is still pending, is
+// addressed to this decider, this requester made it, and the mission is still
+// Assigned to the decider - and locks BOTH rows (`FOR UPDATE OF rr, r`). Two
+// competing approvals therefore serialise on the mission (and request) row: the
+// loser re-reads the post-commit row, finds the owner changed, and produces no
+// `target`, so no transfer and no partial side effects. Later CTEs only read
+// from `transferred`, so nothing can run unless the guarded transfer happened.
+export async function approveMissionTakeoverAtomically(input: {
+	requestId: string;
+	reportId: string;
+	deciderClerkUserId: string;
+	requesterClerkUserId: string;
+	requesterName: string;
+	historyNotes: string;
+}): Promise<TakeoverApprovalOutcome> {
+	const result = await db.execute(sql`
+		WITH target AS (
+			SELECT r.report_id
+			FROM rescue_takeover_requests r
+			JOIN rescue_reports rr ON rr.id = r.report_id
+			WHERE r.id = ${input.requestId}
+				AND r.report_id = ${input.reportId}
+				AND r.status = 'pending'
+				AND r.requested_by_clerk_user_id = ${input.requesterClerkUserId}
+				AND r.assigned_to_clerk_user_id = ${input.deciderClerkUserId}
+				AND rr.status = 'assigned'
+				AND rr.assigned_to_clerk_user_id = ${input.deciderClerkUserId}
+			FOR UPDATE OF rr, r
+		),
+		transferred AS (
+			UPDATE rescue_reports rr
+			SET assigned_to = ${input.requesterName},
+				assigned_to_clerk_user_id = ${input.requesterClerkUserId},
+				assigned_at = now(),
+				status = 'assigned',
+				updated_at = now()
+			FROM target t
+			WHERE rr.id = t.report_id
+			RETURNING rr.id
+		),
+		approved AS (
+			UPDATE rescue_takeover_requests r
+			SET status = 'approved',
+				decided_by_clerk_user_id = ${input.deciderClerkUserId},
+				decided_at = now()
+			FROM transferred tr
+			WHERE r.id = ${input.requestId}
+			RETURNING r.id
+		),
+		closed AS (
+			UPDATE rescue_takeover_requests r
+			SET status = 'cancelled',
+				decided_at = now()
+			FROM transferred tr
+			WHERE r.report_id = tr.id
+				AND r.status = 'pending'
+				AND r.id <> ${input.requestId}
+			RETURNING r.report_id, r.requested_by_clerk_user_id
+		),
+		history AS (
+			INSERT INTO rescue_report_status_history
+				(report_id, from_status, to_status, changed_by_clerk_user_id, dispatcher_name, notes, image_urls)
+			SELECT tr.id, 'assigned', 'assigned', ${input.deciderClerkUserId}, ${input.requesterName}, ${input.historyNotes}, '[]'::jsonb
+			FROM transferred tr
+			RETURNING id
+		)
+		SELECT json_build_object(
+			'transferred', (SELECT count(*) FROM transferred) > 0,
+			'approvedRequestId', (SELECT id FROM approved LIMIT 1),
+			'historyId', (SELECT id FROM history LIMIT 1),
+			'closed', COALESCE((
+				SELECT json_agg(json_build_object(
+					'reportId', c.report_id,
+					'requestedByClerkUserId', c.requested_by_clerk_user_id
+				))
+				FROM closed c
+			), '[]'::json)
+		) AS result
+	`);
+
+	const raw = result.rows[0]?.result;
+	const parsed = (typeof raw === "string" ? JSON.parse(raw) : raw) as
+		| { transferred: boolean; approvedRequestId: string | null; closed: TakeoverClosedRequest[] }
+		| undefined;
+	return {
+		transferred: parsed?.transferred ?? false,
+		approvedRequestId: parsed?.approvedRequestId ?? null,
+		closed: parsed?.closed ?? [],
+	};
+}
+
+// Create a pending takeover request only while the mission is still Assigned
+// to another dispatcher, as ONE statement. The `locked` CTE takes a row lock on
+// the mission first, so a concurrent transfer/start/release (which also locks
+// the mission row) serialises around it: whichever commits first wins, and the
+// loser sees the post-commit row and inserts nothing. Returns undefined when
+// the mission is no longer eligible; a duplicate pending request is left to
+// surface as a unique-constraint error so the caller can map it to 409.
+export async function createPendingTakeoverRequestIfEligible(input: {
+	reportId: string;
+	requesterClerkUserId: string;
+	requesterName: string;
+	reason: string;
+}): Promise<{ id: string } | undefined> {
+	const result = await db.execute(sql`
+		WITH locked AS (
+			SELECT rr.id, rr.assigned_to_clerk_user_id
+			FROM rescue_reports rr
+			WHERE rr.id = ${input.reportId}
+				AND rr.status = 'assigned'
+				AND rr.assigned_to_clerk_user_id IS NOT NULL
+				AND rr.assigned_to_clerk_user_id <> ${input.requesterClerkUserId}
+			FOR UPDATE
+		)
+		INSERT INTO rescue_takeover_requests
+			(report_id, requested_by_clerk_user_id, requested_by_name, assigned_to_clerk_user_id, reason, status)
+		SELECT l.id, ${input.requesterClerkUserId}, ${input.requesterName},
+			l.assigned_to_clerk_user_id, ${input.reason}, 'pending'
+		FROM locked l
+		RETURNING id
+	`);
+
+	const row = result.rows[0] as { id: string } | undefined;
+	return row ? { id: row.id } : undefined;
+}
+
+// True only for the (report, requester) WHERE pending unique index. A Postgres
+// unique violation is SQLSTATE 23505; every other database error must fall
+// through so the caller does not mislabel a real failure as "already pending".
+export function isPendingTakeoverUniqueViolation(error: unknown): boolean {
+	const candidate = (error ?? {}) as {
+		code?: string;
+		constraint?: string;
+		cause?: { code?: string; constraint?: string };
+	};
+	const code = candidate.code ?? candidate.cause?.code;
+	if (code !== "23505") return false;
+	const constraint = candidate.constraint ?? candidate.cause?.constraint;
+	return constraint === undefined || constraint.includes("rescue_takeover_pending_unique");
 }

@@ -1,5 +1,5 @@
 import { SignInButton, useAuth } from "@clerk/react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { IconNotes, IconPaw } from "../../components/MedicalIcons";
 import { fetchMedicalRecord, fetchMedicalRecords } from "../../services/veterinaryApi";
 import type { MedicalQueueAnimal, MedicalRecord } from "../../types/veterinary";
@@ -9,44 +9,57 @@ import { AnimalThumb, Badge, Card, EmptyState } from "./components/VetUi";
 import { fmtDate, label, veterinaryStatusFor } from "./components/vetHelpers";
 import { VeterinaryCarePage } from "./pages/VeterinaryCarePage";
 
+import type { CareScene } from "../../navigation/araNavigation";
+
 type Props = {
   currentView: VeterinaryView;
+  selectedAnimalId?: string;
+  onSelectAnimal: (id: string) => void;
+  careScene: CareScene;
+  onChangeCareScene: (scene: CareScene, replace?: boolean) => void;
+  onInvalidContext: () => void;
   onNavigate: (view: VeterinaryView) => void;
 };
 
-export function VeterinaryMedicalHistory({ currentView, onNavigate }: Props) {
+export function VeterinaryMedicalHistory({ currentView, onNavigate, selectedAnimalId, onSelectAnimal, careScene, onChangeCareScene, onInvalidContext }: Props) {
   const { isLoaded, isSignedIn, getToken } = useAuth();
   const [animals, setAnimals] = useState<MedicalQueueAnimal[]>([]);
   const [selected, setSelected] = useState<MedicalRecord | null>(null);
+  const requestVersion = useRef(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
+    const version = ++requestVersion.current;
     setLoading(true);
     try {
       const token = await getToken();
       if (!token) return;
-      setAnimals(await fetchMedicalRecords(token));
+      if (selectedAnimalId) {
+        const record = await fetchMedicalRecord(token, selectedAnimalId);
+        if (version !== requestVersion.current) return;
+        setSelected(record);
+      } else {
+        const records = await fetchMedicalRecords(token);
+        if (version !== requestVersion.current) return;
+        setAnimals(records);
+      }
       setError("");
     } catch (value) {
+      if (version !== requestVersion.current) return;
+      if (value instanceof Error && /animal not found/i.test(value.message)) { onInvalidContext(); return; }
       setError(value instanceof Error ? value.message : "Medical history could not be loaded.");
     } finally {
-      setLoading(false);
+      if (version === requestVersion.current) setLoading(false);
     }
-  }, [getToken]);
+  }, [getToken, selectedAnimalId, onInvalidContext]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
       void load();
     }, 0);
-    return () => window.clearTimeout(timer);
+    return () => { window.clearTimeout(timer); requestVersion.current += 1; };
   }, [load]);
-
-  const refreshSelected = useCallback(async () => {
-    const token = await getToken();
-    if (!token || !selected) return;
-    setSelected(await fetchMedicalRecord(token, selected.animal.id));
-  }, [getToken, selected]);
 
   if (!isLoaded || !isSignedIn) {
     return (
@@ -63,14 +76,28 @@ export function VeterinaryMedicalHistory({ currentView, onNavigate }: Props) {
     );
   }
 
-  if (selected) {
+  if (selectedAnimalId && selected?.animal.id === selectedAnimalId) {
     return (
       <VeterinaryCarePage
+        onNavigate={onNavigate}
         record={selected}
+        scene={careScene}
+        onChangeScene={onChangeCareScene}
         getToken={getToken}
-        onBack={() => setSelected(null)}
-        onRefresh={refreshSelected}
+        onBack={() => onNavigate("veterinary-records")}
+        onRefresh={load}
       />
+    );
+  }
+
+  if (selectedAnimalId) {
+    return (
+      <main className="vm-page">
+        <div className="vm-container">
+          <p className={error ? "form-error" : "vm-hint"}>{error || "Loading medical history..."}</p>
+          <button type="button" className="ghost-button" onClick={() => onNavigate("veterinary-records")}>Back to medical history</button>
+        </div>
+      </main>
     );
   }
 
@@ -134,17 +161,7 @@ export function VeterinaryMedicalHistory({ currentView, onNavigate }: Props) {
                         <button
                           type="button"
                           className="vm-queue-action is-primary"
-                          onClick={() => {
-                            void (async () => {
-                              const token = await getToken();
-                              if (!token) return;
-                              try {
-                                setSelected(await fetchMedicalRecord(token, animal.id));
-                              } catch (value) {
-                                setError(value instanceof Error ? value.message : "The medical history could not be loaded.");
-                              }
-                            })();
-                          }}
+                          onClick={() => onSelectAnimal(animal.id)}
                         >
                           View history
                         </button>

@@ -1,8 +1,12 @@
 import { useState } from "react";
 import { adoptionStatusLabel, sizeDisplayLabel, vaccinationStatusLabel, type Animal } from "../types/animal";
 import { useFavoriteAnimals } from "../utils/favorites";
-import { capitalize } from "../utils/format";
+import { speciesLabel } from "../utils/format";
+import { buildAnimalTags } from "../utils/animalTags";
+import { savePendingAdoption } from "../utils/pendingAdoption";
+import { AnimalTagChips } from "./AnimalTagChips";
 import { Breadcrumbs } from "./Breadcrumbs";
+import { PhotoLightbox } from "./PhotoLightbox";
 import { SiteHeader, type SiteHeaderView } from "./SiteHeader";
 
 type AnimalProfilePageProps = {
@@ -24,10 +28,14 @@ export function AnimalProfilePage({ animal, isLoaded, isSignedIn, currentPage, o
   // AnimalProfileFields.tsx, where photoUrls[0] is set as the first photo
   // staff upload) - then lets a visitor step through the rest.
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
+  const [isLightboxOpen, setIsLightboxOpen] = useState(false);
 
   const favorited = isFavorite(animal.id);
   const activePhoto = animal.photoUrls[activePhotoIndex] ?? animal.photoUrls[0];
   const hasMultiplePhotos = animal.photoUrls.length > 1;
+  // Availability follows the vet-clearance gate, not just "not adopted" - see
+  // adoptionStatusLabel in types/animal.ts and AGENTS.md's public-listing rule.
+  const availabilityLabel = adoptionStatusLabel(animal.status, animal.medicallyCleared);
 
   function showPreviousPhoto() {
     setActivePhotoIndex((index) => (index === 0 ? animal.photoUrls.length - 1 : index - 1));
@@ -38,7 +46,7 @@ export function AnimalProfilePage({ animal, isLoaded, isSignedIn, currentPage, o
   }
 
   return (
-    <div className="home-page">
+    <div className="home-page animal-profile-public">
       <SiteHeader
         isLoaded={isLoaded}
         isSignedIn={isSignedIn}
@@ -60,17 +68,33 @@ export function AnimalProfilePage({ animal, isLoaded, isSignedIn, currentPage, o
             used the full page-shell width while the content below was
             narrower). */}
         <div className="profile-content">
-          {/* Name comes before the photo on every profile, regardless of
-              how many photos an animal has. */}
-          <h1 className="profile-name">{animal.name}</h1>
+          <div className="profile-intro">
+            <span className="profile-overline">Adopt a companion</span>
+            <h1 className="profile-name">{animal.name}</h1>
+            {animal.description && <p className="profile-summary">{animal.description}</p>}
+            <AnimalTagChips tags={buildAnimalTags(animal)} />
+          </div>
 
           <section className="profile-hero">
             <div
               className="profile-hero-image"
-              aria-label={`${animal.name} photo`}
               style={activePhoto ? { backgroundImage: `url(${activePhoto})` } : undefined}
             >
-              {!activePhoto && <span className="animal-image-label">{capitalize(animal.type)}</span>}
+              {/* Click-to-preview: a transparent layer over the (cropped)
+                  photo that opens the full, uncropped photo in the lightbox.
+                  The heart and prev/next buttons below are siblings of this
+                  button, not children, so clicking them can never open the
+                  preview. */}
+              {activePhoto ? (
+                <button
+                  type="button"
+                  className="profile-hero-preview"
+                  aria-label={`Preview photo ${activePhotoIndex + 1} of ${animal.photoUrls.length} of ${animal.name}`}
+                  onClick={() => setIsLightboxOpen(true)}
+                />
+              ) : (
+                <span className="animal-image-label">{speciesLabel(animal)}</span>
+              )}
               <button
                 type="button"
                 className={favorited ? "favorite-button active" : "favorite-button"}
@@ -85,7 +109,7 @@ export function AnimalProfilePage({ animal, isLoaded, isSignedIn, currentPage, o
                   <button
                     type="button"
                     className="profile-photo-nav prev"
-                    aria-label="Show previous photo"
+                    aria-label={`Show previous photo of ${animal.name}`}
                     onClick={showPreviousPhoto}
                   >
                     ‹
@@ -93,7 +117,7 @@ export function AnimalProfilePage({ animal, isLoaded, isSignedIn, currentPage, o
                   <button
                     type="button"
                     className="profile-photo-nav next"
-                    aria-label="Show next photo"
+                    aria-label={`Show next photo of ${animal.name}`}
                     onClick={showNextPhoto}
                   >
                     ›
@@ -119,6 +143,17 @@ export function AnimalProfilePage({ animal, isLoaded, isSignedIn, currentPage, o
             )}
           </section>
 
+          {isLightboxOpen && activePhoto && (
+            <PhotoLightbox
+              photos={animal.photoUrls}
+              activeIndex={animal.photoUrls[activePhotoIndex] ? activePhotoIndex : 0}
+              animalName={animal.name}
+              onPrevious={showPreviousPhoto}
+              onNext={showNextPhoto}
+              onClose={() => setIsLightboxOpen(false)}
+            />
+          )}
+
           <div className="profile-columns">
             {/* LEFT: structured details - breed, physical traits, health/
                 adoption status, and the adopt action. */}
@@ -126,7 +161,7 @@ export function AnimalProfilePage({ animal, isLoaded, isSignedIn, currentPage, o
               <dl className="profile-facts">
                 <div>
                   <dt>Species</dt>
-                  <dd>{capitalize(animal.type)}</dd>
+                  <dd>{speciesLabel(animal)}</dd>
                 </div>
                 <div>
                   <dt>Breed</dt>
@@ -152,13 +187,17 @@ export function AnimalProfilePage({ animal, isLoaded, isSignedIn, currentPage, o
 
               {/* Same checkmark-line language as the listing cards, instead
                   of a separate status badge repeating what the facts above
-                  already say. */}
-              <p className="pet-card-check profile-check">
-                ✓ {adoptionStatusLabel(animal.status)}
-              </p>
-              {!animal.medicallyCleared && (
+                  already say. An animal that is not medically cleared yet is
+                  not available (the same gate the public listing applies), so
+                  it falls back to the neutral open-circle marker rather than
+                  the teal checkmark. */}
+              {availabilityLabel === "Available for Adoption" ? (
+                <p className="pet-card-check profile-check">
+                  ✓ {availabilityLabel}
+                </p>
+              ) : (
                 <p className="profile-check-muted profile-check">
-                  ○ Medical review pending
+                  ○ {availabilityLabel}
                 </p>
               )}
               {/* Always shown, not just when vaccinated - "not yet vaccinated"
@@ -177,14 +216,26 @@ export function AnimalProfilePage({ animal, isLoaded, isSignedIn, currentPage, o
               )}
 
               {/* Routes to the public adoption application form for this
-                  animal (see App.tsx's "adoption-apply" branch). If the
-                  visitor is not signed in the form itself prompts them to
-                  log in before applying. Hidden once the animal is adopted. */}
+                  animal (see App.tsx's "adoption-apply" branch). The visitor's
+                  current animal is carried by the navigation state, so a
+                  signed-in user goes straight to the form. Only an anonymous
+                  visitor needs the stashed intent: it survives the
+                  sign-in/register round trip (and a reload), and the form
+                  clears it on successful submit. Hidden once the animal is
+                  adopted. */}
               {animal.status !== "adopted" && animal.medicallyCleared && (
                 <button
                   type="button"
                   className="teal-button profile-adopt-button"
-                  onClick={() => onNavigate("adoption-apply")}
+                  onClick={() => {
+                    // Never stash for a signed-in visitor - they navigate
+                    // straight to the form, so a stash would only linger as a
+                    // stale resume prompt if they abandon the wizard.
+                    if (!isSignedIn) {
+                      savePendingAdoption(animal.id);
+                    }
+                    onNavigate("adoption-apply");
+                  }}
                 >
                   Adopt {animal.name}
                 </button>

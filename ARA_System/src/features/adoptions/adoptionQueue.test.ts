@@ -9,9 +9,10 @@ import {
 
 // Run: npm test (glob covers src/**/*.test.ts).
 describe("adoption queue tabs", () => {
-  it("treats completed and rejected as terminal", () => {
+  it("treats completed, rejected and withdrawn as terminal", () => {
     assert.equal(isTerminalAdoptionStatus("completed"), true);
     assert.equal(isTerminalAdoptionStatus("rejected"), true);
+    assert.equal(isTerminalAdoptionStatus("withdrawn"), true);
     assert.equal(isTerminalAdoptionStatus("submitted"), false);
     assert.equal(isTerminalAdoptionStatus("under_review"), false);
     assert.equal(isTerminalAdoptionStatus("approved"), false);
@@ -19,7 +20,14 @@ describe("adoption queue tabs", () => {
 
   it("splits every lifecycle status across exactly one tab", () => {
     const all = [...QUEUE_TAB_STATUSES.active, ...QUEUE_TAB_STATUSES.history].sort();
-    assert.deepEqual(all, ["approved", "completed", "rejected", "submitted", "under_review"]);
+    assert.deepEqual(all, [
+      "approved",
+      "completed",
+      "rejected",
+      "submitted",
+      "under_review",
+      "withdrawn",
+    ]);
   });
 
   it("matches dropdown options to their tab", () => {

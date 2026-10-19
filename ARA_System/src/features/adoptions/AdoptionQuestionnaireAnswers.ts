@@ -1,22 +1,21 @@
 import type { AdoptionApplication } from "../../types/adoption";
-import { calculateAge } from "../../utils/age";
 
-export type AnswerRow = { label: string; value: string };
+export type AnswerRow = { label: string; value: string; href?: string };
 export type AnswerSection = { title: string; rows: AnswerRow[] };
 
 // Short-code -> human label maps for the questionnaire radio answers.
-const HOUSING_LABEL: Record<string, string> = {
-  house: "House",
-  apartment: "Apartment",
+const AGE_BRACKET_LABEL: Record<string, string> = { adult: "Adult (18+)", minor: "Under 18" };
+const ID_DOCUMENT_LABEL: Record<string, string> = {
+  voter_card: "Voter ID card",
+  passport: "Passport",
+  drivers_licence: "Driver's licence",
+  other: "Other photo ID",
+};
+const GUARDIAN_RELATIONSHIP_LABEL: Record<string, string> = {
+  parent: "Parent",
+  guardian: "Guardian",
   other: "Other",
 };
-const TENURE_LABEL: Record<string, string> = { own: "Own", rent: "Rent" };
-const LANDLORD_LABEL: Record<string, string> = {
-  yes: "Yes",
-  no: "No",
-  not_sure: "Not sure",
-};
-const FENCED_LABEL: Record<string, string> = { yes: "Yes", no: "No", na: "N/A" };
 const YES_NO_LABEL: Record<string, string> = { yes: "Yes", no: "No" };
 const ADOPTION_FOR_LABEL: Record<string, string> = {
   self: "Themselves",
@@ -26,6 +25,25 @@ const ADOPTION_FOR_LABEL: Record<string, string> = {
 function codeLabel(value: string | null, map: Record<string, string>): string | null {
   if (!value) return null;
   return map[value] ?? value;
+}
+
+// Human labels for the questionnaire answer codes, reused by the applicant
+// wizard's review summary so its wording matches the staff/queue views.
+export function answerLabel(
+  field: "ageBracket" | "idDocumentType" | "guardianRelationship" | "adoptionFor",
+  value: string | null,
+): string | null {
+  const maps = {
+    ageBracket: AGE_BRACKET_LABEL,
+    idDocumentType: ID_DOCUMENT_LABEL,
+    guardianRelationship: GUARDIAN_RELATIONSHIP_LABEL,
+    adoptionFor: ADOPTION_FOR_LABEL,
+  };
+  return codeLabel(value, maps[field]);
+}
+
+export function yesNoLabel(value: string | null): string | null {
+  return codeLabel(value, YES_NO_LABEL);
 }
 
 // Groups an application's questionnaire answers into titled sections for the
@@ -57,37 +75,43 @@ export function questionnaireSections(application: AdoptionApplication): AnswerS
         { label: "Full name", value: application.fullName },
         { label: "Contact number", value: application.contactNumber ?? "Not provided" },
         { label: "Email", value: application.applicantEmail ?? "Not provided" },
-        { label: "Residential address", value: application.residentialAddress ?? "Not provided" },
         {
-          label: "Date of birth",
-          value: (() => {
-            if (!application.dateOfBirth) return "Not provided";
-            const age = calculateAge(application.dateOfBirth);
-            return age === null ? application.dateOfBirth : `${application.dateOfBirth} (age ${age})`;
-          })(),
+          label: "Age",
+          value: codeLabel(application.ageBracket, AGE_BRACKET_LABEL) ?? "Not provided",
         },
+        ...(application.ageBracket === "minor"
+          ? [
+              { label: "Guardian name", value: application.guardianName ?? "Not provided" },
+              { label: "Guardian contact", value: application.guardianContact ?? "Not provided" },
+              {
+                label: "Guardian relationship",
+                value:
+                  codeLabel(application.guardianRelationship, GUARDIAN_RELATIONSHIP_LABEL) ??
+                  "Not provided",
+              },
+              {
+                label: "Guardian consent",
+                value: application.guardianConsent ? "Given" : "Not given",
+              },
+            ]
+          : []),
+        {
+          label: "Identification",
+          value: codeLabel(application.idDocumentType, ID_DOCUMENT_LABEL) ?? "Not provided",
+        },
+        ...(application.idDocumentUrl
+          ? [{ label: "ID photo", value: "Open document photo", href: application.idDocumentUrl }]
+          : []),
       ],
     },
     {
       title: "2. Household",
       rows: [
-        { label: "Housing type", value: codeLabel(application.housingType, HOUSING_LABEL) ?? "Not provided" },
-        { label: "Own or rent", value: codeLabel(application.tenure, TENURE_LABEL) ?? "Not provided" },
-        ...(application.tenure === "rent"
-          ? [
-              {
-                label: "Landlord allows pets",
-                value: codeLabel(application.landlordPetsAllowed, LANDLORD_LABEL) ?? "Not provided",
-              },
-            ]
-          : []),
-        { label: "Fenced / secure space", value: codeLabel(application.fencedYard, FENCED_LABEL) ?? "Not provided" },
-        {
-          label: "People in household",
-          value: application.householdSize != null ? String(application.householdSize) : "Not provided",
-        },
-        { label: "Children's ages", value: application.childrenAges || "None mentioned" },
         { label: "Pet allergies", value: codeLabel(application.petAllergies, YES_NO_LABEL) ?? "Not provided" },
+        {
+          label: "Asthma / respiratory condition",
+          value: codeLabel(application.respiratoryIssues, YES_NO_LABEL) ?? "Not provided",
+        },
       ],
     },
     {
@@ -106,30 +130,15 @@ export function questionnaireSections(application: AdoptionApplication): AnswerS
     {
       title: "4. Care plan",
       rows: [
-        { label: "Hours alone per day", value: application.aloneHours ?? "Not provided" },
-        { label: "Primary caregiver", value: application.primaryCaregiver ?? "Not provided" },
-        { label: "Daily routine", value: application.dailyRoutine ?? "Not provided" },
         { label: "Vet cost plan", value: application.vetCostPlan ?? "Not provided" },
-        { label: "Travel care plan", value: application.travelCarePlan ?? "Not provided" },
+        { label: "Next of kin", value: application.nextOfKinName ?? "Not provided" },
+        { label: "Next of kin contact", value: application.nextOfKinContact ?? "Not provided" },
       ],
     },
     {
-      title: "5. Motivation",
+      title: "5. Adoption for",
       rows: [
-        { label: "Why adopt", value: application.adoptionMotivation ?? "Not provided" },
         { label: "Adoption for", value: codeLabel(application.adoptionFor, ADOPTION_FOR_LABEL) ?? "Not provided" },
-        {
-          label: "Household agrees",
-          value: codeLabel(application.householdAgreement, YES_NO_LABEL) ?? "Not provided",
-        },
-      ],
-    },
-    {
-      title: "6. Acknowledgements",
-      rows: [
-        { label: "Home visit consent", value: application.consentHomeVisit ? "Given" : "Not given" },
-        { label: "Return to SPCA Fiji", value: application.agreeReturnToSpca ? "Agreed" : "Not agreed" },
-        { label: "Information accurate", value: application.confirmAccurate ? "Confirmed" : "Not confirmed" },
       ],
     },
   ];
@@ -139,4 +148,10 @@ export function questionnaireSections(application: AdoptionApplication): AnswerS
 // Extra-review flag for gift adoptions, shown as a badge in the staff queue.
 export function isGiftAdoption(application: AdoptionApplication): boolean {
   return application.adoptionFor === "gift";
+}
+
+// Safeguarding flag for minor applicants, shown as a badge in the staff
+// queue so reviewers spot guardian-consent cases without opening the record.
+export function isMinorApplication(application: AdoptionApplication): boolean {
+  return application.ageBracket === "minor";
 }

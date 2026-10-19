@@ -1,5 +1,5 @@
 import { SignInButton, useAuth, useUser } from "@clerk/react";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import spcaLogo from "../../assets/spca-logo.png";
 import { SiteHeader, type SiteHeaderView } from "../../components/SiteHeader";
 import { Breadcrumbs } from "../../components/Breadcrumbs";
@@ -8,26 +8,40 @@ import { SuccessToast } from "../../components/SuccessToast";
 import { fetchAnimalById, updateAnimal } from "../../services/animalsApi";
 import type { Animal, AnimalFormInput } from "../../types/animal";
 import { isDevBypassEnabled } from "../../utils/devBypass";
+import { setFlashToast } from "../../utils/flashToast";
+import { parseEstimatedAge } from "./animalFieldRules";
 import { AnimalProfileFields } from "./AnimalProfileFields";
-import { validateAnimalForm } from "./validateAnimalForm";
+import { useBreedOptions } from "./useBreedOptions";
+import { toAnimalPayload, validateAnimalForm } from "./validateAnimalForm";
 
 type EditAnimalProfileProps = {
   animalId: string;
   onNavigate: (view: SiteHeaderView | "manage-animals") => void;
+  onInvalidContext: () => void;
 };
 
 // Converts the API's Animal record (with nullable fields) into the plain
 // string-based shape the form inputs need.
 function toFormInput(animal: Animal): AnimalFormInput {
+  // Rabbit is no longer a species option - migrations 0015/0016 made existing
+  // rabbits other + species "Rabbit". If one is ever still typed "rabbit"
+  // (e.g. on a database without those migrations) it opens the same way.
+  const isLegacyRabbit = animal.type === "rabbit";
+  // "2.5 Years" -> 2.5 + years. An age that can't be understood (e.g. "2"
+  // with no unit, or junk) opens empty, so staff must re-enter it.
+  const age = parseEstimatedAge(animal.estimatedAge);
   return {
     name: animal.name,
-    type: animal.type,
-    breed: animal.breed ?? "",
-    estimatedAge: animal.estimatedAge ?? "",
+    type: animal.type === "rabbit" ? "other" : animal.type,
+    speciesName: isLegacyRabbit ? "Rabbit" : (animal.speciesName ?? ""),
+    breed: animal.breed?.trim() ?? "",
+    ageValue: age?.value ?? "",
+    ageUnit: age?.unit ?? "",
     gender: animal.gender ?? "",
     colour: animal.colour ?? "",
     description: animal.description ?? "",
-    rescueDate: animal.rescueDate ?? "",
+    // rescueDate deliberately excluded - it's not part of this form at all
+    // (see AnimalFormInput's comment), so editing can never change it.
     behaviour: animal.behaviour ?? "",
     rescueHistory: animal.rescueHistory ?? "",
     photoUrls: animal.photoUrls,
@@ -35,14 +49,15 @@ function toFormInput(animal: Animal): AnimalFormInput {
     // Legacy animals registered before this field existed have size: null -
     // fall back to the unselected placeholder so staff can pick one now.
     size: animal.size ?? "",
-    // Same fallback for veterinary priority - staff can set it on an edit.
+    // Legacy animals with no priority start unselected, so staff must pick
+    // one before saving (VeterinaryPriorityField.tsx).
     veterinaryPriority: animal.veterinaryPriority ?? "",
   };
 }
 
 // Staff-only page: loads one animal's profile and lets staff update it
 // through the same field set used for registration.
-export function EditAnimalProfile({ animalId, onNavigate }: EditAnimalProfileProps) {
+export function EditAnimalProfile({ animalId, onNavigate, onInvalidContext }: EditAnimalProfileProps) {
   const { getToken, isLoaded, isSignedIn } = useAuth();
   const { user } = useUser();
   const role = user?.publicMetadata.role;
@@ -50,6 +65,9 @@ export function EditAnimalProfile({ animalId, onNavigate }: EditAnimalProfilePro
     isDevBypassEnabled || role === "staff" || role === "veterinarian" || role === "manager" || role === "admin";
 
   const [form, setForm] = useState<AnimalFormInput | null>(null);
+  const breedOptions = useBreedOptions(form?.type, form?.speciesName);
+  // Turned on by a blocked save so every field's problem shows at once.
+  const [showAllErrors, setShowAllErrors] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -60,33 +78,49 @@ export function EditAnimalProfile({ animalId, onNavigate }: EditAnimalProfilePro
   // existing error-handling path (alert + inline .invite-feedback.error
   // message), which is untouched.
   const [successToastMessage, setSuccessToastMessage] = useState("");
+  const navigationVersion = useRef(0);
+  const returnTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => {
+    navigationVersion.current += 1;
+    window.clearTimeout(returnTimer.current);
+  }, [animalId]);
 
   // Fetches the animal to edit once staff access is confirmed.
   useEffect(() => {
     if (!isLoaded || !isSignedIn || !hasStaffAccess) return;
+    let cancelled = false;
 
     void (async () => {
       try {
         const token = await getToken();
         if (!token) throw new Error("Your Clerk session has expired.");
         const animal = await fetchAnimalById(token, animalId);
+        if (cancelled) return;
         setForm(toFormInput(animal));
       } catch (error) {
+        if (cancelled) return;
+        if (error instanceof Error && /animal not found/i.test(error.message)) {
+          onInvalidContext();
+          return;
+        }
         setLoadError(error instanceof Error ? error.message : "Animal profile could not be loaded.");
       } finally {
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);
       }
     })();
-  }, [animalId, getToken, hasStaffAccess, isLoaded, isSignedIn]);
+    return () => { cancelled = true; };
+  }, [animalId, getToken, hasStaffAccess, isLoaded, isSignedIn, onInvalidContext]);
 
   // Validates the form, shows an alert and blocks submission if anything
   // required is missing/invalid, then saves the changes.
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!form) return;
+    const version = navigationVersion.current;
 
-    const validationError = validateAnimalForm(form);
+    const validationError = validateAnimalForm(form, breedOptions.options);
     if (validationError) {
+      setShowAllErrors(true);
       window.alert(validationError);
       setSaveError(validationError);
       return;
@@ -98,17 +132,26 @@ export function EditAnimalProfile({ animalId, onNavigate }: EditAnimalProfilePro
     try {
       const token = await getToken();
       if (!token) throw new Error("Your Clerk session has expired. Please sign in again.");
-      await updateAnimal(token, animalId, form);
+      const payload = toAnimalPayload(form);
+      await updateAnimal(token, animalId, payload);
+      if (version !== navigationVersion.current) return;
+      const toastMessage = `✓ ${payload.name} updated successfully!`;
       setSaveMessage("Animal profile updated.");
-      setSuccessToastMessage(`✓ ${form.name} updated successfully!`);
+      setSuccessToastMessage(toastMessage);
       // Give staff a moment to actually see the toast before the page
       // changes out from under it - navigating immediately would unmount
       // this component (and the toast with it) before it ever painted.
+      // The same message is handed to Manage animal profiles
+      // (utils/flashToast.ts), so it carries on there after the redirect.
       // isSubmitting deliberately stays true here (not reset in a finally)
       // so "Save changes" stays disabled for this brief window rather than
       // becoming re-clickable right before navigating away.
-      window.setTimeout(() => onNavigate("manage-animals"), 1200);
+      returnTimer.current = window.setTimeout(() => {
+        setFlashToast(toastMessage);
+        onNavigate("manage-animals");
+      }, 1200);
     } catch (error) {
+      if (version !== navigationVersion.current) return;
       const message = error instanceof Error ? error.message : "The animal profile could not be updated.";
       window.alert(message);
       setSaveError(message);
@@ -190,7 +233,13 @@ export function EditAnimalProfile({ animalId, onNavigate }: EditAnimalProfilePro
             {saveError && <p className="invite-feedback error">{saveError}</p>}
 
             <form className="animal-form" onSubmit={handleSubmit}>
-              <AnimalProfileFields value={form} onChange={setForm} getToken={getToken} />
+              <AnimalProfileFields
+                value={form}
+                onChange={setForm}
+                getToken={getToken}
+                breedOptions={breedOptions}
+                showAllErrors={showAllErrors}
+              />
               <div className="animal-form-actions">
                 {/* No confirmation - the form has no persisted draft to lose
                     (nothing is saved until "Save changes" succeeds), so
