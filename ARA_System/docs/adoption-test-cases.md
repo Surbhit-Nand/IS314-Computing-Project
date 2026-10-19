@@ -5,6 +5,22 @@
 > **System:** ARA — Animal Rescue & Adoption Management System, SPCA Fiji (Group 7, IS314 Computing Project).
 > **Date:** 2026-10-19
 
+> **⚠️ Scope — this is a snapshot taken before the hardening merge.** The case
+> list below (AD-01 … AD-37) documents the adoption suites as they stood on
+> `main` @ `06f364a`: `adoptions.service.test.ts` (34 cases) plus
+> `adoptionQueue.test.ts` (3). The `fix/adoption-module-hardening` branch was
+> then merged into `main` (`1e69b5f`), which grew adoption coverage to **79
+> cases — all passing**:
+>
+> | Suite | Cases |
+> | ----- | ----- |
+> | `adoptions.service.test.ts` | 44 (was 34) |
+> | `adoptions.validation.test.ts` (new) | 32 |
+> | `adoptionQueue.test.ts` | 3 |
+>
+> The 10 extra service cases and the whole validation suite are **not written up
+> below yet**; the environment block records the pre-merge run.
+
 ## Summary
 
 | Item               | Value                                                              |
