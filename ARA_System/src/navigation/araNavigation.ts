@@ -40,6 +40,7 @@ const id = z.string().trim().min(1);
 const nullableText = z.string().nullable();
 const animalSchema = z.object({
   id, publicId: z.string(), name: z.string(), type: z.enum(["dog", "cat", "rabbit", "other"]),
+  speciesName: nullableText.default(null),
   breed: nullableText, estimatedAge: nullableText, gender: nullableText, colour: nullableText,
   description: nullableText, rescueDate: nullableText, behaviour: nullableText, rescueHistory: nullableText,
   photoUrls: z.array(z.string()), vaccinationStatus: z.enum(["vaccinated", "not_vaccinated"]),

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Animal, AnimalSize } from "../types/animal";
-import { capitalize } from "../utils/format";
+import { breedLineLabel, capitalize, speciesLabel } from "../utils/format";
 import { useFavoriteAnimals } from "../utils/favorites";
 import { searchAnimalsWithAI } from "../services/animalsApi";
 import { ANIMAL_TRAITS, buildAnimalTags, extractTraits, type TraitGroup } from "../utils/animalTags";
@@ -94,6 +94,16 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
     return ["all", ...[...set].sort()];
   }, [animals]);
 
+  // Typed species of the loaded "other" animals (Rabbit, Guinea Pig...), so
+  // the Species filter can offer each one by name, same idea as breeds.
+  const otherSpecies = useMemo(() => {
+    const set = new Set<string>();
+    for (const animal of animals) {
+      if (animal.type === "other" || animal.type === "rabbit") set.add(speciesLabel(animal));
+    }
+    return [...set].sort();
+  }, [animals]);
+
   // Unique colour list derived from the loaded animals, same idea as breeds.
   const colours = useMemo(() => {
     const set = new Set<string>();
@@ -179,10 +189,16 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
     () =>
       ranked.filter((animal) => {
         if (filters.type !== "all") {
-          // "Other" groups anything that isn't a dog or cat (rabbits, birds,
-          // etc.) so those profiles show under a single species option.
-          const isOther = filters.type === "other" && animal.type !== "dog" && animal.type !== "cat";
-          if (!isOther && animal.type !== filters.type) return false;
+          const isOtherPet = animal.type !== "dog" && animal.type !== "cat";
+          if (filters.type.startsWith("species:")) {
+            // One typed species, e.g. "species:Rabbit".
+            if (!isOtherPet || speciesLabel(animal) !== filters.type.slice("species:".length)) return false;
+          } else if (filters.type === "other") {
+            // "All other pets" groups everything that isn't a dog or cat.
+            if (!isOtherPet) return false;
+          } else if (animal.type !== filters.type) {
+            return false;
+          }
         }
         if (filters.gender !== "all" && (animal.gender ?? "").toLowerCase() !== filters.gender)
           return false;
@@ -291,7 +307,10 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
                 ["all", "All"],
                 ["dog", "Dogs"],
                 ["cat", "Cats"],
-                ["other", "Other Pets"],
+                // Each typed species of the "other" animals listed by name...
+                ...otherSpecies.map((species) => [`species:${species}`, species]),
+                // ...plus one option covering all of them.
+                ...(otherSpecies.length > 0 ? [["other", "All other pets"]] : []),
               ].map(([value, label]) => (
                 <label key={value} className="filter-option">
                   <input
@@ -502,7 +521,7 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
                     }
                   >
                     {!activePhoto && (
-                      <span className="animal-image-label">{capitalize(animal.type)}</span>
+                      <span className="animal-image-label">{speciesLabel(animal)}</span>
                     )}
                     {animal.photoUrls.length > 1 && (
                       <>
@@ -550,7 +569,7 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
                   </div>
                   <div className="pet-card-body">
                     <h3 className="pet-card-name">{animal.name}</h3>
-                    <p className="pet-card-breed">{animal.breed ?? "Breed not recorded"}</p>
+                    <p className="pet-card-breed">{breedLineLabel(animal)}</p>
                     <AnimalTagChips
                       tags={buildAnimalTags(animal)}
                       onSelectTag={(tag) =>

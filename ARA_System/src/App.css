@@ -3035,6 +3035,82 @@
   font-weight: 800;
 }
 
+/* Register / Edit animal profile only (.animal-profile-fields). The shared
+   .animal-form-grid styles above also serve the rescue and adoption forms,
+   so these label/error/counter rules are scoped to leave those unchanged.
+   Field names read as headings (larger, bold, teal) above normal-weight
+   inputs, with a red asterisk on required fields. */
+.animal-profile-fields label {
+  gap: 6px;
+  font-size: inherit;
+  font-weight: 400;
+}
+
+.animal-profile-fields .animal-field-label,
+.animal-profile-fields .animal-photo-label .animal-field-label {
+  color: var(--teal-dark);
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.animal-profile-fields .animal-photo-label {
+  font-weight: 600;
+  color: var(--slate);
+}
+
+.animal-field-required {
+  color: var(--red);
+  font-weight: 800;
+}
+
+.animal-form-required-note {
+  margin: 0;
+  color: var(--slate);
+  font-size: 0.85rem;
+}
+
+.animal-profile-fields input,
+.animal-profile-fields select,
+.animal-profile-fields textarea {
+  font-size: 0.95rem;
+}
+
+.animal-profile-fields [aria-invalid="true"] {
+  border-color: var(--red);
+}
+
+.animal-field-error {
+  color: var(--red);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.animal-field-counter {
+  align-self: flex-end;
+  color: var(--slate);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.animal-field-counter.out-of-range {
+  color: var(--red);
+}
+
+/* Estimated age: number box + unit dropdown side by side, laid out like the
+   other fields' labels. */
+.animal-age-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.animal-age-inputs {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 8rem);
+  gap: 8px;
+}
+
 .animal-photo-list {
   display: flex;
   flex-wrap: wrap;
@@ -3098,6 +3174,60 @@
 .animal-search-input:focus {
   border-color: var(--teal);
   box-shadow: 0 0 0 3px rgba(21, 135, 195, 0.12);
+}
+
+/* Manage animal profiles: sort + filter bar under the search box. Wraps onto
+   extra lines on narrow screens; selects match .animal-search-input. */
+.manage-animals-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 14px;
+  margin-bottom: 18px;
+}
+
+.manage-animals-control {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 150px;
+  min-width: 0;
+  color: var(--slate);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.manage-animals-control select {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--navy);
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  outline: none;
+}
+
+.manage-animals-control select:focus {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px rgba(21, 135, 195, 0.12);
+}
+
+.manage-animals-count {
+  margin: 0 0 0 auto;
+  align-self: center;
+  color: var(--slate);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+@media (max-width: 620px) {
+  .manage-animals-count {
+    margin-left: 0;
+    flex-basis: 100%;
+  }
 }
 
 .animal-table {
@@ -3731,6 +3861,38 @@
   box-shadow: var(--shadow);
 }
 
+/* Click-to-preview target covering the whole photo box; opens the
+   uncropped photo in the .photo-lightbox. No visible label - the zoom-in
+   cursor and a faint hover tint signal that the photo is clickable. */
+.profile-hero-preview {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: zoom-in;
+  transition: background-color 0.15s ease;
+}
+
+.profile-hero-preview:hover {
+  background: rgba(17, 24, 32, 0.08);
+}
+
+.profile-hero-preview:focus-visible {
+  outline: 3px solid var(--aqua);
+  outline-offset: -3px;
+}
+
+/* Heart + prev/next sit above the preview button so they keep their own
+   clicks. */
+.profile-hero-image .favorite-button,
+.profile-hero-image .profile-photo-nav {
+  z-index: 2;
+}
+
 .profile-hero-image .favorite-button {
   position: absolute;
   top: 16px;
@@ -3797,6 +3959,101 @@
 
 .profile-thumb.active {
   border-color: var(--teal);
+}
+
+/* Photo lightbox: full-screen uncropped preview opened from the profile
+   photo. Modal layer (z-index 100) and backdrop colour match .modal-backdrop. */
+.photo-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 68px 16px 24px;
+  background: rgba(17, 24, 32, 0.88);
+  animation: photo-lightbox-in 0.18s ease;
+}
+
+.photo-lightbox-image {
+  display: block;
+  max-width: min(100%, 1200px);
+  max-height: calc(100vh - 92px);
+  max-height: calc(100dvh - 92px);
+  object-fit: contain;
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+
+.photo-lightbox-counter {
+  position: absolute;
+  top: 18px;
+  left: 20px;
+  margin: 0;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--white);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.photo-lightbox-close {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--navy);
+  font-size: 1.1rem;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.photo-lightbox-close:hover {
+  background: var(--white);
+}
+
+.photo-lightbox-nav {
+  width: 48px;
+  height: 48px;
+}
+
+@keyframes photo-lightbox-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .photo-lightbox {
+    animation: none;
+  }
+}
+
+@media (max-width: 620px) {
+  .photo-lightbox {
+    padding: 68px 8px 16px;
+  }
+
+  .photo-lightbox-nav {
+    width: 40px;
+    height: 40px;
+  }
+
+  .photo-lightbox-nav.prev {
+    left: 8px;
+  }
+
+  .photo-lightbox-nav.next {
+    right: 8px;
+  }
 }
 
 /* Two-column body: LEFT structured details, RIGHT prose/story - matches the

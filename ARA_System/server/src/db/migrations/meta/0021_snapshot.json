@@ -174,6 +174,12 @@
           "type": "vector(768)",
           "primaryKey": false,
           "notNull": false
+        },
+        "species_name": {
+          "name": "species_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {},
@@ -1507,7 +1513,6 @@
           "isUnique": true,
           "concurrently": false,
           "method": "btree",
-          "where": "(status = 'booked'::text)",
           "with": {}
         }
       },
@@ -1593,12 +1598,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
-        },
-        "action_id": {
-          "name": "action_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {},
@@ -1951,6 +1950,83 @@
       "policies": {},
       "isRLSEnabled": false
     },
+    "public.breeds": {
+      "name": "breeds",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "species": {
+          "name": "species",
+          "type": "animal_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "species_name": {
+          "name": "species_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "breeds_species_species_name_name_unique": {
+          "name": "breeds_species_species_name_name_unique",
+          "columns": [
+            {
+              "expression": "species",
+              "asc": true,
+              "nulls": "last",
+              "opclass": "text_ops",
+              "isExpression": true
+            },
+            {
+              "expression": "lower(COALESCE(species_name, ''::text))",
+              "asc": true,
+              "nulls": "last",
+              "opclass": "enum_ops",
+              "isExpression": true
+            },
+            {
+              "expression": "lower(name)",
+              "asc": true,
+              "nulls": "last",
+              "opclass": "enum_ops",
+              "isExpression": true
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false
+    },
     "public.rescue_takeover_requests": {
       "name": "rescue_takeover_requests",
       "schema": "",
@@ -2072,118 +2148,6 @@
       "checkConstraints": {},
       "policies": {},
       "isRLSEnabled": false
-    },
-    "public.veterinary_triage_assessments": {
-      "name": "veterinary_triage_assessments",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "animal_id": {
-          "name": "animal_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "clinical_stability": {
-          "name": "clinical_stability",
-          "type": "triage_clinical_stability",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "intervention_urgency": {
-          "name": "intervention_urgency",
-          "type": "triage_intervention_urgency",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "condition_trend": {
-          "name": "condition_trend",
-          "type": "triage_condition_trend",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "emergency_findings": {
-          "name": "emergency_findings",
-          "type": "triage_emergency_finding[]",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "ARRAY[]::triage_emergency_finding[]"
-        },
-        "notes": {
-          "name": "notes",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "performed_by_clerk_user_id": {
-          "name": "performed_by_clerk_user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "assessed_at": {
-          "name": "assessed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "veterinary_triage_assessments_animal_assessed_idx": {
-          "name": "veterinary_triage_assessments_animal_assessed_idx",
-          "columns": [
-            {
-              "expression": "animal_id",
-              "asc": true,
-              "nulls": "last",
-              "opclass": "timestamptz_ops",
-              "isExpression": false
-            },
-            {
-              "expression": "assessed_at",
-              "asc": false,
-              "nulls": "first",
-              "opclass": "timestamptz_ops",
-              "isExpression": false
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "veterinary_triage_assessments_animal_id_animals_id_fk": {
-          "name": "veterinary_triage_assessments_animal_id_animals_id_fk",
-          "tableFrom": "veterinary_triage_assessments",
-          "tableTo": "animals",
-          "schemaTo": "public",
-          "columnsFrom": [
-            "animal_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {},
-      "policies": {},
-      "isRLSEnabled": false
     }
   },
   "enums": {
@@ -2238,45 +2202,6 @@
       ],
       "schema": "public"
     },
-    "public.triage_clinical_stability": {
-      "name": "triage_clinical_stability",
-      "values": [
-        "unstable",
-        "currently_stable",
-        "not_yet_assessed"
-      ],
-      "schema": "public"
-    },
-    "public.triage_condition_trend": {
-      "name": "triage_condition_trend",
-      "values": [
-        "deteriorating",
-        "unchanged",
-        "improving",
-        "unknown"
-      ],
-      "schema": "public"
-    },
-    "public.triage_emergency_finding": {
-      "name": "triage_emergency_finding",
-      "values": [
-        "severe_bleeding",
-        "breathing_difficulty",
-        "circulatory_compromise",
-        "altered_consciousness",
-        "other_emergency_concern"
-      ],
-      "schema": "public"
-    },
-    "public.triage_intervention_urgency": {
-      "name": "triage_intervention_urgency",
-      "values": [
-        "immediate_intervention",
-        "urgent_evaluation",
-        "stabilized_monitoring"
-      ],
-      "schema": "public"
-    },
     "public.vaccination_status": {
       "name": "vaccination_status",
       "values": [
@@ -2296,6 +2221,6 @@
     "tables": {},
     "columns": {}
   },
-  "id": "a4093dcc-84be-58aa-a756-03dc4496201e",
-  "prevId": "db574c31-f592-5fde-8eac-92fa9d57042d"
+  "id": "87703230-87c3-5b45-8356-12d342d8bdda",
+  "prevId": "8c781232-12ac-54f0-a392-440d80038473"
 }

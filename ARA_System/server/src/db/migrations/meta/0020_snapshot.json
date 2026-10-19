@@ -174,6 +174,12 @@
           "type": "vector(768)",
           "primaryKey": false,
           "notNull": false
+        },
+        "species_name": {
+          "name": "species_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {},
@@ -1507,7 +1513,6 @@
           "isUnique": true,
           "concurrently": false,
           "method": "btree",
-          "where": "(status = 'booked'::text)",
           "with": {}
         }
       },
@@ -1593,12 +1598,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
-        },
-        "action_id": {
-          "name": "action_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {},
@@ -1951,8 +1950,8 @@
       "policies": {},
       "isRLSEnabled": false
     },
-    "public.rescue_takeover_requests": {
-      "name": "rescue_takeover_requests",
+    "public.breeds": {
+      "name": "breeds",
       "schema": "",
       "columns": {
         "id": {
@@ -1962,60 +1961,18 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "report_id": {
-          "name": "report_id",
-          "type": "uuid",
+        "species": {
+          "name": "species",
+          "type": "animal_type",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": true
         },
-        "requested_by_clerk_user_id": {
-          "name": "requested_by_clerk_user_id",
+        "name": {
+          "name": "name",
           "type": "text",
           "primaryKey": false,
           "notNull": true
-        },
-        "requested_by_name": {
-          "name": "requested_by_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "assigned_to_clerk_user_id": {
-          "name": "assigned_to_clerk_user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "reason": {
-          "name": "reason",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'pending'"
-        },
-        "decided_by_clerk_user_id": {
-          "name": "decided_by_clerk_user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "decided_at": {
-          "name": "decided_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "decision_note": {
-          "name": "decision_note",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
         },
         "created_at": {
           "name": "created_at",
@@ -2023,50 +1980,47 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "species_name": {
+          "name": "species_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
-        "rescue_takeover_pending_unique": {
-          "name": "rescue_takeover_pending_unique",
+        "breeds_species_species_name_name_unique": {
+          "name": "breeds_species_species_name_name_unique",
           "columns": [
             {
-              "expression": "report_id",
+              "expression": "species",
               "asc": true,
               "nulls": "last",
               "opclass": "text_ops",
-              "isExpression": false
+              "isExpression": true
             },
             {
-              "expression": "requested_by_clerk_user_id",
+              "expression": "lower(COALESCE(species_name, ''::text))",
               "asc": true,
               "nulls": "last",
-              "opclass": "text_ops",
-              "isExpression": false
+              "opclass": "enum_ops",
+              "isExpression": true
+            },
+            {
+              "expression": "lower(name)",
+              "asc": true,
+              "nulls": "last",
+              "opclass": "enum_ops",
+              "isExpression": true
             }
           ],
           "isUnique": true,
           "concurrently": false,
           "method": "btree",
-          "where": "(status = 'pending'::text)",
           "with": {}
         }
       },
-      "foreignKeys": {
-        "rescue_takeover_requests_report_id_rescue_reports_id_fk": {
-          "name": "rescue_takeover_requests_report_id_rescue_reports_id_fk",
-          "tableFrom": "rescue_takeover_requests",
-          "tableTo": "rescue_reports",
-          "schemaTo": "public",
-          "columnsFrom": [
-            "report_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {},
@@ -2145,6 +2099,6 @@
     "tables": {},
     "columns": {}
   },
-  "id": "db574c31-f592-5fde-8eac-92fa9d57042d",
-  "prevId": "b2a04964-5c8d-5918-8203-fa9b12d15e15"
+  "id": "8c781232-12ac-54f0-a392-440d80038473",
+  "prevId": "a293e4b6-d858-5f59-8a7a-e9aff754bb23"
 }

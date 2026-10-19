@@ -8,6 +8,17 @@ import { SuccessToast } from "../../components/SuccessToast";
 import { deleteAnimal, fetchStaffAnimals } from "../../services/animalsApi";
 import { adoptionStatusLabel, vaccinationStatusLabel, type Animal } from "../../types/animal";
 import { isDevBypassEnabled } from "../../utils/devBypass";
+import { clearFlashToast, peekFlashToast, type FlashToast } from "../../utils/flashToast";
+import { speciesLabel } from "../../utils/format";
+import {
+  ALL_FILTERS,
+  SORT_OPTIONS,
+  manageView,
+  speciesOptions,
+  statusOptions,
+  type ManageFilters,
+  type ManageSort,
+} from "./manageAnimalsView";
 
 type ManageAnimalProfilesProps = {
   onNavigate: (view: SiteHeaderView | "staff-dashboard" | "register-animal") => void;
@@ -31,7 +42,17 @@ export function ManageAnimalProfiles({ onNavigate, onSelectAnimal }: ManageAnima
   // button and shows "Deleting..." rather than blocking the whole page).
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState("");
-  const [successToastMessage, setSuccessToastMessage] = useState("");
+  // Starts with any toast handed over by Register / Edit just before they
+  // navigated here (utils/flashToast.ts) - e.g. "✓ Fanny registered
+  // successfully! Animal ID: SPCA-2026-1234".
+  const [successToast, setSuccessToast] = useState<FlashToast | null>(() => peekFlashToast());
+  const [sort, setSort] = useState<ManageSort>("newest");
+  const [filters, setFilters] = useState<ManageFilters>(ALL_FILTERS);
+
+  // The handed-over toast is now on screen - clear it so it shows only once.
+  useEffect(() => {
+    clearFlashToast();
+  }, []);
 
   // Loads every animal profile once the staff member's access is confirmed.
   useEffect(() => {
@@ -67,7 +88,7 @@ export function ManageAnimalProfiles({ onNavigate, onSelectAnimal }: ManageAnima
       if (!token) throw new Error("Your Clerk session has expired. Please sign in again.");
       await deleteAnimal(token, animal.id);
       setAnimals((previous) => previous.filter((existing) => existing.id !== animal.id));
-      setSuccessToastMessage(`✓ ${animal.name}'s profile deleted.`);
+      setSuccessToast({ message: `✓ ${animal.name}'s profile deleted.`, durationMs: 5000 });
     } catch (error) {
       const message = error instanceof Error ? error.message : "The animal profile could not be deleted.";
       window.alert(message);
@@ -77,18 +98,22 @@ export function ManageAnimalProfiles({ onNavigate, onSelectAnimal }: ManageAnima
     }
   }
 
-  // Filters the already-loaded list client-side across the fields staff are
-  // most likely to search by - no extra network round trip needed.
-  const filteredAnimals = useMemo(() => {
-    const term = searchTerm.trim().toLowerCase();
-    if (!term) return animals;
-    return animals.filter((animal) =>
-      [animal.publicId, animal.name, animal.breed ?? "", animal.type]
-        .join(" ")
-        .toLowerCase()
-        .includes(term),
-    );
-  }, [animals, searchTerm]);
+  // Search, then filter, then sort - all client-side on the already-loaded
+  // list (it isn't paginated), so no extra network round trips.
+  const filteredAnimals = useMemo(
+    () => manageView(animals, searchTerm, filters, sort),
+    [animals, searchTerm, filters, sort],
+  );
+  // Status filter options: only statuses that actually exist right now.
+  const statuses = useMemo(() => statusOptions(animals), [animals]);
+  // Species filter: Dog, Cat, then every species registered under Other.
+  const otherSpecies = useMemo(() => speciesOptions(animals), [animals]);
+  const filtersActive =
+    filters.species !== "all" || filters.status !== "all" || filters.vaccination !== "all";
+
+  function setFilter<K extends keyof ManageFilters>(key: K, next: ManageFilters[K]) {
+    setFilters((previous) => ({ ...previous, [key]: next }));
+  }
 
   if (!isLoaded || !isSignedIn) {
     return (
@@ -132,10 +157,11 @@ export function ManageAnimalProfiles({ onNavigate, onSelectAnimal }: ManageAnima
 
   return (
     <main className="dashboard-page">
-      {successToastMessage && (
+      {successToast && (
         <SuccessToast
-          message={successToastMessage}
-          onDismiss={() => setSuccessToastMessage("")}
+          message={successToast.message}
+          durationMs={successToast.durationMs}
+          onDismiss={() => setSuccessToast(null)}
         />
       )}
 
@@ -168,12 +194,82 @@ export function ManageAnimalProfiles({ onNavigate, onSelectAnimal }: ManageAnima
           />
         </div>
 
+        {/* Sort + filters for this page only (not the public listings). They
+            apply after the search above; wraps onto more lines on narrow
+            screens. */}
+        <div className="manage-animals-toolbar">
+          <label className="manage-animals-control">
+            <span>Sort by</span>
+            <select value={sort} onChange={(event) => setSort(event.target.value as ManageSort)}>
+              {SORT_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="manage-animals-control">
+            <span>Species</span>
+            <select
+              value={filters.species}
+              onChange={(event) => setFilter("species", event.target.value)}
+            >
+              <option value="all">All</option>
+              <option value="dog">Dog</option>
+              <option value="cat">Cat</option>
+              {/* Each species registered under Other, by name (Rabbit, Hamster...). */}
+              {otherSpecies.map((species) => (
+                <option key={species} value={species}>
+                  {species}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="manage-animals-control">
+            <span>Status</span>
+            <select value={filters.status} onChange={(event) => setFilter("status", event.target.value)}>
+              <option value="all">All</option>
+              {statuses.map((status) => (
+                <option key={status} value={status}>
+                  {status}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="manage-animals-control">
+            <span>Vaccination</span>
+            <select
+              value={filters.vaccination}
+              onChange={(event) => setFilter("vaccination", event.target.value as ManageFilters["vaccination"])}
+            >
+              <option value="all">All</option>
+              <option value="vaccinated">Vaccinated</option>
+              <option value="not_vaccinated">Not yet vaccinated</option>
+            </select>
+          </label>
+          <button
+            type="button"
+            className="ghost-button small-button"
+            onClick={() => setFilters(ALL_FILTERS)}
+            disabled={!filtersActive}
+          >
+            Clear filters
+          </button>
+          {!isLoading && !loadError && (
+            <p className="manage-animals-count" aria-live="polite">
+              Showing {filteredAnimals.length} of {animals.length} profile{animals.length === 1 ? "" : "s"}
+            </p>
+          )}
+        </div>
+
         {deleteError && <p className="invite-feedback error">{deleteError}</p>}
 
         {isLoading && <SkeletonLoader variant="card" />}
         {!isLoading && loadError && <p className="dashboard-data-state error">{loadError}</p>}
         {!isLoading && !loadError && filteredAnimals.length === 0 && (
-          <p className="dashboard-data-state">No animal profiles match your search.</p>
+          <p className="dashboard-data-state">
+            {filtersActive ? "No animals match these filters." : "No animal profiles match your search."}
+          </p>
         )}
 
         {!isLoading && !loadError && filteredAnimals.length > 0 && (
@@ -193,7 +289,7 @@ export function ManageAnimalProfiles({ onNavigate, onSelectAnimal }: ManageAnima
                 <span className="animal-table-details">
                   <strong>{animal.name}</strong>
                   <span>
-                    {animal.publicId} - {animal.type} - {animal.breed ?? "Unknown breed"}
+                    {animal.publicId} - {speciesLabel(animal)} - {animal.breed ?? "Unknown breed"}
                   </span>
                 </span>
                 <span className="role-pill muted">{adoptionStatusLabel(animal.status, animal.medicallyCleared)}</span>

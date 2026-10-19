@@ -6,7 +6,7 @@ import type { Animal } from "../types/animal";
 const anonymous: NavigationSession = { userId: null, role: undefined, devBypass: false };
 const session = (role?: string, userId = "user-1"): NavigationSession => ({ userId, role, devBypass: false });
 const animal = (id: string): Animal => ({
-  id, publicId: id, name: id, type: "dog", breed: null, estimatedAge: null, gender: null,
+  id, publicId: id, name: id, type: "dog", speciesName: null, breed: null, estimatedAge: null, gender: null,
   colour: null, description: null, rescueDate: null, behaviour: null, rescueHistory: null,
   photoUrls: [], vaccinationStatus: "vaccinated", size: null, veterinaryPriority: null,
   medicallyCleared: true, status: "medically_cleared", createdAt: "", updatedAt: "",

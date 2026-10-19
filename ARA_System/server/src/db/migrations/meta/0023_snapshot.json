@@ -174,6 +174,12 @@
           "type": "vector(768)",
           "primaryKey": false,
           "notNull": false
+        },
+        "species_name": {
+          "name": "species_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {},
@@ -1951,8 +1957,8 @@
       "policies": {},
       "isRLSEnabled": false
     },
-    "public.veterinary_emergency_responses": {
-      "name": "veterinary_emergency_responses",
+    "public.breeds": {
+      "name": "breeds",
       "schema": "",
       "columns": {
         "id": {
@@ -1962,40 +1968,15 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "animal_id": {
-          "name": "animal_id",
-          "type": "uuid",
+        "species": {
+          "name": "species",
+          "type": "animal_type",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": true
         },
-        "attending_veterinarian_clerk_user_id": {
-          "name": "attending_veterinarian_clerk_user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "support_required": {
-          "name": "support_required",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "coordination_note": {
-          "name": "coordination_note",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "version": {
-          "name": "version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "updated_by_clerk_user_id": {
-          "name": "updated_by_clerk_user_id",
+        "name": {
+          "name": "name",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -2007,75 +1988,49 @@
           "notNull": true,
           "default": "now()"
         },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "closed_at": {
-          "name": "closed_at",
-          "type": "timestamp with time zone",
+        "species_name": {
+          "name": "species_name",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         }
       },
       "indexes": {
-        "veterinary_emergency_responses_active_animal_idx": {
-          "name": "veterinary_emergency_responses_active_animal_idx",
+        "breeds_species_species_name_name_unique": {
+          "name": "breeds_species_species_name_name_unique",
           "columns": [
             {
-              "expression": "animal_id",
+              "expression": "species",
               "asc": true,
               "nulls": "last",
-              "opclass": "uuid_ops",
-              "isExpression": false
+              "opclass": "text_ops",
+              "isExpression": true
+            },
+            {
+              "expression": "lower(COALESCE(species_name, ''::text))",
+              "asc": true,
+              "nulls": "last",
+              "opclass": "enum_ops",
+              "isExpression": true
+            },
+            {
+              "expression": "lower(name)",
+              "asc": true,
+              "nulls": "last",
+              "opclass": "enum_ops",
+              "isExpression": true
             }
           ],
           "isUnique": true,
           "concurrently": false,
           "method": "btree",
-          "where": "(closed_at IS NULL)",
           "with": {}
         }
       },
-      "foreignKeys": {
-        "veterinary_emergency_responses_animal_id_animals_id_fk": {
-          "name": "veterinary_emergency_responses_animal_id_animals_id_fk",
-          "tableFrom": "veterinary_emergency_responses",
-          "tableTo": "animals",
-          "schemaTo": "public",
-          "columnsFrom": [
-            "animal_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {
-        "veterinary_emergency_responses_closed_after_created": {
-          "name": "veterinary_emergency_responses_closed_after_created",
-          "value": "(closed_at IS NULL) OR (closed_at >= created_at)"
-        },
-        "veterinary_emergency_responses_closed_unassigned": {
-          "name": "veterinary_emergency_responses_closed_unassigned",
-          "value": "(closed_at IS NULL) OR ((attending_veterinarian_clerk_user_id IS NULL) AND (support_required = false))"
-        },
-        "veterinary_emergency_responses_updated_after_created": {
-          "name": "veterinary_emergency_responses_updated_after_created",
-          "value": "updated_at >= created_at"
-        },
-        "veterinary_emergency_responses_version_positive": {
-          "name": "veterinary_emergency_responses_version_positive",
-          "value": "version > 0"
-        }
-      },
+      "checkConstraints": {},
       "policies": {},
       "isRLSEnabled": false
     },
@@ -2273,6 +2228,6 @@
     "tables": {},
     "columns": {}
   },
-  "id": "621322ba-a6c3-59f2-a9fb-38f2c29fe782",
-  "prevId": "e6f639b5-4f74-59ad-a81b-c7d8d384e91f"
+  "id": "c5482a02-1524-585e-a398-cfdb76586db7",
+  "prevId": "62efa05a-fe3a-5e71-9b8d-9d362dbbcfbd"
 }

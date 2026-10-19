@@ -103,61 +103,82 @@
     {
       "idx": 16,
       "version": "7",
+      "when": 1791341328298,
+      "tag": "0015_breeds_and_rabbit_species",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
       "when": 1791342891518,
       "tag": "0016_adoption_id_verification",
       "breakpoints": true
     },
     {
-      "idx": 17,
+      "idx": 18,
+      "version": "7",
+      "when": 1791344971693,
+      "tag": "0016_animal_species_name",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1791347850881,
+      "tag": "0017_breeds_for_other_species",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
       "version": "7",
       "when": 1791361940927,
       "tag": "0017_adoption_next_of_kin",
       "breakpoints": true
     },
     {
-      "idx": 18,
+      "idx": 21,
       "version": "7",
       "when": 1791430000000,
       "tag": "0018_rescue_takeover_requests",
       "breakpoints": true
     },
     {
-      "idx": 19,
+      "idx": 22,
       "version": "7",
       "when": 1791431000000,
       "tag": "0019_notification_action_id",
       "breakpoints": true
     },
     {
-      "idx": 20,
+      "idx": 23,
       "version": "7",
       "when": 1791707400000,
       "tag": "0018_owner_veterinary_bookings",
       "breakpoints": true
     },
     {
-      "idx": 21,
+      "idx": 24,
       "version": "7",
       "when": 1792207367112,
       "tag": "0019_rapid_triage",
       "breakpoints": true
     },
     {
-      "idx": 22,
+      "idx": 25,
       "version": "7",
       "when": 1792328869000,
       "tag": "0020_veterinary_emergency_responses",
       "breakpoints": true
     },
     {
-      "idx": 23,
+      "idx": 26,
       "version": "7",
       "when": 1792336355002,
       "tag": "0021_remove_rapid_triage",
       "breakpoints": true
     },
     {
-      "idx": 24,
+      "idx": 27,
       "version": "7",
       "when": 1792379152338,
       "tag": "0024_adoption_status_check",

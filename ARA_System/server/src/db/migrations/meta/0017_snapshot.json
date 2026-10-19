@@ -1889,18 +1889,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
-        },
-        "next_of_kin_name": {
-          "name": "next_of_kin_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "next_of_kin_contact": {
-          "name": "next_of_kin_contact",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {
@@ -1938,6 +1926,70 @@
           "onUpdate": "no action"
         }
       },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false
+    },
+    "public.breeds": {
+      "name": "breeds",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "species": {
+          "name": "species",
+          "type": "animal_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "breeds_species_name_unique": {
+          "name": "breeds_species_name_unique",
+          "columns": [
+            {
+              "expression": "species",
+              "asc": true,
+              "nulls": "last",
+              "opclass": "text_ops",
+              "isExpression": false
+            },
+            {
+              "expression": "name",
+              "asc": true,
+              "nulls": "last",
+              "opclass": "text_ops",
+              "isExpression": false
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {},
@@ -2016,6 +2068,6 @@
     "tables": {},
     "columns": {}
   },
-  "id": "05c211d0-d167-54c2-b5de-f15a86a5a4fa",
-  "prevId": "24f9b382-8914-5ec1-9195-00c675e84d84"
+  "id": "fa08851c-417c-5150-89af-89da9bef2bcd",
+  "prevId": "97aef137-16fc-5f06-b548-8d4e414e5cc7"
 }

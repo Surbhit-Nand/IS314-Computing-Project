@@ -89,6 +89,7 @@ npm run server:dev    # Express API only (node --use-system-ca --import tsx, por
 npm run server:check  # typecheck the server package only
 npm run db:generate   # create a Drizzle migration from schema.ts
 npm run db:migrate    # apply migrations — run AFTER every pull, BEFORE server:dev
+npm run db:seed:breeds  # idempotent breed lists for the `breeds` table (after 0015 + 0017)
 npm run build         # tsc -b && vite build (typechecks frontend+server)
 npm run lint          # eslint .
 npm test             # node:test via tsx — server + frontend suites
@@ -103,6 +104,10 @@ npm test             # node:test via tsx — server + frontend suites
   `docs/kara-merge-migration-review.md` before touching migrations.
 - `npm run server:dev` runs through `node --use-system-ca --import tsx` so the
   system certificate store is used for Neon/Clerk TLS.
+- **`db:seed:breeds`** (idempotent, `ON CONFLICT DO NOTHING`) fills the `breeds`
+  table that the Breed dropdowns read. **`db:seed:animals` writes demo profiles
+  to whatever `DATABASE_URL` points at** (uploading photos to Cloudinary) — the
+  team shares one Neon database, so don't run it against the shared instance.
 
 - **Tests**: `npm test` runs every `*.test.ts` under `server/src/**` and
   `src/**` (~39 suites / 341 cases at the redesign merge). The script needs
@@ -156,11 +161,18 @@ npm test             # node:test via tsx — server + frontend suites
 
 - Shared Neon DB across branches — extra columns/tables from other branches
   are normal and benign. Migration **number prefixes are already duplicated**:
-  two `0004_*`, two `0018_*` (`0018_rescue_takeover_requests`,
-  `0018_owner_veterinary_bookings`) and two `0019_*`
-  (`0019_notification_action_id`, `0019_rapid_triage`). Journal indices `2` and
-  `3` are unused. Entries are disambiguated by tag + `when`, never by the
-  number, so when you `db:generate` pick a fresh number and check
+  two `0004_*`, two `0015_*` (`0015_adoption_simplified_questionnaire`,
+  `0015_breeds_and_rabbit_species`), two `0016_*`
+  (`0016_adoption_id_verification`, `0016_animal_species_name`), two `0017_*`
+  (`0017_adoption_next_of_kin`, `0017_breeds_for_other_species`), two `0018_*`
+  (`0018_rescue_takeover_requests`, `0018_owner_veterinary_bookings`) and two
+  `0019_*` (`0019_notification_action_id`, `0019_rapid_triage`). Journal indices
+  `2` and `3` are unused. Entries are disambiguated by tag + `when`, never by the
+  number, and the journal is kept **in `when` order** — the two `0015`-`0017`
+  lineages interleave as idx 15 `0015_adoption_simplified_questionnaire`,
+  16 `0015_breeds_and_rabbit_species`, 17 `0016_adoption_id_verification`,
+  18 `0016_animal_species_name`, 19 `0017_breeds_for_other_species`,
+  20 `0017_adoption_next_of_kin`. So when you pick a fresh number/idx, check
   `server/src/db/migrations/meta/_journal.json` for collisions. The approved
   reconciliation is written up in `docs/kara-merge-migration-review.md`.
 - **`db:generate` cannot produce a clean migration on this repo.** Kit 0.31.10's
@@ -176,11 +188,42 @@ npm test             # node:test via tsx — server + frontend suites
   so a hand-written snapshot can match what the tool itself would have emitted.
   `docs/migration-snapshot-repair-20261019/` holds the reconstruction record
   (its `validate-snapshots.mjs` still asserts the pre-0024 22-entry baseline).
-- The journal **ends** with `0024_adoption_status_check` (idx 24), which adds the
+- The journal's tip is `0024_adoption_status_check` (**idx 27**), which adds the
   `adoption_status_valid` CHECK. Both it and `0021_remove_rapid_triage` were
   applied on 19 Oct 2026, so the live schema now matches the journal.
   `retireTriageMigration.test.ts` locates `0021` by tag instead of by position,
-  because the cleanup is no longer the journal tip.
+  because the cleanup is no longer the journal tip. The merged journal is
+  idx 0, 1, 4–27; after a merge renumbers indices, every `meta/*_snapshot.json`
+  has to move with them (filename = `{idx:04d}_snapshot.json`, `id` = the
+  deterministic hash above, `prevId` = the previous entry's id). The chain was
+  rebuilt by replaying all 26 migrations in journal order into `@electric-sql/pglite`
+  and serializing each state with drizzle-kit's own catalog serializer, then
+  checked with the `drizzle-kit check` command above — reuse that approach rather
+  than editing snapshots by hand.
+- **Species / breeds (migrations `0015_breeds_and_rabbit_species`,
+  `0016_animal_species_name`, `0017_breeds_for_other_species` — all applied on
+  Neon)**: staff register **Dog**, **Cat** or **Other** only. `rabbit` stays in
+  the `animal_type` enum (dropping an enum value means rebuilding the type on a
+  shared DB) but the API rejects it and no row should carry it. For
+  `type = 'other'` the typed species lives in `animals.species_name` ("Rabbit",
+  "Guinea Pig") and `breed` is free text ("Holland Lop", "Unknown"); dogs/cats
+  always have `species_name` NULL. **Display species via `speciesLabel()` in
+  `src/utils/format.ts`** (listing cards use `breedLineLabel()`), never
+  `capitalize(animal.type)` — that prints "Other" for every rabbit. Typing
+  "dog"/"cat" (any case, plural) as an Other species switches back to Dog/Cat in
+  the form, and the API stores such a request as a real dog/cat
+  (`resolveSpeciesAndBreed`, `server/src/modules/animals/speciesBreed.ts`).
+  Breed lists live in the `breeds` table (seeded by `db:seed:breeds`): dog/cat
+  rows have `species_name` NULL; typed-species rows are `species = 'other'` +
+  `species_name`, unique per (species, species_name, name) case-insensitively. A
+  species with a list gets a Breed dropdown ending in a form-only "Other" that
+  opens a typed box; a species without one (e.g. Snake) always types its breed.
+  A typed breed is stored only if it passes `validateTypedBreedName` (no digits,
+  junk, "Other" or species words like "cat") and is never added to the table.
+- **Veterinary priority** is set by staff on the Register/Edit forms
+  (`VeterinaryPriorityField.tsx`, default Moderate on Register). Kept
+  self-contained so it can move to the vet module later — that file's header
+  lists every piece to remove.
 - The API prints a **non-fatal** schema-drift warning at boot if `schema.ts`
   columns are missing on the live DB (`server/src/db/drift-check.ts`) — warns,
   never crashes. Its table list is fixed (`animals`, `rescueReports`,
@@ -568,8 +611,11 @@ Every route/action is gated server-side by role, not just hidden in the UI
 Hybrid search combines deterministic explicit type/size/gender/vaccination
 constraints with a Gemini embedding of the full normalized query. Public
 visibility and structured predicates are applied in SQL before cosine ordering
-and LIMIT. The current parser supports dog/cat/rabbit but deliberately does not
-infer the database's other type. Compatibility and temperament remain semantic.
+and LIMIT. The parser hard-filters only the `dog`/`cat` types, size, gender and
+vaccination; every other species word (rabbit, hamster, …) stays in the
+embedding text and is matched semantically, because those animals are stored as
+`type = 'other'` with the species in `species_name`/`breed`. Compatibility and
+temperament remain semantic too.
 
 See [backend search documentation](server/README.md) for the exact flow,
 visibility rule, supported vocabulary, lifecycle, configuration, and limitations.

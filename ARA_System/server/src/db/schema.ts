@@ -52,6 +52,13 @@ export const animals = pgTable("animals", {
 	publicId: text("public_id").notNull().unique(),
 	name: text("name").notNull(),
 	type: animalType("type").notNull(),
+	// The species staff typed for an animal whose `type` is "other" (e.g.
+	// "Rabbit", "Guinea Pig"), capitalised. Always null for dogs and cats -
+	// their species is `type`. Added by migration 0016, which split it out of
+	// `breed` (where Other animals used to keep it) for existing rows.
+	speciesName: text("species_name"),
+	// A listed `breeds` name for dogs/cats, or a typed breed validated by
+	// validateTypedBreedName (e.g. "Russian Blue Mix", "Holland Lop", "Unknown").
 	breed: text("breed"),
 	estimatedAge: text("estimated_age"),
 	gender: text("gender"),
@@ -95,6 +102,39 @@ export const animals = pgTable("animals", {
 	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 	updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// The listed breeds per species - dogs and cats, and typed "other" species
+// such as Rabbit (species "other" + species_name). The Breed dropdown is
+// loaded from here, and a listed breed is stored in this table's spelling. A
+// breed that isn't listed (typed via the dropdown's "Other" option, a legacy
+// value like "Russian Blue Mix", or any breed of a species with no list such
+// as Snake) is accepted only if it passes validateTypedBreedName, and is never
+// added here automatically. Seeded by `npm run db:seed:breeds` (safe to
+// re-run). Animals store the breed as plain text rather than a foreign key,
+// which is what makes typed breeds possible.
+export const breeds = pgTable(
+	"breeds",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		species: animalType("species").notNull(),
+		// For species "other": the typed species this breed belongs to
+		// ("Rabbit"), matched case-insensitively. Null for dog/cat rows.
+		// Added by migration 0017.
+		speciesName: text("species_name"),
+		name: text("name").notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+	},
+	// One row per (species, species name, breed), ignoring case - so "Mixed
+	// breed" or "Rex" can exist for each species. COALESCE makes dog/cat rows'
+	// null species_name compare equal.
+	(table) => [
+		uniqueIndex("breeds_species_species_name_name_unique").on(
+			table.species,
+			sql`lower(coalesce(${table.speciesName}, ''))`,
+			sql`lower(${table.name})`,
+		),
+	],
+);
 
 export const rescueReports = pgTable("rescue_reports", {
 	id: uuid("id").defaultRandom().primaryKey(),

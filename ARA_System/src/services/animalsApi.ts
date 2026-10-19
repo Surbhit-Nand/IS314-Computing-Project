@@ -1,4 +1,4 @@
-import type { Animal, AnimalFormInput } from "../types/animal";
+import type { Animal, AnimalPayload } from "../types/animal";
 
 // Same base URL / dev-server-not-running guard pattern used in
 // ManagerDashboard.tsx - centralised here so every animals page shares one
@@ -15,6 +15,34 @@ async function readApiResponse<T>(response: Response): Promise<T> {
 
 function authHeaders(token: string, extra?: Record<string, string>) {
   return { Authorization: `Bearer ${token}`, ...extra };
+}
+
+// Breed names for the registration/edit Breed dropdown, from the breeds table
+// (GET /api/animals/breeds/:species). Dog and cat only - "other" animals type
+// their animal type in instead.
+export async function fetchBreeds(species: "dog" | "cat"): Promise<string[]> {
+  const response = await fetch(`${apiBaseUrl}/api/animals/breeds/${species}`);
+  const result = await readApiResponse<string[] | { error?: string }>(response);
+  if (!response.ok || !Array.isArray(result)) {
+    throw new Error((result as { error?: string }).error ?? "The breed list could not be loaded.");
+  }
+  return result;
+}
+
+// Breed list for a typed "other" species (GET /api/animals/breeds/other/:name),
+// matched case-insensitively. speciesName is the breeds table's spelling
+// ("Guinea Pig"), or null with an empty list when the species has none.
+export async function fetchOtherSpeciesBreeds(
+  speciesName: string,
+): Promise<{ speciesName: string | null; breeds: string[] }> {
+  const response = await fetch(`${apiBaseUrl}/api/animals/breeds/other/${encodeURIComponent(speciesName)}`);
+  const result = await readApiResponse<{ speciesName: string | null; breeds: string[] } | { error?: string }>(
+    response,
+  );
+  if (!response.ok || !("breeds" in result)) {
+    throw new Error((result as { error?: string }).error ?? "The breed list could not be loaded.");
+  }
+  return result;
 }
 
 // Fetches every animal profile (staff-only) for the Manage Animal Profiles page.
@@ -61,7 +89,7 @@ export async function uploadAnimalPhoto(token: string, file: File): Promise<stri
 
 // Creates a new animal profile. The server generates the unique Animal ID
 // and returns it as part of the created record.
-export async function createAnimal(token: string, input: AnimalFormInput): Promise<Animal> {
+export async function createAnimal(token: string, input: AnimalPayload): Promise<Animal> {
   const response = await fetch(`${apiBaseUrl}/api/animals`, {
     method: "POST",
     headers: authHeaders(token, { "Content-Type": "application/json" }),
@@ -80,7 +108,7 @@ export async function createAnimal(token: string, input: AnimalFormInput): Promi
 export async function updateAnimal(
   token: string,
   id: string,
-  input: Partial<AnimalFormInput>,
+  input: Partial<AnimalPayload>,
 ): Promise<Animal> {
   const response = await fetch(`${apiBaseUrl}/api/animals/${id}`, {
     method: "PATCH",

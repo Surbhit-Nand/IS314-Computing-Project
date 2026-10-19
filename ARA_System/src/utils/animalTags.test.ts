@@ -9,6 +9,7 @@ function animal(overrides: Partial<Animal> = {}): Animal {
     publicId: "SPCA-2026-0001",
     name: "Test",
     type: "dog",
+    speciesName: null,
     breed: null,
     estimatedAge: null,
     gender: "Male",
