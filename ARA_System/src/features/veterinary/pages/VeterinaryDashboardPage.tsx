@@ -1,5 +1,5 @@
 import { emergencyQueueFocusEvent, focusPendingVeterinaryEmergency } from "../../../utils/veterinaryEmergencyFocus";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { EmergencyResponseActions } from "../components/EmergencyResponseActions";
 import type { VeterinaryEmergencyResponse } from "../../../types/veterinary";
 import { IconActivity, IconCalendar, IconCalendarPlus, IconCheck, IconClipboard, IconNotes, IconShieldCheck, IconSyringe, IconPawPrint, IconHeart } from "../../../components/MedicalIcons";
@@ -37,10 +37,14 @@ type Props = {
 };
 
 export function VeterinaryDashboardPage({ emergencyResponses = [], coordinationUnavailable = true, currentVetId, onCoordinationChanged, stats, queue, appointments, loading, error, onSelectAnimal, onSelectAppointment, onBookAppointment, getToken }: Props) {
+  const [queueSearch, setQueueSearch] = useState("");
   useEffect(() => {
     if (loading) return;
     focusPendingVeterinaryEmergency();
-    const focus = () => focusPendingVeterinaryEmergency(true);
+    const focus = () => {
+      setQueueSearch("");
+      window.requestAnimationFrame(() => focusPendingVeterinaryEmergency(true));
+    };
     window.addEventListener(emergencyQueueFocusEvent, focus);
     return () => window.removeEventListener(emergencyQueueFocusEvent, focus);
   }, [loading, queue]);
@@ -53,7 +57,10 @@ export function VeterinaryDashboardPage({ emergencyResponses = [], coordinationU
     .filter((animal) => !animal.medicallyCleared)
     .sort((a, b) => priorityRank(a.veterinaryPriority) - priorityRank(b.veterinaryPriority))
     .slice(0, 5);
-  const orderedQueue = [...queue].sort((a, b) => priorityRank(a.veterinaryPriority) - priorityRank(b.veterinaryPriority));
+  const searchTerm = queueSearch.trim().toLocaleLowerCase();
+  const orderedQueue = queue
+    .filter((animal) => !searchTerm || [animal.name, animal.publicId].some((value) => value.toLocaleLowerCase().includes(searchTerm)))
+    .sort((a, b) => priorityRank(a.veterinaryPriority) - priorityRank(b.veterinaryPriority));
 
   return (
     <div className="vm-content">
@@ -84,6 +91,14 @@ export function VeterinaryDashboardPage({ emergencyResponses = [], coordinationU
       <div className="vm-layout">
         <div className="vm-main">
           <Card title="Medical queue" detail="All animals in need of veterinary care, prioritised by veterinary priority.">
+            <div className="vm-queue-search">
+              <label htmlFor="medical-queue-search">Find an animal</label>
+              <div className="vm-queue-search-controls">
+                <input id="medical-queue-search" type="search" placeholder="Search by name or animal ID" value={queueSearch} onChange={(event) => setQueueSearch(event.target.value)} aria-controls="veterinary-medical-queue" />
+                {queueSearch && <button type="button" className="ghost-button" onClick={() => setQueueSearch("")}>Clear search</button>}
+              </div>
+              {!loading && <p className="vm-hint" role="status">{orderedQueue.length} of {queue.length} animals</p>}
+            </div>
             {loading ? (
               <QueueSkeleton />
             ) : queue.length === 0 ? (
@@ -91,6 +106,7 @@ export function VeterinaryDashboardPage({ emergencyResponses = [], coordinationU
             ) : (
               <>
                 <div id="veterinary-medical-queue" className="vm-table-wrap" tabIndex={-1}>
+                  {orderedQueue.length === 0 ? <EmptyState icon={<IconPawPrint size={20} />} title="No matching animals" detail="Try another name or animal ID, or clear your search to see the full queue." /> : (
                   <div className="vm-table vm-queue-table">
                     <div className="vm-table-head vm-table-row">
                       <span className="vm-th">Animal</span>
@@ -102,6 +118,7 @@ export function VeterinaryDashboardPage({ emergencyResponses = [], coordinationU
                       <QueueRow key={animal.id} animal={animal} onSelect={onSelectAnimal} response={emergencyResponses.find((entry) => entry.animalId === animal.id)} currentVetId={currentVetId} unavailable={coordinationUnavailable} getToken={getToken} onChanged={onCoordinationChanged ?? (async () => undefined)} />
                     ))}
                   </div>
+                  )}
                 </div>
               </>
             )}
@@ -182,7 +199,7 @@ function QueueRow({ animal, onSelect, response, currentVetId, unavailable, getTo
         <span className="vm-copy">
           <strong>{animal.name}</strong>
           <small className="vm-queue-attendance">{unavailable ? "Attendance unavailable" : attending ? `Attending: ${response?.attendingVeterinarianName || "Veterinarian (name unavailable)"}` : "Awaiting veterinarian"}</small>
-          <small>{animal.publicId} ? {label(animal.type)}{animal.breed ? ` ? ${animal.breed}` : ""}{animal.gender ? ` ? ${label(animal.gender)}` : ""}</small>
+          <small>{[animal.publicId, label(animal.type), animal.breed, animal.gender ? label(animal.gender) : null].filter(Boolean).join(" \u00b7 ")}</small>
         </span>
       </div>
       <div className="vm-td vm-priority-cell" data-label="Priority"><Badge tone={priority.tone}>{priority.text}</Badge></div>

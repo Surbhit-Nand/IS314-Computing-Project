@@ -173,6 +173,13 @@
 #root .vm-page .vm-queue-table .vm-response-note-content p { margin: 0; line-height: 1.5; }
 #root .vm-page .vm-queue-table .vm-emergency-response-form .vm-emergency-response-actions { display: flex; gap: 4px; }
 
+#root .vm-page .vm-queue-search { display: grid; gap: 8px; margin-bottom: 16px; }
+#root .vm-page .vm-queue-search label { font-size: .8rem; font-weight: 600; color: var(--slate); }
+#root .vm-page .vm-queue-search-controls { display: flex; flex-wrap: wrap; gap: 8px; }
+#root .vm-page .vm-queue-search-controls input { flex: 1 1 220px; min-width: 0; min-height: 40px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--white); color: var(--navy); font: inherit; }
+#root .vm-page .vm-queue-search-controls input:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+#root .vm-page .vm-queue-search .vm-hint { margin: 0; }
+
 /* Beginning care is the single queue action; ownership controls are contextual. */
 #root .vm-page .vm-queue-table .vm-emergency-response > .vm-response-toolbar { grid-template-columns: minmax(112px, 1fr) auto; }
 #root .vm-page .vm-queue-table .vm-response-standalone { padding-left: 0; }
