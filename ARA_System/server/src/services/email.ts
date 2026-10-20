@@ -101,6 +101,8 @@ function emailSubject(toStatus: string, animalName: string | null) {
 			return `SPCA Fiji: adoption of ${who} is complete`;
 		case "rejected":
 			return `SPCA Fiji: update on your application for ${who}`;
+		case "withdrawn":
+			return `SPCA Fiji: your application for ${who} was withdrawn`;
 		default:
 			return `SPCA Fiji: update on your application for ${who}`;
 	}
@@ -118,6 +120,12 @@ function emailBody(email: AdoptionStatusEmail) {
 	}
 	if (email.toStatus === "approved") {
 		lines.push(``, `Our team will contact you about next steps.`);
+	}
+	if (email.toStatus === "withdrawn") {
+		lines.push(
+			``,
+			`This application is now closed and will not be reviewed further.`,
+		);
 	}
 	lines.push(``, `You can track progress anytime in My applications.`, ``, `SPCA Fiji`);
 	return lines.join("\n");

@@ -9,21 +9,33 @@
 
 | Item                    | Value                                                                    |
 | ----------------------- | ------------------------------------------------------------------------ |
-| Backend suite           | `server/src/modules/adoptions/adoptions.service.test.ts` (44 cases)      |
+| Backend suite           | `server/src/modules/adoptions/adoptions.service.test.ts` (46 cases)      |
 | HTTP-layer suite        | `server/src/modules/adoptions/adoptions.validation.test.ts` (32 cases)   |
-| Frontend suite          | `src/features/adoptions/adoptionQueue.test.ts` (3 cases)                 |
-| Total test cases        | **79**                                                                   |
+| Repository suite        | `server/src/modules/adoptions/adoptions.repository.test.ts` (3 cases)    |
+| Frontend queue suite    | `src/features/adoptions/adoptionQueue.test.ts` (3 cases)                 |
+| Applicant-labels suite  | `src/types/adoption.test.ts` (3 cases)                                   |
+| Total test cases        | **87**                                                                   |
 | Runner                  | `node --import tsx --experimental-test-module-mocks --test` (via `npm test`) |
 | Environment             | Node v24.21.0, tsx, no database / Clerk / mail provider required          |
 | Where tested            | Local development workstation, branch `main` @ `8493fb2`                  |
 | Date of run             | 2026-10-19, 15:17 (Fiji Standard Time, UTC+12)                           |
-| Verified result         | **79 tests, 11 suites, 79 pass, 0 fail**                                 |
-| Whole suite at that commit | **392 tests, 43 suites, 392 pass, 0 fail**                            |
+| Verified result         | **87 tests, 13 suites, 87 pass, 0 fail**                                 |
+| Whole suite at that commit | **465 tests, 57 suites, 465 pass, 0 fail**                            |
 
-The three suites divide the module by layer: `adoptions.service.ts` (business
+The suites divide the module by layer: `adoptions.service.ts` (business
 rules, with every collaborator stubbed), `adoptions.routes.ts` (the zod request
-schemas and the business-error → HTTP status mapping), and the pure frontend
-queue helper `adoptionQueue.ts`.
+schemas and the business-error → HTTP status mapping), the duplicate-application
+predicate in `adoptions.repository.ts` (the real SQL, run against the Drizzle
+builder with only the transport intercepted), the pure frontend queue helper
+`adoptionQueue.ts`, and the applicant-facing status wording in
+`src/types/adoption.ts`.
+
+> Two defects were fixed on 2026-10-19, both missed because the service suite
+> stubs their collaborators away. First, the "one active application per animal"
+> check excluded only `rejected` and `completed`, so a **withdrawn** application
+> blocked re-applying for that animal for ever (see AD-80 to AD-82). Second,
+> `withdrawAdoptionApplication` notified nobody, so "notified on any status
+> change" was false for a self-cancellation (see AD-83 and AD-84).
 
 ## Environment (test rig)
 
@@ -267,6 +279,50 @@ the copy the applicant sees is part of the contract.
 | AD-78 | Splits every lifecycle status across exactly one tab   | No status is orphaned or shown in both tabs                     | None                  | Active + History tab statuses sorted equal `approved, completed, rejected, submitted, under_review, withdrawn`        | As expected | Pass |
 | AD-79 | Matches dropdown options to their tab                  | Filter options cannot drift from the tabs                       | None                  | `ACTIVE_STATUS_FILTERS` matches the Active tab; `HISTORY_STATUS_FILTERS` matches the History tab                       | As expected | Pass |
 
+## Test cases — Duplicate-application predicate (repository)
+
+`server/src/modules/adoptions/adoptions.repository.test.ts`. These run the real
+Drizzle query builder for `findActiveAdoptionApplication` and intercept only the
+database transport, so the SQL and its bound parameters are asserted without a
+live database (the same technique as `animals.repository.test.ts`). They exist
+because the service suite stubs this function out entirely.
+
+| ID    | Test case                                                        | Rule under test                                                        | Preconditions / stubs        | Expected result                                                                                     | Actual | Status |
+| ----- | ---------------------------------------------------------------- | ---------------------------------------------------------------------- | ---------------------------- | --------------------------------------------------------------------------------------------------- | ------ | ------ |
+| AD-80 | Treats `rejected`, `completed` and `withdrawn` as closed          | Only live applications block a second application for the same animal  | Transport intercepted        | The `status NOT IN` clause binds exactly `completed`, `rejected`, `withdrawn`; no live status appears | As expected | Pass |
+| AD-81 | Keeps the closed-status list equal to the lifecycle's terminal statuses | The duplicate check cannot drift from `ALLOWED_TRANSITIONS`         | Transport intercepted        | The bound status list equals every status whose `ALLOWED_TRANSITIONS` entry is empty                  | As expected | Pass |
+| AD-82 | Scopes the check to one animal and one applicant                  | A duplicate is per-applicant and per-animal, never global               | Transport intercepted        | SQL constrains `animal_id` and `applicant_clerk_user_id` with the given values, limited to one row   | As expected | Pass |
+
+> **Regression this caught.** Before the fix, `findActiveAdoptionApplication`
+> excluded only `rejected` and `completed`, so a withdrawn application blocked
+> re-applying for that animal permanently — the opposite of the FAQ's "only one
+> **active** application". AD-80 fails against the old predicate and passes
+> against the corrected one. `ALLOWED_TRANSITIONS` is now exported from the
+> service so AD-81 can pin the two lists together instead of leaving a fourth
+> hard-coded copy to drift.
+
+## Test cases — Withdrawal notification and applicant status wording
+
+Withdrawal is a status change the applicant triggers themselves, so it must
+reach them the same way a staff transition does (AD-83, AD-84, extending the
+service suite). The applicant's own views never present `withdrawn` as a
+lifecycle status — it reads as a cancellation — while staff queues keep the
+"Withdrawn" wording, pinned by `src/types/adoption.test.ts` (AD-85 to AD-87).
+
+| ID    | Test case                                                      | Rule under test                                                   | Preconditions / stubs                        | Expected result                                                                                                    | Actual | Status |
+| ----- | -------------------------------------------------------------- | ----------------------------------------------------------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ------ | ------ |
+| AD-83 | Notifies the applicant that their withdrawal was recorded      | A self-cancellation is a status change like any other             | Stateful row `submitted`; caller is `APPLICANT_ID` | One notification row (`toStatus: "withdrawn"`, recipient = applicant) and one email attempted (`toStatus: "withdrawn"`) | As expected | Pass |
+| AD-84 | Still records the withdrawal when notification or email fails  | Notification is best-effort, never blocking the write             | Notification store and mail provider both throw | Withdrawal still commits: status becomes `withdrawn`; audit entry `adoption.application.withdrawn` written              | As expected | Pass |
+| AD-85 | Presents a withdrawal as a cancellation                        | The applicant never sees `withdrawn` as a lifecycle status        | None                                          | `applicantClosureShortLabel("withdrawn")` = "Cancelled"; `applicantClosureLabel("withdrawn")` = "Cancelled by you"   | As expected | Pass |
+| AD-86 | Delegates every other status to the shared labels              | Cancellation wording changes withdrawal only, nothing else        | None                                          | Both helpers equal `adoptionStatusShortLabel` / `adoptionStatusLabel` for the other five statuses                    | As expected | Pass |
+| AD-87 | Never leaks "withdrawn" to the applicant                       | Staff wording cannot reach the applicant's own view               | None                                          | No applicant label (short or long) contains "withdrawn" for any of the six statuses                                 | As expected | Pass |
+
+> **Gap this closed.** `withdrawAdoptionApplication` wrote the status, history
+> and audit rows but never called `notifyApplicantBestEffort`, so "you are
+> notified on any status change" was quietly false for a withdrawal. The `withdrawn`
+> copy in `notifications.service.ts` and `services/email.ts` was also missing, so
+> it fell through to the generic "moved to withdrawn" text.
+
 ## Status transition matrix
 
 The matrix the suite enforces (`ALLOWED_TRANSITIONS` in `adoptions.service.ts`).
@@ -294,7 +350,7 @@ Two notes the matrix depends on:
 
 ## Appendix A — Combined test source (single listing)
 
-The three suites are reproduced below as one continuous listing, so the report
+The suites are reproduced below as one continuous listing, so the report
 carries a single code artifact. The runnable copies remain split by package,
 because the repository typechecks them under two different TypeScript projects
 (`server/tsconfig.json` with `rootDir: "src"`, and `tsconfig.app.json`), and
@@ -1103,6 +1159,36 @@ describe("adoptions.service", () => {
 			assert.equal(auditSpy[0].action, "adoption.application.withdrawn");
 		});
 
+		it("notifies the applicant that their withdrawal was recorded", async () => {
+			statefulApplication("submitted");
+
+			await withdrawAdoptionApplication(APPLICATION_ID, APPLICANT_ID);
+
+			// Withdrawal is a status change, so it must reach the applicant the
+			// same way every staff transition does: an in-app row plus email.
+			assert.equal(notificationSpy.length, 1);
+			assert.equal(notificationSpy[0].recipientClerkUserId, APPLICANT_ID);
+			assert.equal(notificationSpy[0].toStatus, "withdrawn");
+			assert.equal(emailSpy.length, 1);
+			assert.equal(emailSpy[0].toStatus, "withdrawn");
+		});
+
+		it("still records the withdrawal when the notification or email fails", async () => {
+			const current = statefulApplication("submitted");
+			repo("createAdoptionStatusNotification", async () => {
+				throw new Error("notification store down");
+			});
+			repo("sendAdoptionStatusEmail", async () => {
+				throw new Error("mail down");
+			});
+
+			const result = await withdrawAdoptionApplication(APPLICATION_ID, APPLICANT_ID);
+
+			assert.equal(result?.status, "withdrawn");
+			assert.equal(current.status, "withdrawn");
+			assert.equal(auditSpy[0].action, "adoption.application.withdrawn");
+		});
+
 		it("refuses to withdraw someone else's application", async () => {
 			statefulApplication("submitted");
 
@@ -1403,6 +1489,87 @@ describe("businessErrorStatus", () => {
 		assert.equal(businessErrorStatus("boom"), null);
 	});
 });
+// ===== server/src/modules/adoptions/adoptions.repository.test.ts =====
+import assert from "node:assert/strict";
+import { afterEach, beforeEach, describe, it, mock } from "node:test";
+
+process.env.CLERK_SECRET_KEY = "test-clerk-secret-key";
+process.env.DATABASE_URL = "postgresql://test:test@localhost:5432/ara_test";
+
+const { db } = await import("../../db/client.js");
+const { findActiveAdoptionApplication } = await import("./adoptions.repository.js");
+// Imported only so this test can pin the repository's closed-status list to the
+// lifecycle definition. The repository itself cannot import the service (the
+// service already imports the repository), so the invariant is asserted here.
+const { ADOPTION_STATUSES, ALLOWED_TRANSITIONS } = await import("./adoptions.service.js");
+
+// Execute the real Drizzle builder, intercepting only the transport. This checks
+// the actual SQL and bound parameters without a live database or module mocking
+// (see the same pattern in animals.repository.test.ts). It exists because the
+// service suite stubs findActiveAdoptionApplication away, so the duplicate-
+// application predicate itself was never asserted anywhere.
+let queries: { sql: string; params: unknown[] }[] = [];
+beforeEach(() => {
+	queries = [];
+	mock.method(db.$client, "query", async (sql: string, params: unknown[]) => {
+		queries.push({ sql, params });
+		return { rows: [] };
+	});
+});
+afterEach(() => mock.restoreAll());
+
+describe("active adoption application predicate", () => {
+	it("treats rejected, completed and withdrawn applications as closed", async () => {
+		await findActiveAdoptionApplication("animal-id", "applicant-id");
+		const { sql, params } = queries[0];
+
+		// Only live statuses may block a new application. A withdrawn one was
+		// cancelled by the applicant themselves, so leaving it out of this list
+		// would silently lock them out of re-applying for that animal forever.
+		const notIn = sql.match(/"status" not in \(([^)]+)\)/);
+		assert.ok(notIn, `Expected a status NOT IN clause in: ${sql}`);
+		// Read the bound values by their placeholder numbers rather than by
+		// position: the LIMIT placeholder is bound after the status list.
+		const excluded = notIn[1]
+			.split(",")
+			.map((placeholder) => params[Number(placeholder.trim().replace("$", "")) - 1]);
+		assert.deepEqual([...excluded].sort(), ["completed", "rejected", "withdrawn"]);
+
+		// The two active statuses that must still block a duplicate.
+		for (const live of ["submitted", "under_review", "approved"]) {
+			assert.ok(!excluded.includes(live), `${live} must not be treated as closed`);
+		}
+	});
+
+	it("keeps the closed-status list exactly the terminal statuses of the lifecycle", async () => {
+		// The bug this guards: the query listed "rejected" and "completed" only,
+		// so a withdrawn application blocked re-applying for ever. Deriving the
+		// expectation from ALLOWED_TRANSITIONS stops a new terminal status being
+		// added (or removed) without updating the duplicate check.
+		const terminal = ADOPTION_STATUSES.filter((status) => ALLOWED_TRANSITIONS[status].length === 0);
+
+		await findActiveAdoptionApplication("animal-id", "applicant-id");
+		const { sql, params } = queries[0];
+		const notIn = sql.match(/"status" not in \(([^)]+)\)/);
+		assert.ok(notIn, `Expected a status NOT IN clause in: ${sql}`);
+		const excluded = notIn[1]
+			.split(",")
+			.map((placeholder) => params[Number(placeholder.trim().replace("$", "")) - 1]);
+
+		assert.deepEqual([...excluded].sort(), [...terminal].sort());
+	});
+
+	it("scopes the check to one animal and one applicant", async () => {
+		await findActiveAdoptionApplication("animal-id", "applicant-id");
+		const { sql, params } = queries[0];
+
+		assert.match(sql, /"animal_id" = \$\d+/);
+		assert.match(sql, /"applicant_clerk_user_id" = \$\d+/);
+		assert.ok(params.includes("animal-id"));
+		assert.ok(params.includes("applicant-id"));
+		assert.match(sql, /limit \$\d+$/);
+	});
+});
 // ===== src/features/adoptions/adoptionQueue.test.ts =====
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
@@ -1441,6 +1608,59 @@ describe("adoption queue tabs", () => {
     assert.deepEqual([...HISTORY_STATUS_FILTERS], [...QUEUE_TAB_STATUSES.history]);
   });
 });
+// ===== src/types/adoption.test.ts =====
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+import {
+  adoptionStatusLabel,
+  adoptionStatusShortLabel,
+  applicantClosureLabel,
+  applicantClosureShortLabel,
+  type AdoptionStatus,
+} from "./adoption.js";
+
+// Run: npm test (glob covers src/**/*.test.ts).
+//
+// The applicant never sees "withdrawn" as a lifecycle status: withdrawing is an
+// action they take, so the resulting state reads as a cancellation. Staff views
+// keep the "Withdrawn" wording, so these wrappers exist to stop the staff label
+// leaking back into the applicant's own view.
+const ALL_STATUSES: AdoptionStatus[] = [
+  "submitted",
+  "under_review",
+  "approved",
+  "completed",
+  "rejected",
+  "withdrawn",
+];
+
+describe("applicant closure wording", () => {
+  it("presents a withdrawal as a cancellation, not a status", () => {
+    assert.equal(applicantClosureShortLabel("withdrawn"), "Cancelled");
+    assert.equal(applicantClosureLabel("withdrawn"), "Cancelled by you");
+  });
+
+  it("delegates every other status to the shared labels", () => {
+    for (const status of ALL_STATUSES) {
+      if (status === "withdrawn") continue;
+      assert.equal(applicantClosureShortLabel(status), adoptionStatusShortLabel(status));
+      assert.equal(applicantClosureLabel(status), adoptionStatusLabel(status));
+    }
+  });
+
+  it("never shows the word withdrawn to the applicant", () => {
+    for (const status of ALL_STATUSES) {
+      assert.ok(
+        !applicantClosureShortLabel(status).toLowerCase().includes("withdrawn"),
+        `short label for ${status} leaked "withdrawn"`,
+      );
+      assert.ok(
+        !applicantClosureLabel(status).toLowerCase().includes("withdrawn"),
+        `long label for ${status} leaked "withdrawn"`,
+      );
+    }
+  });
+});
 ```
 
 ## Appendix B — Traceability, ID mapping and known gaps
@@ -1452,15 +1672,15 @@ describe("adoption queue tabs", () => {
 | Registered user submits an adoption application                                 | AD-07 to AD-20, AD-45 to AD-65 |
 | Staff review, approve or reject                                                 | AD-02, AD-24 to AD-41          |
 | Applicant tracks application status (timeline, not just current state)          | AD-03, AD-05, AD-25, AD-34, AD-36 |
-| Applicant withdraws their own application                                       | AD-42 to AD-44, AD-68, AD-77, AD-78 |
+| Applicant withdraws their own application                                       | AD-42 to AD-44, AD-68, AD-77, AD-78, AD-85 to AD-87 |
 | Lifecycle `submitted -> under_review -> approved -> completed`, or `rejected`/`withdrawn` | AD-01, AD-25 to AD-34, AD-40, AD-42 |
 | `rejected` requires `reviewNotes` shown to the applicant                        | AD-33, AD-34, AD-70            |
 | Medical clearance is a hard precondition (at submit **and** at approval)        | AD-21, AD-27                   |
 | Approval transfers ownership and removes the animal from public listings        | AD-26 (AD-28 idempotent)       |
-| Only one active application per animal, safe against concurrent approvals       | AD-11, AD-35, AD-39, AD-73, AD-74 |
+| Only one active application per animal, safe against concurrent approvals       | AD-11, AD-35, AD-39, AD-73, AD-74, AD-80 to AD-82 |
 | Reviewer cannot decide their own application                                    | AD-40, AD-72                   |
 | Audit trail for submissions and status changes                                  | AD-22, AD-25, AD-36, AD-42     |
-| Notifications on stage change (best-effort)                                     | AD-18, AD-19, AD-20, AD-37, AD-38 |
+| Notifications on stage change (best-effort)                                     | AD-18, AD-19, AD-20, AD-37, AD-38, AD-83, AD-84 |
 | Applicant privacy: applicants only see their own applications                   | AD-03                          |
 | Staff queue Active/History split                                                | AD-77 to AD-79                 |
 | Request validation is enforced before the service sees the payload              | AD-45 to AD-70                 |
@@ -1486,23 +1706,32 @@ Everything else is new coverage: `AD-04` (empty applicant history shortcut),
 `AD-21` (submit-time clearance gate), `AD-22` (submission audit), `AD-23`
 (history-write compensation), `AD-39` (raw `23505` → 409), `AD-40` (self-review
 refusal), `AD-41` (animal-write compensation), `AD-42` to `AD-44` (withdrawal),
+`AD-80` to `AD-82` (the duplicate-application SQL), `AD-83` to `AD-84`
+(withdrawal notification) and `AD-85` to `AD-87` (applicant status wording),
 and the whole `AD-45` to `AD-76` validation block.
 
-### Known gaps (not covered by these 79 cases)
+### Known gaps (not covered by these 87 cases)
 
 - `adoptions.routes.ts` — the **HTTP** behaviour itself (status codes on the
   wire, the RBAC middleware chain, multipart ID upload) is still not unit-tested;
   the schemas and the error→status mapping are now covered (AD-45 to AD-76), but
   the route handlers that use them are exercised only indirectly.
-- `adoptions.repository.ts` — the Drizzle queries are not unit-tested. The
-  service-level pre-check (AD-35) and the `23505` translation (AD-39, AD-73,
+- `adoptions.repository.ts` — **partly covered since 2026-10-19**: the
+  duplicate-application predicate is now asserted as SQL (AD-80 to AD-82). The
+  remaining queries (the list/detail joins, `findAdoptionConflict`,
+  `findAnimalMissingSearchEmbedding`-style lookups) are still not unit-tested.
+  The service-level pre-check (AD-35) and the `23505` translation (AD-39, AD-73,
   AD-74) are covered, but the index that actually raises it lives in the schema
   and is verified only by the migration/snapshot work.
 - Frontend adoption components — `AdoptionApplicationForm.tsx`,
   `ManageAdoptionApplications.tsx` and `MyApplications.tsx` have no automated
-  tests; only the pure `adoptionQueue.ts` helper is covered (AD-77 to AD-79).
+  tests; the pure helpers are covered instead: `adoptionQueue.ts` (AD-77 to
+  AD-79) and the applicant status wording in `src/types/adoption.ts` (AD-85 to
+  AD-87). The components that render those labels are still only exercised
+  manually.
 - Notification content (email/in-app body text) is asserted by recipient and
-  status only, not by rendered copy.
+  status only, not by rendered copy — so the `withdrawn` copy added with AD-83
+  is tested for existence, not for exact wording.
 - Ordering between the two writes on approval (application status first, then
   the animal marked `adopted`) is asserted through call order in the fakes, not
   against a real database; the module relies on the partial unique index for the
