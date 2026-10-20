@@ -26,10 +26,11 @@ type Props = {
   onRefresh: () => Promise<void>;
   onViewProfile?: (animal: Animal) => void;
   scene: CareScene;
+  workflowEntry?: boolean;
   onChangeScene: (scene: CareScene, replace?: boolean) => void;
 };
 
-export function VeterinaryCarePage({ record, getToken, onBack, onRefresh, onViewProfile, scene, onChangeScene, onNavigate }: Props) {
+export function VeterinaryCarePage({ record, getToken, onBack, onRefresh, onViewProfile, scene, onChangeScene, onNavigate, workflowEntry = false }: Props) {
   const animal = record.animal;
   const assessmentDone = record.examinations.length > 0;
   const treatments = record.carePlan.filter((plan) => !NON_CARE.includes(plan.requirementType));
@@ -54,6 +55,13 @@ export function VeterinaryCarePage({ record, getToken, onBack, onRefresh, onView
     if (lockedScene) onChangeScene("history", true);
   }, [lockedScene, onChangeScene]);
   const activeScene = lockedScene ? "history" : scene;
+  // Queue entries open the next actionable stage; the history list keeps its
+  // read-only overview. Do not insert an extra overview between care stages.
+  const workflowScene: CareScene = !assessmentDone ? "assessment" : animal.medicallyCleared ? "history" : ready ? "clearance" : "treatments";
+  const displayedScene = workflowEntry && activeScene === "history" && !animal.medicallyCleared ? workflowScene : activeScene;
+  useEffect(() => {
+    if (workflowEntry && scene === "history" && !animal.medicallyCleared) onChangeScene(workflowScene, true);
+  }, [workflowEntry, scene, animal.medicallyCleared, workflowScene, onChangeScene]);
 
   async function save(action: () => Promise<unknown>, nextScene?: CareScene) {
     const version = navigationVersion.current;
@@ -101,7 +109,7 @@ export function VeterinaryCarePage({ record, getToken, onBack, onRefresh, onView
 
   return (
     <main className="vm-page">
-      <VeterinaryNavbar currentView="veterinary-record" onNavigate={onNavigate} />
+      <VeterinaryNavbar currentView={displayedScene === "history" ? "veterinary-records" : "veterinary-dashboard"} onNavigate={onNavigate} />
       <div className="vm-container">
         <div className="vm-record-top">
           <button type="button" className="ghost-button compact-action" onClick={onBack}><IconArrowLeft size={13} /> Veterinary dashboard</button>
@@ -133,14 +141,14 @@ export function VeterinaryCarePage({ record, getToken, onBack, onRefresh, onView
           rail={<VeterinaryStepper stages={stages} onSelect={(number) => goToScene(number === 1 ? "assessment" : number === 2 ? "treatments" : "clearance")} />}
           notice={hint ? <WorkflowNotice tone="red" icon={<IconLock size={15} />} title="Stage locked" detail={hint} /> : undefined}
         >
-          {activeScene === "history" && (
+          {displayedScene === "history" && (
             <MedicalHistoryScene
               record={record}
               onOpenStage={(stage) => goToScene(stage)}
               onBack={onBack}
             />
           )}
-          {activeScene === "assessment" && (
+          {displayedScene === "assessment" && (
             <InitialAssessmentStage
               record={record}
               animal={animal}
@@ -159,7 +167,7 @@ export function VeterinaryCarePage({ record, getToken, onBack, onRefresh, onView
               onSave={(input, requirements) =>
                 save(async () => {
                   const token = await getToken();
-                  if (!token) return;
+                  if (!token) throw new Error("Your session has expired. Sign in again before saving the assessment.");
                   const { estimatedAge: age, ...rest } = input;
                   if (typeof age === "string" && age.trim()) await updateAnimal(token, animal.id, { estimatedAge: age.trim() });
                   await createExamination(token, animal.id, rest);
@@ -168,7 +176,7 @@ export function VeterinaryCarePage({ record, getToken, onBack, onRefresh, onView
               }
             />
           )}
-          {activeScene === "treatments" && (
+          {displayedScene === "treatments" && (
             <RequiredTreatmentsStage
               record={record}
               editingId={editingId}
@@ -183,7 +191,7 @@ export function VeterinaryCarePage({ record, getToken, onBack, onRefresh, onView
               }
             />
           )}
-          {activeScene === "clearance" && (
+          {displayedScene === "clearance" && (
             <MedicalClearanceStage
               record={record}
               completed={completed}

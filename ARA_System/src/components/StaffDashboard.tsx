@@ -8,8 +8,11 @@ import { fetchAllAdoptionApplications } from "../services/adoptionsApi";
 import { fetchAllRescueReports } from "../services/rescueApi";
 import { useAccountRefresh } from "../utils/useAccountRefresh";
 import { IconPawPrint, IconClipboard, IconHeart, IconMedical } from "./MedicalIcons";
+import type { Animal } from "../types/animal";
+import "../features/animals/animal-management.css";
 
 type StaffDashboardProps = {
+  onReviewAnimal: (animalId: string) => void;
   onNavigate: (
     view: SiteHeaderView | "register-animal" | "manage-animals" | "manage-rescue-reports" | "manage-adoption-applications",
   ) => void;
@@ -17,7 +20,7 @@ type StaffDashboardProps = {
 
 type StaffRole = "staff" | "veterinarian";
 
-export function StaffDashboard({ onNavigate }: StaffDashboardProps) {
+export function StaffDashboard({ onNavigate, onReviewAnimal }: StaffDashboardProps) {
   const { isLoaded, isSignedIn, getToken } = useAuth();
   const { user } = useUser();
   const role = user?.publicMetadata.role;
@@ -30,6 +33,7 @@ export function StaffDashboard({ onNavigate }: StaffDashboardProps) {
   const [counts, setCounts] = useState<{ rescue: number | null; intake: number | null; applications: number | null; care: number | null } | null>(null);
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [readyToPublish, setReadyToPublish] = useState<Animal[]>([]);
   const refresh = useCallback(async () => {
     try {
       const token = await getToken();
@@ -43,6 +47,8 @@ export function StaffDashboard({ onNavigate }: StaffDashboardProps) {
         care: animals.status === "fulfilled" ? animals.value.filter((entry) => entry.status === "in_treatment").length : null,
         applications: applications.status === "fulfilled" ? applications.value.filter((entry) => ["submitted", "under_review"].includes(entry.status)).length : null,
       });
+      setReadyToPublish(animals.status === "fulfilled" ? animals.value.filter((animal) =>
+        animal.medicallyCleared && !animal.publishedAt && !["adopted", "closed"].includes(animal.status)) : []);
       setError([animals, applications, reports].some((entry) => entry.status === "rejected") ? "Some work queue information is unavailable. Counts shown as — could not be loaded." : "");
       setUpdatedAt(new Date().toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit", timeZone: "Pacific/Fiji" }));
     } catch { setCounts(null); setError("Work queue information could not be loaded."); }
@@ -158,6 +164,22 @@ export function StaffDashboard({ onNavigate }: StaffDashboardProps) {
           <strong>{counts?.care ?? "—"}</strong>
           <small>Currently receiving care</small>
         </article>
+      </section>
+
+      <section className="activity-panel dashboard-panel publication-queue">
+        <div className="publication-queue-heading">
+          <span className="publication-queue-icon" aria-hidden="true"><IconPawPrint size={21} /></span>
+          <div><h2>Ready to publish <span className="publication-queue-count">{readyToPublish.length}</span></h2>
+            <p>{readyToPublish.length ? "Medically cleared. Review the profile before it goes public." : "All caught up. Cleared animals will appear here for a final profile review."}</p></div>
+          <button type="button" className="publication-queue-link" onClick={() => onNavigate("manage-animals")}>Manage animals <span aria-hidden="true">↗</span></button>
+        </div>
+        {readyToPublish.length > 0 && <div className="activity-list">
+          {readyToPublish.map((animal) => <div key={animal.id}>
+            <span className="activity-dot active" />
+            <p><strong>{animal.name}</strong><span>{animal.publicId} · Medically cleared · Not public</span></p>
+            <button type="button" className="ghost-button small-button" onClick={() => onReviewAnimal(animal.id)}>Review & publish</button>
+          </div>)}
+        </div>}
       </section>
 
       <section className="activity-panel dashboard-panel">

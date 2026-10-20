@@ -225,6 +225,7 @@ export async function registerAnimal(
 		...input,
 		publicId,
 		medicallyCleared: false,
+		publishedAt: null,
 		status: "intake",
 		// Registering an animal IS the moment it's received into care, so the
 		// rescue date is today's date, set here rather than asking staff to
@@ -271,6 +272,7 @@ export async function updateAnimalProfile(
 	input: Partial<Parameters<typeof updateAnimal>[1]>,
 	dependencies: SearchDependencies = searchDependencies,
 ) {
+	if (input.publishedAt !== undefined) throw new Error("Use the authorised publication service to publish a profile.");
 	const animal = await dependencies.repository.updateAnimal(id, input);
 
 	// Searchable edits invalidate the vector. Other edits preserve a valid vector

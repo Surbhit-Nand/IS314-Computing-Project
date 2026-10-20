@@ -1,4 +1,5 @@
 import { ensureMissingAnimalSearchEmbedding } from "../animals/animals.service.js";
+import { notifyAnimalReadyToPublish } from "../notifications/animalPublication.service.js";
 import {
 	clearAnimal,
 	createCarePlanRequirements,
@@ -129,7 +130,9 @@ export async function medicallyClear(
 	animalId: string,
 	clerkUserId: string,
 	notes?: string,
-	dependencies = clearanceDependencies,
+	dependencies: typeof clearanceDependencies & { notify?: typeof notifyAnimalReadyToPublish } = {
+		...clearanceDependencies, notify: notifyAnimalReadyToPublish,
+	},
 ) {
 	const record = await dependencies.findMedicalRecord(animalId);
 	if (!record) throw new Error("Animal not found");
@@ -140,5 +143,9 @@ export async function medicallyClear(
 	if (finalClearance) await dependencies.changeCarePlan(finalClearance.id, { status: "completed", completedDate: new Date().toISOString() }, clerkUserId);
 	const result = await dependencies.clearAnimal(animalId, clerkUserId, notes);
 	if (result.animal) await dependencies.ensureMissingAnimalSearchEmbedding(animalId);
+	if (result.animal && dependencies.notify) {
+		try { await dependencies.notify(animalId); }
+		catch (error) { console.warn("Staff publication notification could not be delivered; the animal remains in the review queue.", error instanceof Error ? error.message : "unknown error"); }
+	}
 	return result;
 }

@@ -27,6 +27,17 @@ function parameterFor(sql: string, params: unknown[], expression: RegExp): unkno
 }
 
 describe("hybrid search SQL", () => {
+	it("requires staff publication for both normal and AI public listings", async () => {
+		await findPublicAnimals();
+		await findSimilarPublicAnimals([0.1, 0.2, 0.3], { limit: 7, minSimilarity: 0.4 });
+		for (const query of queries) {
+			const where = query.sql.split(" where ")[1];
+			assert.match(where, /"published_at" is not null/);
+			assert.match(where, /"medically_cleared" =/);
+			assert(query.params.includes("closed"));
+			assert(query.params.includes("adopted"));
+		}
+	});
 	it("looks up only a missing non-deleted vector for the requested animal", async () => {
 		assert.equal(await findAnimalMissingSearchEmbedding("animal-id"), undefined);
 		const { sql, params } = queries[0];

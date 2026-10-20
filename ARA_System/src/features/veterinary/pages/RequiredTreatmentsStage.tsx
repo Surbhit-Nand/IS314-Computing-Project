@@ -94,7 +94,7 @@ export function RequiredTreatmentsStage({ record, editingId, setEditingId, onBac
       </section>
 
       <div className="vm-stage-foot">
-        <button type="button" className="ghost-button" onClick={onBack}>Back to assessment</button>
+        <button type="button" className="ghost-button" onClick={onBack}>Back to initial assessment</button>
         <button type="button" className="teal-button" onClick={onNext}>Continue to medical clearance <IconArrowRight size={13} /></button>
       </div>
     </>

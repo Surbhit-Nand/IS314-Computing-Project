@@ -182,6 +182,7 @@ function baseAnimal(overrides: Record<string, unknown> = {}) {
 		// Most submit tests use this directly; the clearance gate is exercised
 		// explicitly by tests that override it to false.
 		medicallyCleared: true,
+		publishedAt: new Date("2026-01-04T00:00:00Z"),
 		...overrides,
 	};
 }
@@ -545,6 +546,11 @@ describe("adoptions.service", () => {
 				submitAdoptionApplication(input, APPLICANT_ID),
 				/not yet medically cleared/,
 			);
+		});
+
+		it("rejects a direct application for a cleared but unpublished animal", async () => {
+			repo("getAnimalById", async () => baseAnimal({ publishedAt: null }));
+			await assert.rejects(submitAdoptionApplication(input, APPLICANT_ID), /awaiting staff publication/);
 		});
 
 		it("audits the submission", async () => {

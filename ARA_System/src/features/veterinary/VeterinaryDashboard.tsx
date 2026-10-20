@@ -105,6 +105,7 @@ export function VeterinaryDashboard({ currentView, onNavigate, selectedAnimalId,
         onNavigate={onNavigate}
         record={record}
         scene={careScene}
+        workflowEntry
         onChangeScene={onChangeCareScene}
         getToken={getToken}
         onBack={() => onNavigate("veterinary-dashboard")}
