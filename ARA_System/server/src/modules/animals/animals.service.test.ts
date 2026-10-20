@@ -89,6 +89,7 @@ const BASE_PROFILE = {
 	veterinaryPriority: "routine",
 	rescueDate: "2026-01-04",
 	medicallyCleared: true,
+	publishedAt: new Date("2026-01-04T00:00:00Z"),
 	status: "medically_cleared",
 	veterinaryStatus: "cleared",
 	medicalClearanceDate: new Date("2026-01-04T00:00:00Z"),

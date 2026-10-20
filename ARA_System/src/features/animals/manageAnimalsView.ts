@@ -2,7 +2,7 @@
 // over the list already loaded from GET /api/animals/staff (not paginated),
 // so they run in the browser and are unit-tested in manageAnimalsView.test.ts.
 // Order: search, then filter, then sort.
-import { adoptionStatusLabel, type Animal, type VeterinaryPriority } from "../../types/animal";
+import { type Animal, type VeterinaryPriority } from "../../types/animal";
 import { speciesLabel } from "../../utils/format";
 
 export type ManageSort = "newest" | "oldest" | "name-asc" | "name-desc" | "priority";
@@ -16,16 +16,21 @@ export const SORT_OPTIONS: { value: ManageSort; label: string }[] = [
 ];
 
 export type ManageFilters = {
-  // "all", "dog", "cat", or a typed species exactly as speciesOptions() lists
-  // it ("Rabbit", "Guinea Pig") - no catch-all "Other".
+  // Rabbits and every typed species are grouped under "other".
   species: string;
-  // An adoptionStatusLabel ("Available for Adoption", "Awaiting veterinary
-  // clearance", "Adopted") or "all".
+  // A listingStatusLabel or "all".
   status: string;
   vaccination: "all" | "vaccinated" | "not_vaccinated";
 };
 
 export const ALL_FILTERS: ManageFilters = { species: "all", status: "all", vaccination: "all" };
+
+export function listingStatusLabel(animal: Animal): string {
+  if (animal.status === "adopted") return "Adopted";
+  if (animal.status === "closed") return "Closed";
+  if (!animal.medicallyCleared) return "Awaiting clearance";
+  return animal.publishedAt ? "Published" : "Ready to publish";
+}
 
 // Most urgent first; animals with no priority last.
 const PRIORITY_RANK: Record<VeterinaryPriority, number> = { critical: 0, high: 1, moderate: 2, routine: 3 };
@@ -53,12 +58,10 @@ export function searchAnimals(animals: Animal[], searchTerm: string): Animal[] {
 export function filterAnimals(animals: Animal[], filters: ManageFilters): Animal[] {
   return animals.filter((animal) => {
     if (filters.species !== "all") {
-      // Dogs/cats by type; anything registered as Other by the species staff
-      // typed for it (speciesLabel: "Rabbit", "Guinea Pig"...).
-      const species = animal.type === "dog" || animal.type === "cat" ? animal.type : speciesLabel(animal);
+      const species = animal.type === "dog" || animal.type === "cat" ? animal.type : "other";
       if (species !== filters.species) return false;
     }
-    if (filters.status !== "all" && adoptionStatusLabel(animal.status, animal.medicallyCleared) !== filters.status) return false;
+    if (filters.status !== "all" && listingStatusLabel(animal) !== filters.status) return false;
     if (filters.vaccination !== "all" && animal.vaccinationStatus !== filters.vaccination) return false;
     return true;
   });
@@ -77,19 +80,9 @@ export function sortAnimals(animals: Animal[], sort: ManageSort): Animal[] {
   return [...animals].sort(comparators[sort]);
 }
 
-// The Species filter's options after Dog and Cat: every species staff
-// registered under Other that's in the list right now, A-Z ("Guinea Pig",
-// "Hamster", "Rabbit"). Grows on its own as new species are registered.
-export function speciesOptions(animals: Animal[]): string[] {
-  const typed = animals
-    .filter((animal) => animal.type !== "dog" && animal.type !== "cat")
-    .map((animal) => speciesLabel(animal));
-  return [...new Set(typed)].sort((first, second) => first.localeCompare(second));
-}
-
-// The Status filter's options: only statuses that actually exist in the list.
+// Keep workflow stages discoverable even when their queues are empty.
 export function statusOptions(animals: Animal[]): string[] {
-  return [...new Set(animals.map((animal) => adoptionStatusLabel(animal.status, animal.medicallyCleared)))].sort();
+  return ["Awaiting clearance", "Ready to publish", "Published", "Adopted", ...(animals.some((animal) => animal.status === "closed") ? ["Closed"] : [])];
 }
 
 export function manageView(animals: Animal[], searchTerm: string, filters: ManageFilters, sort: ManageSort): Animal[] {

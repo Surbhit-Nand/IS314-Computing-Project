@@ -138,7 +138,7 @@ export async function submitAdoptionApplication(
 	applicantClerkUserId: string,
 ) {
 	const animal = await getAnimalById(input.animalId);
-	if (!animal || animal.deletedAt || animal.status === "adopted") {
+	if (!animal || animal.deletedAt || animal.status === "adopted" || animal.status === "closed") {
 		throw new AdoptionBusinessError(400, "This animal is no longer available for adoption.");
 	}
 
@@ -148,6 +148,9 @@ export async function submitAdoptionApplication(
 	// application for an animal the veterinary module has not cleared.
 	if (!animal.medicallyCleared) {
 		throw new AdoptionBusinessError(400, "This animal is not yet medically cleared for adoption.");
+	}
+	if (!animal.publishedAt) {
+		throw new AdoptionBusinessError(400, "This animal's profile is awaiting staff publication.");
 	}
 
 	const existing = await findActiveAdoptionApplication(input.animalId, applicantClerkUserId);

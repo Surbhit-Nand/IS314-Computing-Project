@@ -6,7 +6,8 @@ import { Breadcrumbs } from "../../components/Breadcrumbs";
 import { SkeletonLoader } from "../../components/SkeletonLoader";
 import { SuccessToast } from "../../components/SuccessToast";
 import { deleteAnimal, fetchStaffAnimals } from "../../services/animalsApi";
-import { adoptionStatusLabel, vaccinationStatusLabel, type Animal } from "../../types/animal";
+import { type Animal } from "../../types/animal";
+import "./animal-management.css";
 import { isDevBypassEnabled } from "../../utils/devBypass";
 import { clearFlashToast, peekFlashToast, type FlashToast } from "../../utils/flashToast";
 import { speciesLabel } from "../../utils/format";
@@ -14,7 +15,7 @@ import {
   ALL_FILTERS,
   SORT_OPTIONS,
   manageView,
-  speciesOptions,
+  listingStatusLabel,
   statusOptions,
   type ManageFilters,
   type ManageSort,
@@ -106,8 +107,6 @@ export function ManageAnimalProfiles({ onNavigate, onSelectAnimal }: ManageAnima
   );
   // Status filter options: only statuses that actually exist right now.
   const statuses = useMemo(() => statusOptions(animals), [animals]);
-  // Species filter: Dog, Cat, then every species registered under Other.
-  const otherSpecies = useMemo(() => speciesOptions(animals), [animals]);
   const filtersActive =
     filters.species !== "all" || filters.status !== "all" || filters.vaccination !== "all";
 
@@ -217,12 +216,7 @@ export function ManageAnimalProfiles({ onNavigate, onSelectAnimal }: ManageAnima
               <option value="all">All</option>
               <option value="dog">Dog</option>
               <option value="cat">Cat</option>
-              {/* Each species registered under Other, by name (Rabbit, Hamster...). */}
-              {otherSpecies.map((species) => (
-                <option key={species} value={species}>
-                  {species}
-                </option>
-              ))}
+              <option value="other">Other</option>
             </select>
           </label>
           <label className="manage-animals-control">
@@ -274,6 +268,7 @@ export function ManageAnimalProfiles({ onNavigate, onSelectAnimal }: ManageAnima
 
         {!isLoading && !loadError && filteredAnimals.length > 0 && (
           <div className="animal-table">
+            <div className="animal-table-heading" aria-hidden="true"><span>Animal</span><span>Listing status</span><span>Vaccination</span><span>Actions</span></div>
             {filteredAnimals.map((animal) => (
               // A plain, non-interactive row - clicking the photo/name/ID/
               // badges does nothing. Editing is only reachable through the
@@ -292,12 +287,11 @@ export function ManageAnimalProfiles({ onNavigate, onSelectAnimal }: ManageAnima
                     {animal.publicId} - {speciesLabel(animal)} - {animal.breed ?? "Unknown breed"}
                   </span>
                 </span>
-                <span className="role-pill muted">{adoptionStatusLabel(animal.status, animal.medicallyCleared)}</span>
-                {/* Teal (accent) when vaccinated vs. muted/grey when not -
-                    both states always render, just visually distinct, so
-                    "not yet vaccinated" doesn't just disappear from the row. */}
-                <span className={animal.vaccinationStatus === "vaccinated" ? "role-pill" : "role-pill muted"}>
-                  {vaccinationStatusLabel(animal.vaccinationStatus)}
+                <span className={`animal-listing-state${!["adopted", "closed"].includes(animal.status) && animal.medicallyCleared ? animal.publishedAt ? " is-published" : " is-ready" : ""}`}>
+                  {listingStatusLabel(animal)}
+                </span>
+                <span className={`animal-vaccination-state${animal.vaccinationStatus === "vaccinated" ? " is-vaccinated" : ""}`}>
+                  {animal.vaccinationStatus === "vaccinated" ? "Vaccinated" : "Not vaccinated"}
                 </span>
                 <div className="animal-table-actions">
                   <button
@@ -305,7 +299,7 @@ export function ManageAnimalProfiles({ onNavigate, onSelectAnimal }: ManageAnima
                     className="teal-button small-button"
                     onClick={() => onSelectAnimal(animal.id)}
                   >
-                    Edit
+                    {animal.medicallyCleared && !animal.publishedAt && !["adopted", "closed"].includes(animal.status) ? "Review & publish" : "Edit"}
                   </button>
                   <button
                     type="button"

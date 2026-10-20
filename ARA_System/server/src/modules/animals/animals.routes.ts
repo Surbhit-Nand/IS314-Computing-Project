@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { publishAnimalProfile, saveAnimalListingDraft } from "./animalPublication.service.js";
 import multer from "multer";
 import { z } from "zod";
 import { requireClerkSession } from "../../middleware/auth.js";
@@ -148,6 +149,21 @@ function firstIssueMessage(error: z.ZodError): string {
 }
 
 export const animalsRouter = Router();
+
+animalsRouter.patch("/:id/listing", requireClerkSession, requireStaffOrAbove, async (request, response, next) => {
+  const id = z.string().uuid().safeParse(getIdParam(request.params.id));
+  const body = z.object({ description: z.string().max(1000), behaviour: z.string().max(1000), photoUrls: z.array(z.string().url()).max(3) }).strict().safeParse(request.body);
+  if (!id.success || !body.success) { response.status(400).json({ error: "Invalid listing draft. Only description, temperament, and photos can be updated here." }); return; }
+  try { response.json(await saveAnimalListingDraft(id.data, request.clerkUserId!, body.data)); }
+  catch (error) { next(error); }
+});
+
+animalsRouter.post("/:id/publish", requireClerkSession, requireStaffOrAbove, async (request, response, next) => {
+  const id = z.string().uuid().safeParse(getIdParam(request.params.id));
+  if (!id.success) { response.status(400).json({ error: "Invalid animal ID" }); return; }
+  try { response.json(await publishAnimalProfile(id.data, request.clerkUserId!)); }
+  catch (error) { next(error); }
+});
 
 // Public: only medically cleared, not-yet-adopted animals.
 animalsRouter.get("/", async (_request, response, next) => {

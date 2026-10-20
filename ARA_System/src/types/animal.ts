@@ -85,6 +85,7 @@ export type Animal = {
   size: AnimalSize | null;
   veterinaryPriority: VeterinaryPriority | null;
   medicallyCleared: boolean;
+  publishedAt?: string | null;
   veterinaryStatus?: string;
   status: AnimalLifecycleStatus;
   createdAt: string;

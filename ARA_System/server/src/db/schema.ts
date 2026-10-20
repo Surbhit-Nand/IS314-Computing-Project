@@ -72,6 +72,9 @@ export const animals = pgTable("animals", {
 	size: animalSize("size"),
 	veterinaryPriority: animalPriority("veterinary_priority"),
 	medicallyCleared: boolean("medically_cleared").notNull().default(false),
+	// Medical clearance does not publish a profile: staff review the existing
+	// photos/details and explicitly approve its public listing.
+	publishedAt: timestamp("published_at", { withTimezone: true }),
 	veterinaryStatus: text("veterinary_status").notNull().default("needs_initial_examination"),
 	medicalClearanceDate: timestamp("medical_clearance_date", { withTimezone: true }),
 	medicalClearedByClerkUserId: text("medical_cleared_by_clerk_user_id"),
