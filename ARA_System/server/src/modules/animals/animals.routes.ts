@@ -91,7 +91,7 @@ const animalSchema = z.object({
 	colour: z.string().min(1),
 	description: narrativeText("Description"),
 	behaviour: narrativeText("Behaviour"),
-	rescueHistory: narrativeText("Rescue history"),
+	rescueHistory: z.union([z.literal(""), narrativeText("Rescue history")]).optional(),
 	// Between 1 and 3 photos - photoUrls[0] is the animal's main/profile
 	// picture (used on listing cards and as the profile hero), enforced here
 	// and again client-side in validateAnimalForm.ts.
@@ -152,7 +152,7 @@ export const animalsRouter = Router();
 
 animalsRouter.patch("/:id/listing", requireClerkSession, requireStaffOrAbove, async (request, response, next) => {
   const id = z.string().uuid().safeParse(getIdParam(request.params.id));
-  const body = z.object({ description: z.string().max(1000), behaviour: z.string().max(1000), photoUrls: z.array(z.string().url()).max(3) }).strict().safeParse(request.body);
+  const body = z.object({ description: z.string().max(1000), behaviour: z.string().max(1000), rescueHistory: z.string().max(1000), photoUrls: z.array(z.string().url()).max(3) }).strict().safeParse(request.body);
   if (!id.success || !body.success) { response.status(400).json({ error: "Invalid listing draft. Only description, temperament, and photos can be updated here." }); return; }
   try { response.json(await saveAnimalListingDraft(id.data, request.clerkUserId!, body.data)); }
   catch (error) { next(error); }

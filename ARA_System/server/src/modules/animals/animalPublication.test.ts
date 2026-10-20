@@ -12,7 +12,7 @@ const id = "11111111-1111-4111-8111-111111111111";
 async function fixture() {
   const db = new PGlite();
   await db.exec(`CREATE TABLE animals(id uuid PRIMARY KEY,name text NOT NULL,description text,
-    behaviour text DEFAULT 'Gentle and playful with a calm personality.',veterinary_priority text,rescue_history text DEFAULT 'Original intake note',search_embedding text,
+    behaviour text DEFAULT 'Gentle and playful with a calm personality.',veterinary_priority text,rescue_history text DEFAULT 'Rescued and cared for by the shelter team.',search_embedding text,
     photo_urls jsonb NOT NULL DEFAULT '[]',medically_cleared boolean DEFAULT false,
     status text DEFAULT 'intake',deleted_at timestamptz,updated_at timestamptz DEFAULT now());
     CREATE TABLE audit_logs(actor_clerk_user_id text,action text,entity_type text,entity_id text,metadata jsonb);
@@ -66,9 +66,9 @@ it("denies ordinary users before any database operation", async () => {
 it("blocks uncleared, adopted, closed, deleted, and incomplete profiles", async () => {
   const deps = await fixture();
   try {
-    const changes = ["medically_cleared=false", "status='adopted'", "status='closed'", "deleted_at=now()", "description=' '", "behaviour=' '", "photo_urls='[]'", "photo_urls='[\"javascript:alert(1)\"]'"];
+    const changes = ["medically_cleared=false", "status='adopted'", "status='closed'", "deleted_at=now()", "description=' '", "behaviour=' '", "rescue_history=' '", "photo_urls='[]'", "photo_urls='[\"javascript:alert(1)\"]'"];
     for (const change of changes) {
-      await deps.db.exec("UPDATE animals SET published_at=NULL,medically_cleared=true,status='intake',deleted_at=NULL,description='A gentle companion who enjoys quiet walks.',behaviour='Gentle and playful with a calm personality.',photo_urls='[\"https://example.com/milo.jpg\"]'");
+      await deps.db.exec("UPDATE animals SET published_at=NULL,medically_cleared=true,status='intake',deleted_at=NULL,description='A gentle companion who enjoys quiet walks.',behaviour='Gentle and playful with a calm personality.',rescue_history='Rescued and cared for by the shelter team.',photo_urls='[\"https://example.com/milo.jpg\"]'");
       await deps.db.exec(`UPDATE animals SET ${change}`);
       await assert.rejects(publishAnimalProfile(id, "staff", deps), (error: unknown) => (error as { status: number }).status === 409);
       assert.equal((await deps.db.query<{ published_at: string | null }>("SELECT published_at FROM animals")).rows[0].published_at, null);
@@ -101,13 +101,13 @@ it("saves an unfinished listing without requiring or overwriting internal intake
   const deps = await fixture();
   try {
     await deps.db.exec("UPDATE animals SET published_at=NULL");
-    const input = { description: "A draft", behaviour: "", photoUrls: [] as string[], veterinaryPriority: "routine", rescueHistory: "Overwritten", publishedAt: new Date() };
+    const input = { description: "A draft", behaviour: "", photoUrls: [] as string[], veterinaryPriority: "routine", rescueHistory: "A staff-written rescue journey draft", publishedAt: new Date() };
     await saveAnimalListingDraft(id, "staff", input, { ...deps, refreshEmbedding: async () => false });
     const [animal] = (await deps.db.query<Record<string, unknown>>("SELECT * FROM animals")).rows;
     assert.equal(animal.description, "A draft");
     assert.equal(animal.published_at, null);
     assert.equal(animal.veterinary_priority, null);
-    assert.equal(animal.rescue_history, "Original intake note");
+    assert.equal(animal.rescue_history, input.rescueHistory);
     assert.equal(animal.medically_cleared, true);
     assert.equal((await deps.db.query("SELECT * FROM medical_history")).rows.length, 1);
     await assert.rejects(publishAnimalProfile(id, "staff", deps));
@@ -117,10 +117,26 @@ it("saves an unfinished listing without requiring or overwriting internal intake
 it("does not allow a draft save to break a public listing or bypass staff authorisation", async () => {
   const deps = await fixture();
   try {
-    const input = { description: "", behaviour: "", photoUrls: [] as string[] };
+    const input = { description: "", behaviour: "", rescueHistory: "", photoUrls: [] as string[] };
     await assert.rejects(saveAnimalListingDraft(id, "staff", input, { ...deps, refreshEmbedding: async () => false }), /before publishing/);
     await assert.rejects(saveAnimalListingDraft(id, "owner", input, { ...deps, access: async () => false, refreshEmbedding: async () => false }), (error: unknown) => (error as { status: number }).status === 403);
     const [animal] = (await deps.db.query<{ description: string }>("SELECT description FROM animals")).rows;
     assert.equal(animal.description, "A gentle companion who enjoys quiet walks.");
+  } finally { await deps.db.close(); }
+});
+
+it("keeps an empty rescue journey as a draft, then publishes the manually entered journey", async () => {
+  const deps = await fixture();
+  try {
+    await deps.db.exec("UPDATE animals SET published_at=NULL");
+    const input = { description: "A gentle companion who enjoys quiet walks.", behaviour: "Gentle and playful with a calm personality.", photoUrls: ["https://example.com/milo.jpg"], rescueHistory: "" };
+    const draftDeps = { ...deps, refreshEmbedding: async () => false };
+    await saveAnimalListingDraft(id, "staff", input, draftDeps);
+    await assert.rejects(publishAnimalProfile(id, "staff", deps), /Rescue history is required/);
+    await assert.rejects(saveAnimalListingDraft(id, "staff", { ...input, rescueHistory: "x".repeat(1001) }, draftDeps));
+    input.rescueHistory = "Found near the village and brought to the shelter for care.";
+    await saveAnimalListingDraft(id, "staff", input, draftDeps);
+    assert((await publishAnimalProfile(id, "staff", deps)).publishedAt);
+    assert.equal((await deps.db.query<{ rescue_history: string }>("SELECT rescue_history FROM animals")).rows[0].rescue_history, input.rescueHistory);
   } finally { await deps.db.close(); }
 });

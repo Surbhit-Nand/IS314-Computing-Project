@@ -16,13 +16,14 @@ type Props = {
 export function AnimalPublicationEditor({ animal, getToken, onEditRecord, onBack, onSaved }: Props) {
   const [description, setDescription] = useState(animal.description ?? "");
   const [behaviour, setBehaviour] = useState(animal.behaviour ?? "");
+  const [rescueHistory, setRescueHistory] = useState(animal.rescueHistory ?? "");
   const [photos, setPhotos] = useState(animal.photoUrls);
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const uploadInput = useRef<HTMLInputElement>(null);
-  const dirty = description !== (animal.description ?? "") || behaviour !== (animal.behaviour ?? "") || JSON.stringify(photos) !== JSON.stringify(animal.photoUrls);
+  const dirty = rescueHistory !== (animal.rescueHistory ?? "") || description !== (animal.description ?? "") || behaviour !== (animal.behaviour ?? "") || JSON.stringify(photos) !== JSON.stringify(animal.photoUrls);
   const leave = (action: () => void) => {
     if (!dirty || window.confirm("Leave without saving your listing changes?")) action();
   };
@@ -48,15 +49,15 @@ export function AnimalPublicationEditor({ animal, getToken, onEditRecord, onBack
     const publish = (event.nativeEvent as SubmitEvent).submitter?.getAttribute("value") === "publish";
     setError(""); setMessage("");
     if (publish || animal.publishedAt) {
-      const problem = validateNarrativeText(description, "Description") || validateNarrativeText(behaviour, "Temperament") || (!photos.length ? "Choose at least one listing photo." : null);
+      const problem = validateNarrativeText(description, "Description") || validateNarrativeText(behaviour, "Temperament") || validateNarrativeText(rescueHistory, "Rescue history") || (!photos.length ? "Choose at least one listing photo." : null);
       if (problem) { setError(problem); return; }
     }
     setBusy(true);
     try {
       const token = await getToken();
       if (!token) throw new Error("Please sign in again.");
-      await saveAnimalListingDraft(token, animal.id, { description, behaviour, photoUrls: photos });
-      const saved = { ...animal, description, behaviour, photoUrls: photos };
+      await saveAnimalListingDraft(token, animal.id, { description, behaviour, rescueHistory, photoUrls: photos });
+      const saved = { ...animal, description, behaviour, rescueHistory, photoUrls: photos };
       onSaved(saved);
       if (publish) {
         try {
@@ -71,7 +72,7 @@ export function AnimalPublicationEditor({ animal, getToken, onEditRecord, onBack
 
   return <div className="animal-publication-editor">
     <header className="publication-editor-heading">
-      <div><p className="eyebrow">{animal.publishedAt ? "Public listing" : "Publication review"}</p><h1>{animal.publishedAt ? "Edit listing" : "Prepare a new beginning"}</h1><p>Photos and a little personality. The rest is already here.</p></div>
+      <div><p className="eyebrow">{animal.publishedAt ? "Public listing" : "Publication review"}</p><h1>{animal.publishedAt ? "Edit listing" : "Prepare a new beginning"}</h1><p>Share their photos, personality, and rescue journey before publication.</p></div>
       <button type="button" className="publication-record-link" disabled={busy || uploading} onClick={() => leave(onEditRecord)}>Edit animal record ↗</button>
     </header>
     <section className="publication-animal-summary" aria-label="Animal details from registration">
@@ -102,12 +103,15 @@ export function AnimalPublicationEditor({ animal, getToken, onEditRecord, onBack
             <label htmlFor="publication-temperament">Temperament & personality</label><p className="publication-help" id="publication-temperament-help">Describe their energy, habits, and the home that would suit them. At least 30 characters and five words to publish.</p>
             <textarea id="publication-temperament" aria-describedby="publication-temperament-help" maxLength={1000} rows={4} value={behaviour} onChange={(event) => { setBehaviour(event.target.value); setMessage(""); }} placeholder="Playful, gentle, independent… tell their story." />
             <span className="publication-character-count">{behaviour.length} / 1,000</span>
+            <label htmlFor="publication-rescue-history">Rescue history</label><p className="publication-help" id="publication-rescue-history-help">Tell adopters about this animal's rescue journey in your own words. At least 30 characters and five words to publish.</p>
+            <textarea id="publication-rescue-history" aria-describedby="publication-rescue-history-help" maxLength={1000} rows={5} value={rescueHistory} onChange={(event) => { setRescueHistory(event.target.value); setMessage(""); }} placeholder="Describe their journey from rescue to a new beginning." />
+            <span className="publication-character-count">{rescueHistory.length} / 1,000</span>
           </fieldset>
         </div>
         <aside className="publication-preview" aria-label="Listing preview">
           <p className="eyebrow">Listing preview</p>
           <div className="publication-preview-photo">{photos[0] ? <img src={photos[0]} alt={`${animal.name}'s main listing photo`} /> : <span>Your main photo goes here</span>}</div>
-          <div className="publication-preview-body"><span className="publication-preview-status">{animal.publishedAt ? "Published" : "Draft · not public"}</span><h2>{animal.name}</h2><p>{[animal.breed, animal.estimatedAge, animal.gender].filter(Boolean).join(" · ")}</p><p className="publication-preview-description">{description || "Their story will appear here as you write."}</p><h3>Personality</h3><p className="publication-preview-description">{behaviour || "A little about their personality."}</p></div>
+          <div className="publication-preview-body"><span className="publication-preview-status">{animal.publishedAt ? "Published" : "Draft · not public"}</span><h2>{animal.name}</h2><p>{[animal.breed, animal.estimatedAge, animal.gender].filter(Boolean).join(" · ")}</p><p className="publication-preview-description">{description || "Their story will appear here as you write."}</p><h3>Personality</h3><p className="publication-preview-description">{behaviour || "A little about their personality."}</p><h3>Rescue history</h3><p className="publication-preview-description">{rescueHistory || "Their rescue journey will appear here."}</p></div>
         </aside>
       </div>
       {uploading && <p role="status">Uploading photo…</p>}

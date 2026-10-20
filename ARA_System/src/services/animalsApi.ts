@@ -161,7 +161,7 @@ export async function publishAnimalProfile(token: string, id: string): Promise<{
   if (!response.ok) throw new Error(result.error ?? "The animal profile could not be published.");
   return result;
 }
-export async function saveAnimalListingDraft(token: string, id: string, input: { description: string; behaviour: string; photoUrls: string[] }): Promise<void> {
+export async function saveAnimalListingDraft(token: string, id: string, input: { description: string; behaviour: string; rescueHistory: string; photoUrls: string[] }): Promise<void> {
   const response = await fetch(`${apiBaseUrl}/api/animals/${id}/listing`, {
     method: "PATCH", headers: authHeaders(token, { "Content-Type": "application/json" }), body: JSON.stringify(input),
   });

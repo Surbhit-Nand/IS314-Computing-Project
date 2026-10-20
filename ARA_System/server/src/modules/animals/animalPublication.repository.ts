@@ -1,7 +1,7 @@
 import type { TransactionQuery } from "../../db/transaction.js";
 
 export type PublicationProfile = {
-  id: string; name: string; description: string | null; behaviour: string | null; photoUrls: string[];
+  id: string; name: string; description: string | null; behaviour: string | null; rescueHistory: string | null; photoUrls: string[];
   medicallyCleared: boolean; status: string; deletedAt: unknown; publishedAt: unknown;
 };
 
@@ -9,14 +9,14 @@ export function createPublicationStore(query: TransactionQuery) {
   return {
     async find(id: string) {
       // Serialise publication with edits, clearance, and adoption of this record.
-      const result = await query(`SELECT id,name,description,behaviour,photo_urls AS "photoUrls",
+      const result = await query(`SELECT id,name,description,behaviour,rescue_history AS "rescueHistory",photo_urls AS "photoUrls",
         medically_cleared AS "medicallyCleared",status,deleted_at AS "deletedAt",published_at AS "publishedAt"
         FROM animals WHERE id=$1 FOR UPDATE`, [id]);
       return result.rows[0] as PublicationProfile | undefined;
     },
-    async saveDraft(id: string, input: { description: string; behaviour: string; photoUrls: string[] }) {
-      await query(`UPDATE animals SET description=$2,behaviour=$3,photo_urls=$4::jsonb,
-        search_embedding=NULL,updated_at=clock_timestamp() WHERE id=$1`, [id, input.description, input.behaviour, JSON.stringify(input.photoUrls)]);
+    async saveDraft(id: string, input: { description: string; behaviour: string; rescueHistory: string; photoUrls: string[] }) {
+      await query(`UPDATE animals SET description=$2,behaviour=$3,photo_urls=$4::jsonb,rescue_history=$5,
+        search_embedding=NULL,updated_at=clock_timestamp() WHERE id=$1`, [id, input.description, input.behaviour, JSON.stringify(input.photoUrls), input.rescueHistory]);
     },
     async publish(id: string, actor: string) {
       const result = await query(`UPDATE animals SET published_at=clock_timestamp(),updated_at=clock_timestamp()

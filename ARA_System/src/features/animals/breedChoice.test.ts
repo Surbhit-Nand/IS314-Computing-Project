@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { AnimalFormInput } from "../../types/animal";
 import { BREED_OTHER_OPTION, findListedBreed, orderBreedOptions } from "./breedChoice.js";
-import { getAnimalFormErrors, validateAnimalForm } from "./validateAnimalForm.js";
+import { getAnimalFormErrors, validateAnimalForm, toAnimalPayload } from "./validateAnimalForm.js";
 
 // Run: npm test. The dog/cat Breed dropdown's "Other" option and the typed
 // breed box (AnimalProfileFields.tsx) are driven by these helpers and by
@@ -60,6 +60,13 @@ const VALID_FORM: AnimalFormInput = {
   size: "large",
   veterinaryPriority: "moderate",
 };
+
+it("registration accepts an empty rescue journey and record saves leave it to publication review", () => {
+  const form = { ...VALID_FORM, rescueHistory: "" };
+  assert.equal(validateAnimalForm(form, DOG_BREEDS), null);
+  assert.equal("rescueHistory" in toAnimalPayload(form), false);
+  assert.equal("rescueHistory" in toAnimalPayload(VALID_FORM), false);
+});
 
 function breedError(breed: string, type: AnimalFormInput["type"] = "dog") {
   return getAnimalFormErrors({ ...VALID_FORM, type, speciesName: type === "other" ? "Rabbit" : "", breed }, DOG_BREEDS)

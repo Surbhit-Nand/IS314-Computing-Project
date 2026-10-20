@@ -13,7 +13,7 @@ export function publicationProblem(animal: PublicationProfile): string | null {
   if (animal.deletedAt || ["adopted", "closed"].includes(animal.status)) return "This animal is no longer available for publication.";
   if (!animal.medicallyCleared) return "Medical clearance is required before publication.";
   if (!animal.name.trim() || !animal.description?.trim()) return "Add a name and description before publishing.";
-  const narrativeProblem = validateNarrativeText(animal.description, "Description") || validateNarrativeText(animal.behaviour ?? "", "Temperament");
+  const narrativeProblem = validateNarrativeText(animal.description, "Description") || validateNarrativeText(animal.behaviour ?? "", "Temperament") || validateNarrativeText(animal.rescueHistory ?? "", "Rescue history");
   if (narrativeProblem) return narrativeProblem;
   if (!animal.photoUrls.length || animal.photoUrls.length > 3 || animal.photoUrls.some((url) => {
     try { return !["http:", "https:"].includes(new URL(url).protocol); } catch { return true; }
@@ -21,13 +21,13 @@ export function publicationProblem(animal: PublicationProfile): string | null {
   return null;
 }
 
-export type ListingDraft = { description: string; behaviour: string; photoUrls: string[] };
+export type ListingDraft = { description: string; behaviour: string; rescueHistory: string; photoUrls: string[] };
 
 export async function saveAnimalListingDraft(id: string, actor: string, input: ListingDraft, dependencies = {
   access: canPublish, transaction: withSqlTransaction, refreshEmbedding: ensureMissingAnimalSearchEmbedding,
 }) {
   if (!await dependencies.access(actor)) throw new PublicationError(403, "Only authorised staff can edit listings.");
-  if (typeof input.description !== "string" || typeof input.behaviour !== "string" || input.description.length > 1000 || input.behaviour.length > 1000 ||
+  if (typeof input.description !== "string" || typeof input.behaviour !== "string" || input.description.length > 1000 || input.behaviour.length > 1000 || typeof input.rescueHistory !== "string" || input.rescueHistory.length > 1000 ||
       !Array.isArray(input.photoUrls) || input.photoUrls.length > 3 || input.photoUrls.some((url) => {
         try { return typeof url !== "string" || !["http:", "https:"].includes(new URL(url).protocol); } catch { return true; }
       })) throw new PublicationError(400, "Use up to 1,000 characters per field and up to three valid photo URLs.");
@@ -41,7 +41,7 @@ export async function saveAnimalListingDraft(id: string, actor: string, input: L
       const problem = publicationProblem({ ...animal, ...input });
       if (problem) throw new PublicationError(409, problem);
     }
-    await store.saveDraft(id, { description: input.description, behaviour: input.behaviour, photoUrls: input.photoUrls });
+    await store.saveDraft(id, { description: input.description, behaviour: input.behaviour, rescueHistory: input.rescueHistory, photoUrls: input.photoUrls });
   });
   await dependencies.refreshEmbedding(id);
   return { id };

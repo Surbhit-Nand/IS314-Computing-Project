@@ -165,7 +165,7 @@ export type AgeUnit = "weeks" | "months" | "years";
 
 // What the API receives on create/edit: the form with the age combined into
 // the stored text ("2.5 Years") and every select filled in.
-export type AnimalPayload = Omit<AnimalFormInput, "ageValue" | "ageUnit" | "type" | "vaccinationStatus"> & {
+export type AnimalPayload = Omit<AnimalFormInput, "ageValue" | "ageUnit" | "type" | "vaccinationStatus" | "rescueHistory"> & {
   type: FormSpecies;
   estimatedAge: string;
   vaccinationStatus: VaccinationStatus;
