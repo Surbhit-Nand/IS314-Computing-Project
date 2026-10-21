@@ -1,5 +1,25 @@
 # ARA: Animal Rescue and Adoption Management System
 
+ARA supports SPCA Fiji's animal rescue, veterinary care and adoption work.
+Visitors can browse animals, search for a suitable companion, apply to adopt and
+report rescues. Staff manage animal profiles, rescue operations, veterinary care,
+applications and reporting through role-based workspaces.
+
+**Start here:** the [project overview and local setup guide](../README.md)
+explains prerequisites, environment files, database preparation and troubleshooting.
+All npm commands run from this `ARA_System` directory. After completing setup,
+keep these commands running in two separate terminals:
+
+```sh
+# Terminal 1: backend at http://localhost:8787
+npm run server:dev
+```
+
+```sh
+# Terminal 2: frontend at http://localhost:5173
+npm run dev -- --port 5173 --strictPort
+```
+
 ARA uses a React/TypeScript Vite frontend and an Express/TypeScript backend with
 PostgreSQL on Neon. Start the frontend with `npm run dev` and the API separately
 with `npm run server:dev` after configuring local environment files and applying
