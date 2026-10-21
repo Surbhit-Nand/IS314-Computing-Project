@@ -1,6 +1,14 @@
 import type { animals } from "../../db/schema.js";
+import { extractTraits } from "../../shared/animalTraits.js";
 
 type AnimalRow = typeof animals.$inferSelect;
+
+// Longest phrases first. Spelling correction derives structured terms from
+// this same list; the parser remains the authority for interpreting them.
+export const ANIMAL_SEARCH_STRUCTURED_TERMS = [
+	"not vaccinated", "extra large", "dog", "dogs", "cat", "cats",
+	"small", "medium", "large", "male", "female", "vaccinated",
+] as const;
 
 export type AnimalSearchFilters = {
 	// Dog and cat only. Rabbits, hamsters etc. are species "other" with the
@@ -14,7 +22,10 @@ export type AnimalSearchFilters = {
 	vaccinationStatus?: AnimalRow["vaccinationStatus"];
 };
 
-export type AnimalSearchIntent = AnimalSearchFilters & { semanticQuery: string };
+export type AnimalSearchIntent = AnimalSearchFilters & {
+	semanticQuery: string;
+	requestedTraits: string[];
+};
 
 function unambiguous<T extends string>(values: T[]): T | undefined {
 	const unique = new Set(values);
@@ -54,7 +65,7 @@ export function parseAnimalSearchIntent(semanticQuery: string): AnimalSearchInte
 
 	// Longest phrases first: "extra large" must never also count as "large",
 	// and "not vaccinated" must never also count as "vaccinated".
-	const tokens = /\b(?:not[ -]+vaccinated|extra[ -]+large|dogs?|cats?|small|medium|large|male|female|vaccinated)\b/g;
+	const tokens = new RegExp(`\\b(?:${ANIMAL_SEARCH_STRUCTURED_TERMS.map((term) => term.replaceAll(" ", "[ -]+")).join("|")})\\b`, "g");
 	for (const match of text.matchAll(tokens)) {
 		const token = match[0].replace(/-/g, " ").replace(/\s+/g, " ");
 		let field: keyof AnimalSearchFilters;
@@ -80,5 +91,6 @@ export function parseAnimalSearchIntent(semanticQuery: string): AnimalSearchInte
 		gender: uncertain.has("gender") ? undefined : unambiguous(genders),
 		vaccinationStatus: uncertain.has("vaccinationStatus") ? undefined : unambiguous(vaccinations),
 		semanticQuery,
+		requestedTraits: extractTraits(semanticQuery, null),
 	};
 }

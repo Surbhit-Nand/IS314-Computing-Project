@@ -29,9 +29,8 @@ const { searchEmbedding: _searchEmbedding, ...animalProfileColumns } = getTableC
 // requireMedicallyCleared) so clearance is enforced again at the point an
 // application is approved.
 //
-// Extracted into its own function because it now gates two read paths: the
-// normal listing (findPublicAnimals) and AI search (findSimilarPublicAnimals).
-// Both must use the identical predicate, otherwise a semantically perfect
+// Shared by the normal listing and both AI search candidate paths.
+// All must use the identical predicate, otherwise a semantically perfect
 // match could leak an animal the ordinary listing hides - or an adoptable
 // animal would silently vanish from AI search. There is no AI involvement in
 // this decision: the database alone decides what is publicly adoptable, and the
@@ -48,6 +47,17 @@ function publicAnimalVisibility() {
 
 export async function findPublicAnimals() {
 	return db.select(animalProfileColumns).from(animals).where(publicAnimalVisibility());
+}
+
+// One batched protection dictionary per search. Only public discovery fields
+// from publicly visible profiles are ever supplied to spelling correction.
+export async function findPublicAnimalSpellingTerms() {
+	const rows = await db.select({
+		name: animals.name, breed: animals.breed,
+		speciesName: animals.speciesName, colour: animals.colour,
+	}).from(animals).where(publicAnimalVisibility());
+	return rows.flatMap((row) => [row.name, row.breed, row.speciesName, row.colour])
+		.filter((term): term is string => Boolean(term));
 }
 
 // The columns AI search returns. Narrower than animalProfileColumns on purpose:
@@ -86,6 +96,40 @@ function cosineDistance(embedding: number[]) {
 	return sql`${animals.searchEmbedding} <=> ${JSON.stringify(embedding)}::vector`;
 }
 
+// Every search path shares the same visibility and structured constraints.
+function publicSearchEligibility(filters: AnimalSearchFilters = {}) {
+	return and(
+		publicAnimalVisibility(),
+		filters.type ? eq(animals.type, filters.type) : undefined,
+		filters.size ? eq(animals.size, filters.size) : undefined,
+		// Free-text legacy values may differ in capitalization or whitespace.
+		filters.gender
+			? sql`lower(trim(${animals.gender})) = ${filters.gender.toLowerCase()}`
+			: undefined,
+		filters.vaccinationStatus
+			? eq(animals.vaccinationStatus, filters.vaccinationStatus)
+			: undefined,
+	);
+}
+
+// Trait matching uses the shared TypeScript extractor, never a second SQL
+// vocabulary. Fetch EVERY eligible profile before tag ranking: a semantic
+// LIMIT/threshold here could hide the best deterministic match. NULL vectors
+// remain eligible for tags, with no semantic score. No private fields/vectors
+// leave the database in this projection.
+export async function findPublicAnimalSearchCandidates(
+	queryEmbedding: number[],
+	filters: AnimalSearchFilters,
+) {
+	return db.select({
+		id: animals.id,
+		name: animals.name,
+		behaviour: animals.behaviour,
+		description: animals.description,
+		similarity: sql<number | null>`1 - (${cosineDistance(queryEmbedding)})`.as("similarity"),
+	}).from(animals).where(publicSearchEligibility(filters));
+}
+
 // Ranks publicly adoptable animals by how close their stored embedding is to
 // the searcher's sentence, best match first. Explicit structured constraints
 // restrict the SQL candidates before the threshold, ordering and result limit.
@@ -101,23 +145,13 @@ export async function findSimilarPublicAnimals(
 ) {
 	const distance = cosineDistance(queryEmbedding);
 	const maxDistance = 1 - (options.minSimilarity ?? 0);
-	const filters = options.filters ?? {};
 
 	return db
 		.select(publicSearchResult)
 		.from(animals)
 		.where(
 			and(
-				publicAnimalVisibility(),
-				filters.type ? eq(animals.type, filters.type) : undefined,
-				filters.size ? eq(animals.size, filters.size) : undefined,
-				// Free-text legacy values may differ in capitalization or whitespace.
-				filters.gender
-					? sql`lower(trim(${animals.gender})) = ${filters.gender.toLowerCase()}`
-					: undefined,
-				filters.vaccinationStatus
-					? eq(animals.vaccinationStatus, filters.vaccinationStatus)
-					: undefined,
+				publicSearchEligibility(options.filters),
 				// An animal with no embedding yet - registered before the search
 				// feature existed, or its embedding failed to generate - has
 				// nothing to compare against, so it is skipped rather than

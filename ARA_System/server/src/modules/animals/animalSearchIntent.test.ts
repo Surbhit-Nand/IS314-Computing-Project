@@ -54,7 +54,9 @@ const cases: [string, AnimalSearchFilters][] = [
 describe("deterministic animal search intent", () => {
 	for (const [query, expected] of cases) {
 		it(query, () => {
-			assert.deepEqual(parseAnimalSearchIntent(query), {
+			const { requestedTraits, ...intent } = parseAnimalSearchIntent(query);
+			assert.ok(Array.isArray(requestedTraits));
+			assert.deepEqual(intent, {
 				type: undefined,
 				size: undefined,
 				gender: undefined,
@@ -64,4 +66,29 @@ describe("deterministic animal search intent", () => {
 			});
 		});
 	}
+});
+
+describe("requested search traits", () => {
+	it("A: extracts hard constraints and energetic + cuddly without stripping semantic text", () => {
+		assert.deepEqual(parseAnimalSearchIntent("small energetic cuddly dog"), {
+			type: "dog", size: "small", gender: undefined, vaccinationStatus: undefined,
+			requestedTraits: ["energetic", "cuddly"], semanticQuery: "small energetic cuddly dog",
+		});
+	});
+	it("uses the card vocabulary, synonyms and lexicon order", () => {
+		assert.deepEqual(parseAnimalSearchIntent("calm friendly dog good with children").requestedTraits,
+			["good-with-children", "calm", "friendly"]);
+		assert.deepEqual(parseAnimalSearchIntent("playful affectionate dog").requestedTraits, ["energetic", "cuddly"]);
+	});
+	for (const query of ["small dog that is not energetic", "dog that isn't cuddly", "dog that isn’t cuddly", "dog without puppy energy"]) {
+		it(`H: does not request negated traits: ${query}`, () => {
+			assert.deepEqual(parseAnimalSearchIntent(query).requestedTraits, []);
+		});
+	}
+	it("I: does not invent traits for a descriptive query", () => {
+		const intent = parseAnimalSearchIntent("small brown dog that likes staying near people");
+		assert.deepEqual(intent.requestedTraits, []);
+		assert.equal(intent.type, "dog");
+		assert.equal(intent.size, "small");
+	});
 });

@@ -5,10 +5,16 @@ PostgreSQL on Neon. Start the frontend with `npm run dev` and the API separately
 with `npm run server:dev` after configuring local environment files and applying
 required migrations.
 
-Animal listings support hybrid search: explicit structured characteristics
-restrict public candidates, while Gemini embeddings and pgvector rank those
-candidates semantically. Existing cards, sidebar filters, no-match handling, and
-reset behavior are preserved.
+Animal listings support tag-priority search with semantic fallback: explicit
+structured characteristics restrict public candidates, then matches from the
+shared animal-card trait vocabulary rank ahead of semantic-only matches.
+Gemini embeddings and pgvector break tag ties and find relevant descriptions.
+Existing cards, sidebar filters, no-match handling, and reset behavior are preserved.
+High-confidence spelling correction runs before interpretation and embedding.
+When a query is corrected, search uses the corrected text immediately and shows
+a clickable **Did you mean** suggestion while retaining the original input.
+Uncertain words are left unchanged; spelling does not replace semantic search.
+See [spelling verification and limitations](docs/ai-search-spelling-report.md).
 
 Adopters with approved or completed applications can use **My Animals** to view
 their animal's veterinary history and manage owner-booked appointments.

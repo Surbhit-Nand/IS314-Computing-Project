@@ -1,0 +1,23 @@
+.home-page.animal-catalog-page .catalog-hero .catalog-search {
+  align-self: center;
+}
+
+.catalog-spelling-suggestion {
+  margin: 12px 0 0;
+  font-size: 0.875rem;
+}
+
+.catalog-spelling-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--spca-brand, var(--teal));
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.catalog-spelling-link:hover,
+.catalog-spelling-link:focus-visible {
+  text-decoration-thickness: 2px;
+}

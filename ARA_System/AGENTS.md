@@ -632,14 +632,28 @@ Every route/action is gated server-side by role, not just hidden in the UI
 
 ## AI search
 
-Hybrid search combines deterministic explicit type/size/gender/vaccination
-constraints with a Gemini embedding of the full normalized query. Public
-visibility and structured predicates are applied in SQL before cosine ordering
-and LIMIT. The parser hard-filters only the `dog`/`cat` types, size, gender and
+Normalize whitespace, then run conservative local spelling correction before
+intent parsing, trait extraction and full-query embedding. Derive spelling terms
+from the shared vocabulary; protect public names/breeds/species/colours with one
+batched public lookup. Preserve negations and ambiguous words. Keep original text
+for transparency and return optional `didYouMean` only on a meaningful correction.
+The listing accepts the suggestion by searching again and clears stale suggestions.
+
+Search combines deterministic explicit type/size/gender/vaccination constraints,
+shared card-trait priority, and a Gemini embedding of the full normalized query.
+Public visibility and structured predicates are applied in SQL before ranking.
+Trait queries fetch all eligible candidates, rank full then partial requested
+trait matches ahead of semantic-only matches, deduplicate by ID, and limit last.
+Only semantic-only matches require the configured similarity threshold; tag
+matches can qualify below it or with NULL vectors. With no requested traits,
+the existing SQL semantic ordering/threshold/LIMIT path is retained.
+`server/src/shared/animalTraits.ts` owns the pure vocabulary/extractor; the
+frontend `src/utils/animalTags.ts` re-exports it and retains card-building logic.
+The parser hard-filters only the `dog`/`cat` types, size, gender and
 vaccination; every other species word (rabbit, hamster, …) stays in the
 embedding text and is matched semantically, because those animals are stored as
-`type = 'other'` with the species in `species_name`/`breed`. Compatibility and
-temperament remain semantic too.
+`type = 'other'` with the species in `species_name`/`breed`. Recognized compatibility
+and temperament traits influence ranking; other descriptions remain semantic.
 
 See [backend search documentation](server/README.md) for the exact flow,
 visibility rule, supported vocabulary, lifecycle, configuration, and limitations.
@@ -648,7 +662,7 @@ explicit environment threshold of 0.60, result limit 10, and a 10-second timeout
 The code's threshold fallback remains 0; recalibrate with substantially larger
 datasets rather than treating 0.60 as universal.
 
-NULL embeddings are excluded from AI search and can be retried by an eligible
+NULL embeddings are excluded from semantic-only results and can be retried by an eligible
 profile save, successful veterinary clearance, or missing-only backfill.
 Provider failures must not block registration, updates, or clearance. Valid
 embeddings must be preserved on unrelated edits. Keep provider credentials
