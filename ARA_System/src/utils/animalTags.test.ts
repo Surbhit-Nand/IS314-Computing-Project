@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { ANIMAL_TRAITS, buildAnimalTags, extractTraits, traitLabel } from "./animalTags.js";
 import type { Animal } from "../types/animal.js";
+import * as sharedTraits from "../../server/src/shared/animalTraits.js";
 
 function animal(overrides: Partial<Animal> = {}): Animal {
   return {
@@ -69,6 +70,11 @@ describe("buildAnimalTags", () => {
 });
 
 describe("extractTraits", () => {
+  it("re-exports the exact same vocabulary and extractor used by backend search", () => {
+    assert.equal(ANIMAL_TRAITS, sharedTraits.ANIMAL_TRAITS);
+    assert.equal(extractTraits, sharedTraits.extractTraits);
+    assert.equal(traitLabel, sharedTraits.traitLabel);
+  });
   it("returns every matched trait in lexicon order", () => {
     assert.deepEqual(extractTraits("Calm and cuddly with kids", null), [
       "good-with-children",

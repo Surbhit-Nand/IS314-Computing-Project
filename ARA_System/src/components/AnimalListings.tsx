@@ -9,6 +9,7 @@ import { apiBaseUrl } from "../services/apiClient.js";
 import { SiteFooter } from "./SiteFooter";
 import { SiteHeader, type SiteHeaderView } from "./SiteHeader";
 import { IconArrowLeft, IconArrowRight } from "./MedicalIcons";
+import "./AnimalListings.css";
 
 type AnimalListingsProps = {
   isLoaded: boolean;
@@ -63,6 +64,7 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
   const [aiQuery, setAiQuery] = useState("");
   const [aiSearching, setAiSearching] = useState(false);
   const [aiSearchError, setAiSearchError] = useState("");
+  const [didYouMean, setDidYouMean] = useState<string | null>(null);
   const [photoIndexes, setPhotoIndexes] = useState<Record<string, number>>({});
   // Guards against a slow earlier request overwriting a newer search's results.
   const searchRun = useRef(0);
@@ -125,14 +127,15 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
     setAiQuery("");
     setAiSearchError("");
     setAiSearching(false);
+    setDidYouMean(null);
   }
 
   // Runs a natural-language search. The result is only ever the *order* the
   // cards appear in: each match is the full profile already loaded from
   // GET /api/animals, so opening a card behaves exactly as it does in the
   // normal listing.
-  async function runAiSearch() {
-    const query = searchText.trim();
+  async function runAiSearch(queryText = searchText) {
+    const query = queryText.trim();
     // Fewer than two characters can't describe an animal, and the server
     // rejects them: treat it as "no search" rather than an error.
     if (query.length < 2) {
@@ -144,14 +147,16 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
     searchRun.current = run;
     setAiSearching(true);
     setAiSearchError("");
+    setDidYouMean(null);
 
     try {
-      const hits = await searchAnimalsWithAI(query);
+      const { results: hits, didYouMean: suggestion } = await searchAnimalsWithAI(query);
       if (searchRun.current !== run) return; // a newer search has taken over
       // If the server returns no matches, treat this as a completed search
       // with an empty result set (do NOT fall back to all animals).
       setAiRanking(hits.length === 0 ? [] : hits);
-      setAiQuery(query);
+      setAiQuery(suggestion ?? query);
+      setDidYouMean(suggestion ?? null);
     } catch (error: unknown) {
       if (searchRun.current !== run) return;
       // AI search is assistive only, so a provider outage falls back to the
@@ -277,6 +282,11 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
                 onChange={(event) => {
                   const next = event.target.value;
                   setSearchText(next);
+                  // Editing invalidates any in-flight suggestion, so a stale
+                  // response cannot appear beneath a different input value.
+                  searchRun.current += 1;
+                  setAiSearching(false);
+                  setDidYouMean(null);
                   // Clearing (or shortening) the box clears the search too, so
                   // the listing is never left showing results for a query the
                   // visitor can no longer see.
@@ -287,6 +297,23 @@ export function AnimalListings({ isLoaded, isSignedIn, currentPage, onNavigate, 
                 {aiSearching ? "Searching…" : "Search"}
               </button>
             </div>
+            {didYouMean && (
+              <p className="catalog-spelling-suggestion" role="status" aria-live="polite">
+                Did you mean: {"\u201c"}
+                <button
+                  type="button"
+                  className="catalog-spelling-link"
+                  onClick={() => {
+                    const corrected = didYouMean;
+                    setSearchText(corrected);
+                    void runAiSearch(corrected);
+                  }}
+                >
+                  {didYouMean}
+                </button>
+                {"\u201d"}?
+              </p>
+            )}
           </form>
         </section>
 

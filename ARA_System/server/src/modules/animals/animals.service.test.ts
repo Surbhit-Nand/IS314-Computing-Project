@@ -37,6 +37,7 @@ const {
 	normalizeSearchQuery,
 	registerAnimal,
 	searchAnimalsWithAI,
+	searchAnimalsWithAISuggestion,
 	updateAnimalProfile,
 } = await import("./animals.service.js");
 const { buildAnimalSearchText, touchesSearchableField } = await import("./animalSearchText.js");
@@ -58,6 +59,8 @@ type SearchCall = { embedding: Embedding; limit: number; minSimilarity?: number;
 // as importantly, that nothing was sent at all.
 let embedCalls: EmbedCall[] = [];
 let searchCalls: SearchCall[] = [];
+let candidateCalls: { embedding: Embedding; filters: AnimalSearchFilters }[] = [];
+let candidateAnimals: Awaited<ReturnType<typeof import("./animals.repository.js").findPublicAnimalSearchCandidates>> = [];
 let embeddingWrites: { id: string; embedding: Embedding | null }[] = [];
 let missingAnimals: AnimalRow[] = [];
 let storedAnimals: AnimalRow[] = [];
@@ -139,6 +142,7 @@ function embed(text: string, purpose: "document" | "query"): Promise<Embedding> 
 function dependencies() {
 	return {
 		repository: {
+			findPublicAnimalSpellingTerms: async (): Promise<string[]> => [],
 			findAnimalByPublicId: async () => undefined,
 			// Stands in for the INSERT + RETURNING: the saved row is whatever the
 			// service decided to write, so a test can read back the real defaults.
@@ -158,6 +162,10 @@ function dependencies() {
 				searchCalls.push({ embedding, ...options });
 				return Promise.resolve(storedAnimals);
 			},
+			findPublicAnimalSearchCandidates: async (embedding: Embedding, filters: AnimalSearchFilters) => {
+				candidateCalls.push({ embedding, filters });
+				return candidateAnimals;
+			},
 			findAnimalsMissingSearchEmbedding: async () => missingAnimals,
 			findAnimalMissingSearchEmbedding: async (id: string) => missingAnimals.find((row) => row.id === id),
 		},
@@ -173,6 +181,8 @@ function dependencies() {
 beforeEach(() => {
 	embedCalls = [];
 	searchCalls = [];
+	candidateCalls = [];
+	candidateAnimals = [];
 	embeddingWrites = [];
 	missingAnimals = [];
 	storedAnimals = [];
@@ -244,20 +254,20 @@ describe("natural-language search", () => {
 		];
 
 		const results = await searchAnimalsWithAI(
-			"small dog which is calm around children",
+			"small brown dog that likes staying near people",
 			dependencies(),
 		);
 
 		assert.equal(embedCalls.length, 1);
 		assert.equal(embedCalls[0].purpose, "query");
-		assert.equal(embedCalls[0].text, "small dog which is calm around children");
+		assert.equal(embedCalls[0].text, "small brown dog that likes staying near people");
 		assert.deepEqual(results, storedAnimals);
 	});
 
 	it("collapses extra whitespace so equivalent sentences embed identically", async () => {
-		await searchAnimalsWithAI("  small   calm\tdog  ", dependencies());
+		await searchAnimalsWithAI("  small   brown\tdog  ", dependencies());
 
-		assert.equal(embedCalls[0].text, "small calm dog");
+		assert.equal(embedCalls[0].text, "small brown dog");
 		assert.deepEqual(searchCalls[0].filters, {
 			type: "dog", size: "small", gender: undefined, vaccinationStatus: undefined,
 		});
@@ -265,9 +275,9 @@ describe("natural-language search", () => {
 
 	it("passes all hard constraints while embedding the full normalized sentence", async () => {
 		const deps = { ...dependencies(), minSimilarity: 0.42, limit: 7 };
-		await searchAnimalsWithAI("  female small dog not vaccinated good with children  ", deps);
+		await searchAnimalsWithAI("  female small dog not vaccinated  ", deps);
 		assert.deepEqual(embedCalls, [{
-			text: "female small dog not vaccinated good with children", purpose: "query",
+			text: "female small dog not vaccinated", purpose: "query",
 		}]);
 		assert.deepEqual(searchCalls, [{
 			embedding: providerEmbedding, limit: 7, minSimilarity: 0.42,
@@ -276,14 +286,14 @@ describe("natural-language search", () => {
 	});
 
 	it("keeps descriptive-only queries unconstrained", async () => {
-		await searchAnimalsWithAI("calm family animal", dependencies());
+		await searchAnimalsWithAI("brown animal near people", dependencies());
 		assert.deepEqual(searchCalls[0].filters, {
 			type: undefined, size: undefined, gender: undefined, vaccinationStatus: undefined,
 		});
 	});
 
 	it("returns no matches without falling back to an unfiltered listing", async () => {
-		assert.deepEqual(await searchAnimalsWithAI("small calm dog", dependencies()), []);
+		assert.deepEqual(await searchAnimalsWithAI("small brown dog", dependencies()), []);
 		assert.equal(searchCalls.length, 1);
 		assert.equal(searchCalls[0].filters?.type, "dog");
 		assert.equal(searchCalls[0].filters?.size, "small");
@@ -296,11 +306,11 @@ describe("natural-language search", () => {
 		const rows = [animal({ id: "a", description: "Calm around children." })];
 		storedAnimals = rows;
 
-		assert.deepEqual(await searchAnimalsWithAI("calm dog", dependencies()), rows);
+		assert.deepEqual(await searchAnimalsWithAI("brown dog", dependencies()), rows);
 	});
 
 	it("passes the query vector and the configured limit to the repository", async () => {
-		await searchAnimalsWithAI("calm dog", dependencies());
+		await searchAnimalsWithAI("brown dog", dependencies());
 
 		assert.equal(searchCalls.length, 1);
 		// Exactly the vector the provider returned for the query, and the
@@ -325,7 +335,7 @@ describe("natural-language search", () => {
 		providerFailure = new AiSearchUnavailableError("GEMINI_API_KEY is not configured");
 
 		await assert.rejects(
-			() => searchAnimalsWithAI("calm dog", dependencies()),
+			() => searchAnimalsWithAI("brown dog", dependencies()),
 			(error: unknown) => error instanceof AiSearchUnavailableError,
 		);
 		// Nothing was searched, so an outage can never degrade into "here is every
@@ -337,6 +347,98 @@ describe("natural-language search", () => {
 		assert.equal(normalizeSearchQuery("a".repeat(301))?.length, 300);
 		assert.equal(normalizeSearchQuery("a"), null);
 		assert.equal(normalizeSearchQuery("\n\t "), null);
+	});
+});
+
+describe("spelling service and HTTP integration", () => {
+	function rankedFixtures() {
+		candidateAnimals = [
+			{ id: "Charlie", name: "Charlie", behaviour: "", description: "Loves activity and affection", similarity: 0.95 },
+			{ id: "Buddy", name: "Buddy", behaviour: "Energetic", description: null, similarity: 0.9 },
+			{ id: "Milo", name: "Milo", behaviour: "Energetic and cuddly", description: null, similarity: 0.59 },
+		];
+	}
+	it("corrects before embedding/filtering and preserves tag priority, threshold and final limit", async () => {
+		rankedFixtures();
+		const result = await searchAnimalsWithAISuggestion("  small energetic vuddly bog  ", { ...dependencies(), limit: 2 });
+		assert.deepEqual(result.hits, [{ id: "Milo" }, { id: "Buddy" }]);
+		assert.equal(result.spelling.originalQuery, "small energetic vuddly bog");
+		assert.equal(result.spelling.correctedQuery, "small energetic cuddly dog");
+		assert.deepEqual(embedCalls, [{ text: "small energetic cuddly dog", purpose: "query" }]);
+		assert.equal(candidateCalls[0].filters.type, "dog");
+		assert.equal(candidateCalls[0].filters.size, "small");
+		assert.deepEqual(searchCalls, []);
+	});
+	it("does not turn a corrected negative trait into positive tag priority", async () => {
+		const result = await searchAnimalsWithAISuggestion("not energtic dog", dependencies());
+		assert.equal(result.spelling.correctedQuery, "not energetic dog");
+		assert.deepEqual(candidateCalls, []);
+		assert.equal(searchCalls.length, 1);
+		assert.equal(embedCalls[0].text, "not energetic dog");
+	});
+	it("protects names with one batched dictionary lookup and skips guessing if it fails", async () => {
+		const deps = dependencies();
+		let calls = 0;
+		deps.repository.findPublicAnimalSpellingTerms = async () => { calls++; return ["Vuddly", "Bog"]; };
+		assert.equal((await searchAnimalsWithAISuggestion("small energetic Vuddly Bog", deps)).spelling.changed, false);
+		assert.equal(calls, 1);
+		deps.repository.findPublicAnimalSpellingTerms = async () => { throw new Error("Dictionary unavailable"); };
+		assert.equal((await searchAnimalsWithAISuggestion("small energetic vuddly bog", deps)).spelling.changed, false);
+		assert.equal(embedCalls[1].text, "small energetic vuddly bog");
+	});
+	it("HTTP returns only ranked IDs and an optional suggestion; keeps validation and provider failure", async () => {
+		const { default: express } = await import("express");
+		const { createAnimalSearchHandler } = await import("./animals.routes.js");
+		rankedFixtures();
+		const app = express();
+		app.use(express.json());
+		app.post("/api/animals/ai-search", createAnimalSearchHandler((query) => searchAnimalsWithAISuggestion(query, dependencies())));
+		const server = app.listen(0, "127.0.0.1");
+		await new Promise<void>((resolve) => server.once("listening", resolve));
+		try {
+			const address = server.address();
+			assert(address && typeof address !== "string");
+			const search = (query: string) => fetch(`http://127.0.0.1:${address.port}/api/animals/ai-search`, {
+				method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query }),
+			});
+			const response = await search("small energetic vuddly bog");
+			assert.equal(response.status, 200);
+			assert.deepEqual(await response.json(), { results: ["Milo", "Buddy", "Charlie"], didYouMean: "small energetic cuddly dog" });
+			assert.deepEqual(await (await search("small energetic cuddly dog")).json(), { results: ["Milo", "Buddy", "Charlie"] });
+			assert.equal((await search(" ")).status, 400);
+			providerFailure = new AiSearchUnavailableError("Provider unavailable");
+			assert.equal((await search("small energetic vuddly bog")).status, 503);
+		} finally {
+			await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+		}
+	});
+});
+
+describe("tag-priority service integration", () => {
+	it("embeds the full normalized query, passes hard filters, and limits after ranking", async () => {
+		candidateAnimals = [
+			{ id: "Charlie", name: "Charlie", behaviour: "", description: "Loves activity and affection", similarity: 0.95 },
+			{ id: "Buddy", name: "Buddy", behaviour: "Energetic", description: null, similarity: 0.9 },
+			{ id: "Milo", name: "Milo", behaviour: "Energetic and cuddly", description: null, similarity: 0.59 },
+		];
+		const results = await searchAnimalsWithAI("  small energetic  cuddly dog ", { ...dependencies(), minSimilarity: 0.6, limit: 2 });
+		assert.deepEqual(results, [{ id: "Milo" }, { id: "Buddy" }]);
+		assert.deepEqual(embedCalls, [{ text: "small energetic cuddly dog", purpose: "query" }]);
+		assert.deepEqual(candidateCalls, [{ embedding: providerEmbedding, filters: {
+			type: "dog", size: "small", gender: undefined, vaccinationStatus: undefined,
+		} }]);
+		assert.deepEqual(searchCalls, [], "must not call the limited semantic query for tags");
+	});
+	it("keeps no-match results empty and does not widen hard filters", async () => {
+		assert.deepEqual(await searchAnimalsWithAI("small energetic dog", dependencies()), []);
+		assert.equal(candidateCalls.length, 1);
+		assert.deepEqual(searchCalls, []);
+	});
+	it("keeps provider failure distinct from no matches for tag searches", async () => {
+		providerFailure = new AiSearchUnavailableError("Provider unavailable");
+		await assert.rejects(searchAnimalsWithAI("energetic dog", dependencies()), AiSearchUnavailableError);
+		assert.deepEqual(candidateCalls, []);
+		assert.deepEqual(searchCalls, []);
 	});
 });
 
@@ -564,7 +666,9 @@ describe("public visibility is shared by the listing and AI search", () => {
 		const source = repositorySource();
 
 		assert.match(functionBody(source, "findPublicAnimals"), /publicAnimalVisibility\(\)/);
-		assert.match(functionBody(source, "findSimilarPublicAnimals"), /publicAnimalVisibility\(\)/);
+		assert.match(functionBody(source, "publicSearchEligibility"), /publicAnimalVisibility\(\)/);
+		assert.match(functionBody(source, "findSimilarPublicAnimals"), /publicSearchEligibility\(/);
+		assert.match(functionBody(source, "findPublicAnimalSearchCandidates"), /publicSearchEligibility\(/);
 	});
 
 	it("keeps every availability condition inside that one predicate", () => {

@@ -3,6 +3,8 @@ import { cloudinary, isCloudinaryConfigured } from "../../services/cloudinaryCli
 import { embedAnimalProfileText, embedSearchQuery } from "../../services/aiSearchClient.js";
 import { buildAnimalSearchText, touchesSearchableField } from "./animalSearchText.js";
 import { parseAnimalSearchIntent } from "./animalSearchIntent.js";
+import { rankAnimalSearchCandidates } from "./animalSearchRanking.js";
+import { correctAnimalSearchQuery, type AnimalSearchSpelling } from "./animalSearchSpelling.js";
 import {
 	createAnimal,
 	findAllAnimals,
@@ -11,6 +13,8 @@ import {
 	findAnimalMissingSearchEmbedding,
 	findAnimalsMissingSearchEmbedding,
 	findPublicAnimals,
+	findPublicAnimalSearchCandidates,
+	findPublicAnimalSpellingTerms,
 	findSimilarPublicAnimals,
 	setAnimalSearchEmbedding,
 	softDeleteAnimal,
@@ -18,7 +22,7 @@ import {
 } from "./animals.repository.js";
 
 type AnimalRow = NonNullable<Awaited<ReturnType<typeof updateAnimal>>>;
-type SimilarAnimals = Awaited<ReturnType<typeof findSimilarPublicAnimals>>;
+type SimilarAnimals = { id: string }[];
 
 export async function listPublicAnimals() {
 	return findPublicAnimals();
@@ -55,7 +59,7 @@ async function generateUniquePublicId(
 }
 
 // ---------------------------------------------------------------------------
-// AI search (structured constraints plus semantic ranking of public profiles)
+// AI search (hard constraints, tag-priority ranking, then semantic fallback)
 //
 // Assistive discovery only. It ranks animals that already exist and are already
 // publicly adoptable; it never approves, rejects or completes an adoption, never
@@ -69,8 +73,8 @@ async function generateUniquePublicId(
 // embedding provider.
 const MAX_QUERY_LENGTH = 300;
 
-// The collaborators the AI-search paths need: an embedding provider and the two
-// vector queries. They are grouped into one optional parameter so
+// The collaborators the AI-search paths need: an embedding provider and the
+// repository queries. They are grouped into one optional parameter so
 // animals.service.test.ts can exercise this logic with stubs instead of a live
 // database and a live provider. Every production call site simply leaves it out,
 // which keeps the real wiring in exactly one place below.
@@ -83,6 +87,8 @@ type SearchDependencies = {
 		| "createAnimal"
 		| "updateAnimal"
 		| "findSimilarPublicAnimals"
+		| "findPublicAnimalSearchCandidates"
+		| "findPublicAnimalSpellingTerms"
 		| "findAnimalsMissingSearchEmbedding"
 		| "findAnimalMissingSearchEmbedding"
 		| "setAnimalSearchEmbedding"
@@ -103,6 +109,8 @@ const searchDependencies: SearchDependencies = {
 		createAnimal,
 		updateAnimal,
 		findSimilarPublicAnimals,
+		findPublicAnimalSearchCandidates,
+		findPublicAnimalSpellingTerms,
 		findAnimalsMissingSearchEmbedding,
 		findAnimalMissingSearchEmbedding,
 		setAnimalSearchEmbedding,
@@ -158,8 +166,8 @@ async function refreshSearchEmbedding(
 	}
 }
 
-// Natural-language search: "small dog which is calm around children" ->
-// the publicly adoptable animals closest to that sentence, best match first.
+// Natural-language search: hard constraints always gate eligibility, recognized
+// profile traits rank first, and semantic similarity supplies the fallback.
 //
 // Availability is decided by the database (publicAnimalVisibility in
 // animals.repository.ts), never by the AI: the provider only converts the
@@ -168,24 +176,54 @@ export async function searchAnimalsWithAI(
 	rawQuery: string,
 	dependencies: SearchDependencies = searchDependencies,
 ): Promise<SimilarAnimals> {
+	return (await searchAnimalsWithAISuggestion(rawQuery, dependencies)).hits;
+}
+
+// One search pipeline for both the existing internal callers and the HTTP
+// suggestion response. The original normalized query is retained internally.
+export async function searchAnimalsWithAISuggestion(
+	rawQuery: string,
+	dependencies: SearchDependencies = searchDependencies,
+): Promise<{ hits: SimilarAnimals; spelling: AnimalSearchSpelling }> {
 	const query = normalizeSearchQuery(rawQuery);
+	const unchanged = (text: string): AnimalSearchSpelling => ({
+		originalQuery: text, correctedQuery: text, corrections: [], changed: false,
+	});
 	if (query === null) {
 		// Blank or whitespace-only input: no provider call, no DB query, no
 		// error. The frontend stays on the normal listing.
-		return [];
+		return { hits: [], spelling: unchanged(rawQuery.trim().replace(/\s+/g, " ")) };
 	}
 
-	const { semanticQuery, ...filters } = parseAnimalSearchIntent(query);
+	let spelling = unchanged(query);
+	try {
+		const protectedTerms = await dependencies.repository.findPublicAnimalSpellingTerms();
+		spelling = correctAnimalSearchQuery(query, { protectedTerms });
+	} catch {
+		// If the current name dictionary cannot be loaded, avoid guessing about
+		// potentially valid names; continue the existing search unchanged.
+	}
+	const { semanticQuery, requestedTraits, ...filters } = parseAnimalSearchIntent(spelling.correctedQuery);
 
 	// Propagates AiSearchUnavailableError from the provider service, which the
 	// route turns into a 503 the frontend shows as "AI search unavailable".
 	const queryEmbedding = await dependencies.provider.embedSearchQuery(semanticQuery);
 
-	return dependencies.repository.findSimilarPublicAnimals(queryEmbedding, {
+	if (requestedTraits.length > 0) {
+		const candidates = await dependencies.repository.findPublicAnimalSearchCandidates(queryEmbedding, filters);
+		const hits = rankAnimalSearchCandidates(candidates, requestedTraits, {
+			limit: dependencies.limit,
+			minSimilarity: dependencies.minSimilarity,
+		}).map(({ animal }) => ({ id: animal.id }));
+		return { hits, spelling };
+	}
+
+	const hits = await dependencies.repository.findSimilarPublicAnimals(queryEmbedding, {
 		limit: dependencies.limit,
 		minSimilarity: dependencies.minSimilarity,
 		filters,
 	});
+	return { hits, spelling };
 }
 
 // Generates the search vectors for animals that have none - the one-off

@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type RequestHandler } from "express";
 import { publishAnimalProfile, saveAnimalListingDraft } from "./animalPublication.service.js";
 import multer from "multer";
 import { z } from "zod";
@@ -11,7 +11,7 @@ import {
 	listAllAnimals,
 	listPublicAnimals,
 	registerAnimal,
-	searchAnimalsWithAI,
+	searchAnimalsWithAISuggestion,
 	updateAnimalProfile,
 	uploadAnimalPhoto,
 } from "./animals.service.js";
@@ -179,32 +179,39 @@ animalsRouter.get("/", async (_request, response, next) => {
 // No authentication - browsing the catalogue must work with no account, exactly
 // like GET "/". RBAC is untouched: this route only ever returns animals the
 // public listing would return anyway, ranked by how well they match.
-animalsRouter.post("/ai-search", async (request, response, next) => {
-	const parsed = aiSearchSchema.safeParse(request.body);
-	if (!parsed.success) {
-		response.status(400).json({
-			error: "Please describe the animal you are looking for, for example: small calm dog good with children.",
-		});
-		return;
-	}
-
-	try {
-		const hits = await searchAnimalsWithAI(parsed.data.query);
-		response.json({ results: hits.map((h) => h.id) });
-	} catch (error) {
-		// The provider being unavailable is an expected, recoverable condition,
-		// not a bug: tell the caller so the frontend can keep the normal listing
-		// and filters on screen instead of showing a failure.
-		if (error instanceof AiSearchUnavailableError) {
-			response.status(503).json({
-				error:
-					"AI search is currently unavailable. You can still browse animals or use the normal filters.",
+export function createAnimalSearchHandler(search = searchAnimalsWithAISuggestion): RequestHandler {
+	return async (request, response, next) => {
+		const parsed = aiSearchSchema.safeParse(request.body);
+		if (!parsed.success) {
+			response.status(400).json({
+				error: "Please describe the animal you are looking for, for example: small calm dog good with children.",
 			});
 			return;
 		}
-		next(error);
-	}
-});
+
+		try {
+			const { hits, spelling } = await search(parsed.data.query);
+			response.json({
+				results: hits.map((h) => h.id),
+				...(spelling.changed ? { didYouMean: spelling.correctedQuery } : {}),
+			});
+		} catch (error) {
+			// The provider being unavailable is an expected, recoverable condition,
+			// not a bug: tell the caller so the frontend can keep the normal listing
+			// and filters on screen instead of showing a failure.
+			if (error instanceof AiSearchUnavailableError) {
+				response.status(503).json({
+					error:
+						"AI search is currently unavailable. You can still browse animals or use the normal filters.",
+				});
+				return;
+			}
+			next(error);
+		}
+	};
+}
+
+animalsRouter.post("/ai-search", createAnimalSearchHandler());
 
 // Breed list for a typed "other" species (e.g. /breeds/other/guinea%20pig),
 // matched case-insensitively: { speciesName: "Guinea Pig", breeds: [...] },

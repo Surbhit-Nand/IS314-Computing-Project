@@ -1,14 +1,40 @@
 # ARA: Animal Rescue and Adoption Management System
 
+ARA supports SPCA Fiji's animal rescue, veterinary care and adoption work.
+Visitors can browse animals, search for a suitable companion, apply to adopt and
+report rescues. Staff manage animal profiles, rescue operations, veterinary care,
+applications and reporting through role-based workspaces.
+
+**Start here:** the [project overview and local setup guide](../README.md)
+explains prerequisites, environment files, database preparation and troubleshooting.
+All npm commands run from this `ARA_System` directory. After completing setup,
+keep these commands running in two separate terminals:
+
+```sh
+# Terminal 1: backend at http://localhost:8787
+npm run server:dev
+```
+
+```sh
+# Terminal 2: frontend at http://localhost:5173
+npm run dev -- --port 5173 --strictPort
+```
+
 ARA uses a React/TypeScript Vite frontend and an Express/TypeScript backend with
 PostgreSQL on Neon. Start the frontend with `npm run dev` and the API separately
 with `npm run server:dev` after configuring local environment files and applying
 required migrations.
 
-Animal listings support hybrid search: explicit structured characteristics
-restrict public candidates, while Gemini embeddings and pgvector rank those
-candidates semantically. Existing cards, sidebar filters, no-match handling, and
-reset behavior are preserved.
+Animal listings support tag-priority search with semantic fallback: explicit
+structured characteristics restrict public candidates, then matches from the
+shared animal-card trait vocabulary rank ahead of semantic-only matches.
+Gemini embeddings and pgvector break tag ties and find relevant descriptions.
+Existing cards, sidebar filters, no-match handling, and reset behavior are preserved.
+High-confidence spelling correction runs before interpretation and embedding.
+When a query is corrected, search uses the corrected text immediately and shows
+a clickable **Did you mean** suggestion while retaining the original input.
+Uncertain words are left unchanged; spelling does not replace semantic search.
+See [spelling verification and limitations](docs/ai-search-spelling-report.md).
 
 Adopters with approved or completed applications can use **My Animals** to view
 their animal's veterinary history and manage owner-booked appointments.
