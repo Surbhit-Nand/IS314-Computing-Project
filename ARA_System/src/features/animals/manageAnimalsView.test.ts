@@ -4,11 +4,14 @@ import type { Animal } from "../../types/animal";
 import {
   ALL_FILTERS,
   filterAnimals,
+  formatAddedDate,
   manageView,
   searchAnimals,
   sortAnimals,
   speciesOptions,
   statusOptions,
+  statusTone,
+  summaryCounts,
 } from "./manageAnimalsView.js";
 
 // Run: npm test. The Manage animal profiles page's search -> filter -> sort.
@@ -101,5 +104,39 @@ describe("filterAnimals / statusOptions / search", () => {
     assert.deepEqual(names(searchAnimals(ANIMALS, "rabbit")), ["Clover"]);
     assert.deepEqual(names(manageView(ANIMALS, "", { ...ALL_FILTERS, species: "dog" }, "name-asc")), ["bella", "Duke"]);
     assert.deepEqual(names(manageView(ANIMALS, "du", { ...ALL_FILTERS, species: "dog" }, "newest")), ["Duke"]);
+  });
+});
+
+describe("summary chips and row display helpers", () => {
+  it("counts the whole list, one entry per status that exists, in Status-filter order", () => {
+    const list = [...ANIMALS, animal({ name: "Unclear", medicallyCleared: false, vaccinationStatus: "not_vaccinated" })];
+    assert.deepEqual(summaryCounts(list), {
+      total: 5,
+      statuses: [
+        { label: "Adopted", count: 1 },
+        { label: "Available for Adoption", count: 3 },
+        { label: "Awaiting veterinary clearance", count: 1 },
+      ],
+      notVaccinated: 2,
+    });
+    // Each chip's status is a value the Status filter already accepts.
+    assert.deepEqual(summaryCounts(list).statuses.map((status) => status.label), statusOptions(list));
+    assert.deepEqual(summaryCounts([]), { total: 0, statuses: [], notVaccinated: 0 });
+  });
+
+  it("gives each status its pill colour, neutral for anything else", () => {
+    assert.equal(statusTone("Available for Adoption"), "available");
+    assert.equal(statusTone("Awaiting veterinary clearance"), "awaiting");
+    assert.equal(statusTone("Adopted"), "adopted");
+    assert.equal(statusTone("Something new"), "neutral");
+  });
+
+  it('formats the added date as day + short month ("21 Oct")', () => {
+    // Shown in the viewer's local time (Fiji is UTC+12), so the test builds
+    // its dates in local time to pass in any timezone.
+    assert.equal(formatAddedDate(new Date(2026, 9, 21, 12).toISOString()), "21 Oct");
+    // Newer ICU data writes September as "Sept" in en-GB; either is fine.
+    assert.match(formatAddedDate(new Date(2026, 8, 1, 12).toISOString()), /^1 Sept?$/);
+    assert.equal(formatAddedDate("not a date"), "");
   });
 });

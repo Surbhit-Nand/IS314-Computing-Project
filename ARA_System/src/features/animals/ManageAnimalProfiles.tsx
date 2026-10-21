@@ -6,19 +6,29 @@ import { Breadcrumbs } from "../../components/Breadcrumbs";
 import { SkeletonLoader } from "../../components/SkeletonLoader";
 import { SuccessToast } from "../../components/SuccessToast";
 import { deleteAnimal, fetchStaffAnimals } from "../../services/animalsApi";
-import { adoptionStatusLabel, vaccinationStatusLabel, type Animal } from "../../types/animal";
+import { adoptionStatusLabel, type Animal } from "../../types/animal";
 import { isDevBypassEnabled } from "../../utils/devBypass";
 import { clearFlashToast, peekFlashToast, type FlashToast } from "../../utils/flashToast";
 import { speciesLabel } from "../../utils/format";
 import {
   ALL_FILTERS,
   SORT_OPTIONS,
+  formatAddedDate,
   manageView,
   speciesOptions,
   statusOptions,
+  statusTone,
+  summaryCounts,
   type ManageFilters,
   type ManageSort,
 } from "./manageAnimalsView";
+
+// Shorter chip wording for the long status labels; the pills in each row keep
+// the full label.
+const CHIP_LABELS: Record<string, string> = {
+  "Available for Adoption": "Available",
+  "Awaiting veterinary clearance": "Awaiting clearance",
+};
 
 type ManageAnimalProfilesProps = {
   onNavigate: (view: SiteHeaderView | "staff-dashboard" | "register-animal") => void;
@@ -110,6 +120,8 @@ export function ManageAnimalProfiles({ onNavigate, onSelectAnimal }: ManageAnima
   const otherSpecies = useMemo(() => speciesOptions(animals), [animals]);
   const filtersActive =
     filters.species !== "all" || filters.status !== "all" || filters.vaccination !== "all";
+  // Summary chip counts, from the whole loaded list.
+  const summary = useMemo(() => summaryCounts(animals), [animals]);
 
   function setFilter<K extends keyof ManageFilters>(key: K, next: ManageFilters[K]) {
     setFilters((previous) => ({ ...previous, [key]: next }));
@@ -156,7 +168,7 @@ export function ManageAnimalProfiles({ onNavigate, onSelectAnimal }: ManageAnima
   }
 
   return (
-    <main className="dashboard-page">
+    <main className="dashboard-page manage-animals-page">
       {successToast && (
         <SuccessToast
           message={successToast.message}
@@ -188,11 +200,50 @@ export function ManageAnimalProfiles({ onNavigate, onSelectAnimal }: ManageAnima
           <input
             type="search"
             className="animal-search-input"
-            placeholder="Search by ID, name, breed, or species"
+            placeholder="Search name, ID, breed or species"
+            aria-label="Search name, ID, breed or species"
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
           />
         </div>
+
+        {/* Summary chips: counts from the loaded list. Each applies the
+            matching existing filter; clicking the active chip clears it. */}
+        {!isLoading && !loadError && animals.length > 0 && (
+          <div className="manage-animals-chips" role="group" aria-label="Quick filters">
+            <button
+              type="button"
+              className="manage-animals-chip"
+              aria-pressed={filters.status === "all" && filters.vaccination === "all"}
+              onClick={() => setFilters((previous) => ({ ...previous, status: "all", vaccination: "all" }))}
+            >
+              Total <strong>{summary.total}</strong>
+            </button>
+            {summary.statuses.map(({ label, count }) => (
+              <button
+                key={label}
+                type="button"
+                className={`manage-animals-chip manage-animals-chip--${statusTone(label)}`}
+                aria-pressed={filters.status === label}
+                onClick={() => setFilter("status", filters.status === label ? "all" : label)}
+              >
+                {CHIP_LABELS[label] ?? label} <strong>{count}</strong>
+              </button>
+            ))}
+            {summary.notVaccinated > 0 && (
+              <button
+                type="button"
+                className="manage-animals-chip manage-animals-chip--awaiting"
+                aria-pressed={filters.vaccination === "not_vaccinated"}
+                onClick={() =>
+                  setFilter("vaccination", filters.vaccination === "not_vaccinated" ? "all" : "not_vaccinated")
+                }
+              >
+                Not vaccinated <strong>{summary.notVaccinated}</strong>
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Sort + filters for this page only (not the public listings). They
             apply after the search above; wraps onto more lines on narrow
@@ -267,9 +318,14 @@ export function ManageAnimalProfiles({ onNavigate, onSelectAnimal }: ManageAnima
         {isLoading && <SkeletonLoader variant="card" />}
         {!isLoading && loadError && <p className="dashboard-data-state error">{loadError}</p>}
         {!isLoading && !loadError && filteredAnimals.length === 0 && (
-          <p className="dashboard-data-state">
-            {filtersActive ? "No animals match these filters." : "No animal profiles match your search."}
-          </p>
+          <div className="manage-animals-empty">
+            <p>{filtersActive ? "No animals match these filters." : "No animal profiles match your search."}</p>
+            {filtersActive && (
+              <button type="button" className="manage-animals-dark-button" onClick={() => setFilters(ALL_FILTERS)}>
+                Clear filters
+              </button>
+            )}
+          </div>
         )}
 
         {!isLoading && !loadError && filteredAnimals.length > 0 && (
@@ -278,7 +334,7 @@ export function ManageAnimalProfiles({ onNavigate, onSelectAnimal }: ManageAnima
               // A plain, non-interactive row - clicking the photo/name/ID/
               // badges does nothing. Editing is only reachable through the
               // explicit "Edit" button below, not the row itself.
-              <div key={animal.id} className="animal-table-row">
+              <div key={animal.id} className="animal-table-row manage-animal-row">
                 <span className="animal-table-photo">
                   {animal.photoUrls[0] ? (
                     <img src={animal.photoUrls[0]} alt={animal.name} />
@@ -291,30 +347,49 @@ export function ManageAnimalProfiles({ onNavigate, onSelectAnimal }: ManageAnima
                   <span>
                     {animal.publicId} - {speciesLabel(animal)} - {animal.breed ?? "Unknown breed"}
                   </span>
+                  {formatAddedDate(animal.createdAt) && (
+                    <span className="manage-animal-added">Added {formatAddedDate(animal.createdAt)}</span>
+                  )}
                 </span>
-                <span className="role-pill muted">{adoptionStatusLabel(animal.status, animal.medicallyCleared)}</span>
-                {/* Teal (accent) when vaccinated vs. muted/grey when not -
-                    both states always render, just visually distinct, so
-                    "not yet vaccinated" doesn't just disappear from the row. */}
-                <span className={animal.vaccinationStatus === "vaccinated" ? "role-pill" : "role-pill muted"}>
-                  {vaccinationStatusLabel(animal.vaccinationStatus)}
-                </span>
-                <div className="animal-table-actions">
-                  <button
-                    type="button"
-                    className="teal-button small-button"
-                    onClick={() => onSelectAnimal(animal.id)}
+                {/* Status + vaccination pills and the buttons grouped on the
+                    right. Pills are colour-coded (green / amber / muted blue
+                    / grey); both vaccination states always render. */}
+                <div className="manage-animal-row-meta">
+                  <span
+                    className={`manage-pill manage-pill--${statusTone(
+                      adoptionStatusLabel(animal.status, animal.medicallyCleared),
+                    )}`}
                   >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    className="danger-button small-button"
-                    onClick={() => handleDelete(animal)}
-                    disabled={deletingId === animal.id}
+                    {adoptionStatusLabel(animal.status, animal.medicallyCleared)}
+                  </span>
+                  {/* Shorter wording on this staff page only - the public
+                      profile keeps vaccinationStatusLabel's text. */}
+                  <span
+                    className={
+                      animal.vaccinationStatus === "vaccinated"
+                        ? "manage-pill manage-pill--available"
+                        : "manage-pill manage-pill--awaiting"
+                    }
                   >
-                    {deletingId === animal.id ? "Deleting..." : "Delete"}
-                  </button>
+                    {animal.vaccinationStatus === "vaccinated" ? "Vaccinated" : "Not vaccinated"}
+                  </span>
+                  <div className="animal-table-actions">
+                    <button
+                      type="button"
+                      className="manage-animals-dark-button small-button"
+                      onClick={() => onSelectAnimal(animal.id)}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      className="manage-animals-delete-button small-button"
+                      onClick={() => handleDelete(animal)}
+                      disabled={deletingId === animal.id}
+                    >
+                      {deletingId === animal.id ? "Deleting..." : "Delete"}
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}

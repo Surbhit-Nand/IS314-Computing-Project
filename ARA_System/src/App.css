@@ -3294,6 +3294,283 @@
   font-size: 0.76rem;
 }
 
+/* ---------------------------------------------------------------------------
+   Manage animal profiles - page polish. Everything below is scoped to
+   .manage-animals-page (ManageAnimalProfiles.tsx only) and its own classes,
+   so no other page changes. Colours come only from the site variables in
+   index.css; the tints are built from them with color-mix and darkened
+   towards --navy so small pill text stays readable (contrast 5.8-7.3:1).
+   --------------------------------------------------------------------------- */
+.manage-animals-page {
+  --manage-green-bg: var(--success-tint);
+  --manage-green-text: color-mix(in srgb, var(--success) 60%, var(--navy));
+  --manage-amber-bg: var(--amber-tint);
+  --manage-amber-text: color-mix(in srgb, var(--amber) 55%, var(--navy));
+  --manage-blue-bg: var(--teal-tint);
+  --manage-blue-text: color-mix(in srgb, var(--teal-dark) 70%, var(--navy));
+  --manage-neutral-bg: var(--bg);
+  --manage-neutral-text: color-mix(in srgb, var(--slate) 80%, var(--navy));
+  --manage-dark: var(--navy);
+  --manage-dark-hover: color-mix(in srgb, var(--navy) 80%, var(--slate));
+  /* --red with white text is only 4.03:1, so Delete uses it darkened a
+     little towards --navy: 5.08:1 (hover 6.52:1). */
+  --manage-danger: color-mix(in srgb, var(--red) 85%, var(--navy));
+  --manage-danger-hover: color-mix(in srgb, var(--red) 70%, var(--navy));
+  --manage-focus: var(--teal);
+}
+
+/* Header: title on the left, search on the right; the search drops under the
+   title on narrow screens. Wide enough for its whole placeholder. */
+.manage-animals-page .panel-heading {
+  flex-wrap: wrap;
+}
+
+.manage-animals-page .panel-heading .animal-search-input {
+  width: 300px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* Solid dark button: Edit in each row and the empty state's
+   "Clear filters". */
+.manage-animals-dark-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--manage-dark);
+  border-radius: 999px;
+  background: var(--manage-dark);
+  color: var(--white);
+  padding: 10px 16px;
+  font-size: 0.85rem;
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.manage-animals-dark-button:hover {
+  background: var(--manage-dark-hover);
+  border-color: var(--manage-dark-hover);
+  transform: translateY(-1px);
+}
+
+/* Solid red Delete button, the pair to the dark Edit button. */
+.manage-animals-delete-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--manage-danger);
+  border-radius: 999px;
+  background: var(--manage-danger);
+  color: var(--white);
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.manage-animals-delete-button:hover:not(:disabled) {
+  background: var(--manage-danger-hover);
+  border-color: var(--manage-danger-hover);
+  transform: translateY(-1px);
+}
+
+/* While the soft delete is in progress ("Deleting..."). */
+.manage-animals-delete-button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+  transform: none;
+}
+
+.manage-animals-dark-button:focus-visible,
+.manage-animals-delete-button:focus-visible,
+.manage-animals-chip:focus-visible {
+  outline: 3px solid var(--manage-focus);
+  outline-offset: 2px;
+}
+
+/* Edit + Delete as a matching pair: same height, border, radius, padding,
+   font size and weight. */
+.manage-animals-page .animal-table-actions :is(.manage-animals-dark-button, .manage-animals-delete-button) {
+  min-height: 38px;
+  border-width: 1px;
+  border-radius: 999px;
+  padding: 9px 16px;
+  font-size: 0.85rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+/* Summary chips: counts, click to apply the matching filter. */
+.manage-animals-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.manage-animals-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--white);
+  color: var(--navy);
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.manage-animals-chip strong {
+  font-weight: 800;
+}
+
+.manage-animals-chip:hover {
+  border-color: var(--teal);
+}
+
+.manage-animals-chip[aria-pressed="true"] {
+  border-color: var(--manage-blue-text);
+  background: var(--manage-blue-bg);
+  color: var(--manage-blue-text);
+}
+
+.manage-animals-chip--available[aria-pressed="true"] {
+  border-color: var(--manage-green-text);
+  background: var(--manage-green-bg);
+  color: var(--manage-green-text);
+}
+
+.manage-animals-chip--awaiting[aria-pressed="true"] {
+  border-color: var(--manage-amber-text);
+  background: var(--manage-amber-bg);
+  color: var(--manage-amber-text);
+}
+
+.manage-animals-chip--neutral[aria-pressed="true"] {
+  border-color: var(--manage-neutral-text);
+  background: var(--manage-neutral-bg);
+  color: var(--manage-neutral-text);
+}
+
+/* Rows: more breathing room, a light hover highlight, a larger rounded
+   thumbnail (still cropped to fill), and pills + buttons grouped right. */
+.manage-animals-page .manage-animal-row {
+  gap: 16px;
+  padding: 16px 12px;
+  border-radius: 12px;
+  transition: background 0.15s ease;
+}
+
+.manage-animals-page .manage-animal-row:hover {
+  background: var(--bg);
+}
+
+.manage-animals-page .manage-animal-row .animal-table-photo {
+  flex: 0 0 64px;
+  width: 64px;
+  height: 64px;
+  border-radius: 14px;
+}
+
+.manage-animals-page .manage-animal-added {
+  margin-top: 6px;
+  color: var(--slate);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.manage-animal-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-left: auto;
+}
+
+/* Colour-coded pills: status and vaccination. */
+.manage-pill {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.manage-pill--available {
+  background: var(--manage-green-bg);
+  border-color: color-mix(in srgb, var(--manage-green-text) 20%, transparent);
+  color: var(--manage-green-text);
+}
+
+.manage-pill--awaiting {
+  background: var(--manage-amber-bg);
+  border-color: color-mix(in srgb, var(--manage-amber-text) 20%, transparent);
+  color: var(--manage-amber-text);
+}
+
+.manage-pill--adopted {
+  background: var(--manage-blue-bg);
+  border-color: color-mix(in srgb, var(--manage-blue-text) 20%, transparent);
+  color: var(--manage-blue-text);
+}
+
+.manage-pill--neutral {
+  background: var(--manage-neutral-bg);
+  border-color: var(--line);
+  color: var(--manage-neutral-text);
+}
+
+/* Empty state with its own "Clear filters" button. */
+.manage-animals-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 28px 16px;
+  border: 1px dashed var(--line);
+  border-radius: 14px;
+  background: var(--bg);
+  text-align: center;
+}
+
+.manage-animals-empty p {
+  margin: 0;
+  color: var(--manage-neutral-text);
+  font-weight: 700;
+}
+
+/* Narrow screens: header actions and the row's pills/buttons drop onto their
+   own full-width line instead of overflowing sideways. */
+@media (max-width: 720px) {
+  .manage-animals-page .panel-heading .animal-search-input {
+    width: 100%;
+  }
+
+  .manage-animals-page .manage-animal-row {
+    flex-wrap: wrap;
+  }
+
+  .manage-animals-page .manage-animal-row .animal-table-details {
+    flex: 1 1 calc(100% - 80px);
+  }
+
+  .manage-animal-row-meta {
+    flex-basis: 100%;
+    justify-content: flex-start;
+    margin-left: 0;
+  }
+}
+
 /* about us page */
 
 /* Larger eyebrow labels across the about page sections */

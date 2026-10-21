@@ -95,3 +95,45 @@ export function statusOptions(animals: Animal[]): string[] {
 export function manageView(animals: Animal[], searchTerm: string, filters: ManageFilters, sort: ManageSort): Animal[] {
   return sortAnimals(filterAnimals(searchAnimals(animals, searchTerm), filters), sort);
 }
+
+// ------------------------------------------------ display helpers (page only)
+
+// Counts for the summary chips above the list, from the whole loaded list.
+// `statuses` has one entry per status that actually exists, in the same
+// order as the Status filter (statusOptions), so each chip maps straight
+// onto an existing filter value.
+export type SummaryCounts = {
+  total: number;
+  statuses: { label: string; count: number }[];
+  notVaccinated: number;
+};
+
+export function summaryCounts(animals: Animal[]): SummaryCounts {
+  return {
+    total: animals.length,
+    statuses: statusOptions(animals).map((label) => ({
+      label,
+      count: animals.filter((animal) => adoptionStatusLabel(animal.status, animal.medicallyCleared) === label).length,
+    })),
+    notVaccinated: animals.filter((animal) => animal.vaccinationStatus === "not_vaccinated").length,
+  };
+}
+
+// Which colour a status pill gets: green / amber / muted blue / neutral grey.
+export type StatusTone = "available" | "awaiting" | "adopted" | "neutral";
+
+export function statusTone(label: string): StatusTone {
+  if (label === "Available for Adoption") return "available";
+  if (label === "Awaiting veterinary clearance") return "awaiting";
+  if (label === "Adopted") return "adopted";
+  return "neutral";
+}
+
+// "Added 21 Oct" under each row: day and short month from createdAt, always
+// day-first (as used in Fiji) whatever the browser's locale.
+const ADDED_DATE = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" });
+
+export function formatAddedDate(createdAt: string): string {
+  const date = new Date(createdAt);
+  return Number.isNaN(date.getTime()) ? "" : ADDED_DATE.format(date);
+}
