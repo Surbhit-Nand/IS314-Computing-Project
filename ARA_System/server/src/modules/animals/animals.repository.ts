@@ -20,8 +20,8 @@ import type { AnimalSearchFilters } from "./animalSearchIntent.js";
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const { searchEmbedding: _searchEmbedding, ...animalProfileColumns } = getTableColumns(animals);
 
-// Public listing gate: an animal appears publicly only once a veterinarian
-// has issued medical clearance. `medically_cleared` is written in exactly one
+// Public listing gate: an animal appears publicly only after veterinary
+// clearance AND explicit staff publication. `medically_cleared` is written in exactly one
 // place - clearAnimal in the veterinary repository, reached only via
 // POST /api/veterinary/animals/:id/clearance behind requireVeterinaryAccess -
 // so no staff/registration path can set it, and registerAnimal hard-codes it
@@ -39,8 +39,10 @@ const { searchEmbedding: _searchEmbedding, ...animalProfileColumns } = getTableC
 function publicAnimalVisibility() {
 	return and(
 		ne(animals.status, "adopted"),
+		ne(animals.status, "closed"),
 		isNull(animals.deletedAt),
 		eq(animals.medicallyCleared, true),
+		isNotNull(animals.publishedAt),
 	);
 }
 

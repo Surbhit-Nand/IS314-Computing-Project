@@ -69,8 +69,8 @@ export function getAnimalFormErrors(input: AnimalFormInput, knownBreeds?: string
   if (description) errors.description = description;
   const behaviour = validateNarrativeText(input.behaviour, "Behaviour");
   if (behaviour) errors.behaviour = behaviour;
-  const rescueHistory = validateNarrativeText(input.rescueHistory, "Rescue history");
-  if (rescueHistory) errors.rescueHistory = rescueHistory;
+
+
 
   if (input.photoUrls.length === 0) {
     errors.photoUrls = "Please upload at least one photo of the animal.";
@@ -100,7 +100,6 @@ const FIELD_ORDER: AnimalFormField[] = [
   "vaccinationStatus",
   "description",
   "behaviour",
-  "rescueHistory",
   "photoUrls",
 ];
 
@@ -123,8 +122,11 @@ export function toAnimalPayload(input: AnimalFormInput): AnimalPayload {
   if (type === "" || vaccinationStatus === "" || ageUnit === "") {
     throw new Error("toAnimalPayload: the form must be validated first.");
   }
+  // Rescue history is owned by publication review; record edits preserve it.
+  const { rescueHistory, ...profile } = rest;
+  void rescueHistory;
   return {
-    ...rest,
+    ...profile,
     type,
     vaccinationStatus,
     name: formatAnimalName(input.name),

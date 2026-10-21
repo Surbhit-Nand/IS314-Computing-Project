@@ -85,7 +85,7 @@ export function EmergencyResponseActions({ animal, response, currentVetId, unava
         {delivery ? <span className={`vm-response-delivery${delivery.status === "sent" ? " is-sent" : ""}`} tabIndex={0} role="img" aria-label={assistanceDeliveryText(delivery)} title={assistanceDeliveryText(delivery)}>{delivery.status === "sent" ? <IconCheck size={14} /> : <IconNotes size={14} />}</span> : null}
       </div>
     </div>
-    {unavailable ? <small className="vm-hint">Response unavailable ? refresh before beginning care.</small> : null}
+    {unavailable ? <small className="vm-hint">Response unavailable. Refresh before beginning care.</small> : null}
     {menuOpen && owner ? <div className="vm-response-context-menu" role="group" aria-label={`Coordination actions for ${animal.name}`}>
       {isOwner ? <><button type="button" className="vm-queue-action" disabled={busy} onClick={() => void act({ action: "release" })}>Release</button>
         <button type="button" className="vm-queue-action" disabled={busy} onClick={() => openForm("support")}>Request Support</button></>
@@ -96,7 +96,7 @@ export function EmergencyResponseActions({ animal, response, currentVetId, unava
       void (async () => { if (await act({ action: "attend" })) onBeginCare(); })();
     }}>
       <p>Begin care for {animal.name}? Confirm to record you as the attending veterinarian and open the medical workflow. Existing emergency assistance notifications will be sent when needed.</p>
-      <div className="vm-emergency-response-actions"><button type="submit" className="vm-queue-action is-primary" disabled={busy}>{busy ? "Starting?" : "Confirm begin care"}</button>
+      <div className="vm-emergency-response-actions"><button type="submit" className="vm-queue-action is-primary" disabled={busy}>{busy ? "Starting..." : "Confirm begin care"}</button>
         <button type="button" className="vm-queue-action" disabled={busy} onClick={() => setForm(null)}>Cancel</button></div>
     </form> : null}
     {notesOpen && (response?.coordinationNote || response?.supportRequired) ? <div className="vm-response-note-content" role="region" aria-label={`Coordination notes for ${animal.name}`}>

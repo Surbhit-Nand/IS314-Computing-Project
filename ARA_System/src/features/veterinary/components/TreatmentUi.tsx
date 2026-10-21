@@ -47,10 +47,23 @@ export function TreatmentRow({ plan, editing, onEdit, onCancel, onUpdate }: { pl
   const transition = STATUS_TRANSITIONS[plan.status];
   const date = plan.completedDate ?? plan.scheduledDate;
   const [editDate, setEditDate] = useState(String(plan.scheduledDate ?? plan.completedDate ?? ""));
+  const [editDetails, setEditDetails] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  async function submitUpdate(input: Record<string, unknown>) {
+    if (saving) return;
+    setSaving(true);
+    try { await onUpdate(input); }
+    finally { setSaving(false); }
+  }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
+    if (editDetails) {
+      void submitUpdate(Object.fromEntries(["details", "medication", "notes"].map((key) => [key, String(data.get(key) ?? "").trim()])));
+      return;
+    }
     const input: Record<string, unknown> = { status: transition.next };
     if (transition.dateField) {
       if (!editDate) return;
@@ -60,7 +73,7 @@ export function TreatmentRow({ plan, editing, onEdit, onCancel, onUpdate }: { pl
       const value = String(data.get(key) ?? "").trim();
       if (value) input[key] = value;
     }
-    void onUpdate(input);
+    void submitUpdate(input);
   }
 
   return (
@@ -80,14 +93,18 @@ export function TreatmentRow({ plan, editing, onEdit, onCancel, onUpdate }: { pl
         {isComplete ? (
           <Badge tone="green"><IconCheck size={12} /> Done</Badge>
         ) : editing ? null : (
+          <>
+          <button type="button" className="mini-button vm-treatment-edit-action" disabled={saving} onClick={() => { setEditDetails(true); onEdit(); }} aria-label={`Edit ${display} details`}>Edit</button>
           <button
             type="button"
-            className="mini-button"
+            className="mini-button vm-treatment-primary-action"
+            disabled={saving}
             onClick={() => {
-              if (transition.next === "completed") void onUpdate({ status: "completed" });
-              else onEdit();
+              if (transition.next === "completed") void submitUpdate({ status: "completed" });
+              else { setEditDetails(false); onEdit(); }
             }}
           >{transition?.action ?? "Update"}</button>
+          </>
         )}
       </span>
       {editing ? (
@@ -95,7 +112,15 @@ export function TreatmentRow({ plan, editing, onEdit, onCancel, onUpdate }: { pl
           className="vm-trow-form"
           onSubmit={handleSubmit}
         >
-          {transition.dateField === "scheduledDate" ? (
+          <fieldset className="vm-treatment-edit-fields" disabled={saving}>
+          {editDetails ? (
+            <>
+              <label>Treatment details<textarea className="vm-textarea" name="details" rows={2} defaultValue={plan.details ?? ""} /></label>
+              <label>Medication<input className="vm-input" name="medication" defaultValue={plan.medication ?? ""} /></label>
+              <label>Notes<textarea className="vm-textarea" name="notes" rows={2} defaultValue={plan.notes ?? ""} /></label>
+              <p className="vm-hint">Saving these details keeps the current treatment status and scheduled date.</p>
+            </>
+          ) : transition.dateField === "scheduledDate" ? (
             <span className="vm-trow-form-instruction">
               <DateTimePicker value={editDate} onChange={setEditDate} required disablePast />
               <textarea className="vm-textarea" name="details" rows={2} placeholder="What the vet needs to do on the scheduled date, e.g. “Administer the core vaccination” or “Perform a wound dressing change”." required defaultValue={plan.details ?? ""} />
@@ -105,7 +130,7 @@ export function TreatmentRow({ plan, editing, onEdit, onCancel, onUpdate }: { pl
           ) : (
             <span className="vm-trow-form-note">The treatment is being given now. Record what was given and any follow-up notes for this animal.</span>
           )}
-          {transition.dateField === "scheduledDate" ? null : transition.dateField ? (
+          {editDetails || transition.dateField === "scheduledDate" ? null : transition.dateField ? (
             <>
               <input className="vm-input" name="details" placeholder="Treatment details (optional)" defaultValue={plan.details ?? ""} />
               <input className="vm-input" name="medication" placeholder="Medication (optional)" defaultValue={plan.medication ?? ""} />
@@ -119,9 +144,10 @@ export function TreatmentRow({ plan, editing, onEdit, onCancel, onUpdate }: { pl
           )}
           <span className="vm-trow-form-actions">
             <button type="button" className="ghost-button compact-action" onClick={onCancel}>Cancel</button>
-            <button type="button" className="ghost-button compact-action" onClick={() => void onUpdate({ status: "not_required" })}>Not required</button>
-            <button type="submit" className="teal-button compact-primary">{transition?.submit ?? "Save"}</button>
+            {!editDetails && <button type="button" className="ghost-button compact-action" onClick={() => void submitUpdate({ status: "not_required" })}>Not required</button>}
+            <button type="submit" className="teal-button compact-primary">{saving ? "Saving…" : editDetails ? "Save changes" : transition?.submit ?? "Save"}</button>
           </span>
+          </fieldset>
         </form>
       ) : null}
     </div>

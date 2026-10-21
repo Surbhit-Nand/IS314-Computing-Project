@@ -318,7 +318,7 @@ function App() {
   if (activeView === "staff-dashboard") {
     return (
       <Suspense fallback={<PageLoadingFallback />}>
-        <StaffDashboard onNavigate={navigate} />
+        <StaffDashboard onNavigate={navigate} onReviewAnimal={(animalId) => navigateTo({ view: "edit-animal", selectedAnimalId: animalId })} />
       </Suspense>
     );
   }

@@ -13,6 +13,7 @@ import { parseEstimatedAge } from "./animalFieldRules";
 import { AnimalProfileFields } from "./AnimalProfileFields";
 import { useBreedOptions } from "./useBreedOptions";
 import { toAnimalPayload, validateAnimalForm } from "./validateAnimalForm";
+import { AnimalPublicationEditor } from "./AnimalPublicationEditor";
 
 type EditAnimalProfileProps = {
   animalId: string;
@@ -65,7 +66,10 @@ export function EditAnimalProfile({ animalId, onNavigate, onInvalidContext }: Ed
     isDevBypassEnabled || role === "staff" || role === "veterinarian" || role === "manager" || role === "admin";
 
   const [form, setForm] = useState<AnimalFormInput | null>(null);
-  const breedOptions = useBreedOptions(form?.type, form?.speciesName);
+  const [animalRecord, setAnimalRecord] = useState<Animal | null>(null);
+  const [editRecord, setEditRecord] = useState(false);
+  const canPrepareListing = Boolean(animalRecord?.medicallyCleared && !["adopted", "closed"].includes(animalRecord.status));
+  const breedOptions = useBreedOptions(editRecord || !canPrepareListing ? form?.type : undefined, form?.speciesName);
   // Turned on by a blocked save so every field's problem shows at once.
   const [showAllErrors, setShowAllErrors] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -97,6 +101,7 @@ export function EditAnimalProfile({ animalId, onNavigate, onInvalidContext }: Ed
         const animal = await fetchAnimalById(token, animalId);
         if (cancelled) return;
         setForm(toFormInput(animal));
+        setAnimalRecord(animal);
       } catch (error) {
         if (cancelled) return;
         if (error instanceof Error && /animal not found/i.test(error.message)) {
@@ -135,7 +140,7 @@ export function EditAnimalProfile({ animalId, onNavigate, onInvalidContext }: Ed
       const payload = toAnimalPayload(form);
       await updateAnimal(token, animalId, payload);
       if (version !== navigationVersion.current) return;
-      const toastMessage = `✓ ${payload.name} updated successfully!`;
+      const toastMessage = `${payload.name} updated successfully!`;
       setSaveMessage("Animal profile updated.");
       setSuccessToastMessage(toastMessage);
       // Give staff a moment to actually see the toast before the page
@@ -219,7 +224,7 @@ export function EditAnimalProfile({ animalId, onNavigate, onInvalidContext }: Ed
         trail={[
           { label: "Staff Dashboard", onClick: () => onNavigate("staff-dashboard") },
           { label: "Manage animals", onClick: () => onNavigate("manage-animals") },
-          { label: "Edit profile" },
+          { label: canPrepareListing && !editRecord ? "Publication review" : "Edit animal record" },
         ]}
       />
 
@@ -227,12 +232,24 @@ export function EditAnimalProfile({ animalId, onNavigate, onInvalidContext }: Ed
         {isLoading && <SkeletonLoader variant="card" />}
         {!isLoading && loadError && <p className="dashboard-data-state error">{loadError}</p>}
 
-        {!isLoading && !loadError && form && (
+        {!isLoading && !loadError && form && (canPrepareListing && !editRecord && animalRecord ?
+          <AnimalPublicationEditor key={animalRecord.id} animal={animalRecord} getToken={getToken}
+            onEditRecord={() => setEditRecord(true)} onBack={() => onNavigate("manage-animals")}
+            onSaved={(animal) => { setAnimalRecord(animal); setForm(toFormInput(animal)); }} /> : (
           <>
             {saveMessage && <p className="invite-feedback success">{saveMessage}</p>}
             {saveError && <p className="invite-feedback error">{saveError}</p>}
 
-            <form className="animal-form" onSubmit={handleSubmit}>
+            <div className="publication-review-summary">
+              <h2>Animal record</h2>
+              <p>Registration and internal care details. These fields are separate from preparing an adoption listing.</p>
+              {canPrepareListing && <button type="button" className="ghost-button" onClick={() => {
+                if (animalRecord && (JSON.stringify(form) === JSON.stringify(toFormInput(animalRecord)) || window.confirm("Return to the listing without saving record changes?"))) {
+                  setForm(toFormInput(animalRecord)); setEditRecord(false);
+                }
+              }}>Back to publication editor</button>}
+            </div>
+            <form className="animal-form" onSubmit={(event) => void handleSubmit(event)}>
               <AnimalProfileFields
                 value={form}
                 onChange={setForm}
@@ -258,7 +275,7 @@ export function EditAnimalProfile({ animalId, onNavigate, onInvalidContext }: Ed
               </div>
             </form>
           </>
-        )}
+        ))}
       </section>
     </main>
   );

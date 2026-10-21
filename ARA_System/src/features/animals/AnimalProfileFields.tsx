@@ -528,7 +528,7 @@ export function AnimalProfileFields({ value, onChange, getToken, breedOptions, s
 
       {narrativeField("description", "Description", 4)}
       {narrativeField("behaviour", "Behaviour", 3)}
-      {narrativeField("rescueHistory", "Rescue history", 3)}
+
 
       <div className="animal-form-full animal-photo-field">
         <span className="animal-photo-label">

@@ -153,3 +153,18 @@ export async function searchAnimalsWithAI(query: string): Promise<string[]> {
   }
   return result.results ?? [];
 }
+export async function publishAnimalProfile(token: string, id: string): Promise<{ id: string; publishedAt: string }> {
+  const response = await fetch(`${apiBaseUrl}/api/animals/${id}/publish`, {
+    method: "POST", headers: authHeaders(token),
+  });
+  const result = await readApiResponse<{ id: string; publishedAt: string; error?: string }>(response);
+  if (!response.ok) throw new Error(result.error ?? "The animal profile could not be published.");
+  return result;
+}
+export async function saveAnimalListingDraft(token: string, id: string, input: { description: string; behaviour: string; rescueHistory: string; photoUrls: string[] }): Promise<void> {
+  const response = await fetch(`${apiBaseUrl}/api/animals/${id}/listing`, {
+    method: "PATCH", headers: authHeaders(token, { "Content-Type": "application/json" }), body: JSON.stringify(input),
+  });
+  const result = await readApiResponse<{ error?: string }>(response);
+  if (!response.ok) throw new Error(result.error ?? "The listing draft could not be saved.");
+}

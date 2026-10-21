@@ -173,8 +173,64 @@
 #root .vm-page .vm-queue-table .vm-response-note-content p { margin: 0; line-height: 1.5; }
 #root .vm-page .vm-queue-table .vm-emergency-response-form .vm-emergency-response-actions { display: flex; gap: 4px; }
 
+#root .vm-page .vm-queue-search { display: grid; gap: 8px; margin-bottom: 16px; }
+#root .vm-page .vm-queue-search label { font-size: .8rem; font-weight: 600; color: var(--slate); }
+#root .vm-page .vm-queue-search-controls { display: flex; flex-wrap: wrap; gap: 8px; }
+#root .vm-page .vm-queue-search-controls input { flex: 1 1 220px; min-width: 0; min-height: 40px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--white); color: var(--navy); font: inherit; }
+#root .vm-page .vm-queue-search-controls input:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+#root .vm-page .vm-queue-search .vm-hint { margin: 0; }
+
 /* Beginning care is the single queue action; ownership controls are contextual. */
 #root .vm-page .vm-queue-table .vm-emergency-response > .vm-response-toolbar { grid-template-columns: minmax(112px, 1fr) auto; }
 #root .vm-page .vm-queue-table .vm-response-standalone { padding-left: 0; }
 #root .vm-page .vm-queue-table .vm-response-context-menu { display: flex; flex-wrap: wrap; gap: 4px; padding: 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--white); }
 #root .vm-page .vm-queue-table .vm-emergency-response-form > p { margin: 0; color: var(--slate); font-size: .75rem; line-height: 1.5; }
+/* Give assessment dates room, keeping all four examination controls aligned. */
+#root .vm-page .vm-examination-fields {
+  grid-template-columns: minmax(260px, 1.4fr) repeat(3, minmax(0, 1fr));
+  align-items: start;
+}
+#root .vm-page .vm-examination-fields .vm-field { align-content: start; }
+#root .vm-page .vm-examination-fields :is(.vm-input, .vm-dtp-trigger) {
+  min-height: 52px;
+  height: 52px;
+  margin: 0;
+}
+#root .vm-page .vm-examination-fields .vm-dtp-trigger {
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 10px 12px;
+}
+#root .vm-page .vm-examination-fields .vm-dtp-trigger-copy strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: .8rem;
+  line-height: 1.5;
+}
+#root .vm-page .vm-examination-fields :is(.vm-dtp-trigger-copy small, .vm-dtp-clock) { display: none; }
+#root .vm-page .vm-examination-fields .vm-dtp-time {
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: .7rem;
+  font-weight: 400;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 1180px) {
+  #root .vm-page .vm-examination-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 620px) {
+  #root .vm-page .vm-examination-fields { grid-template-columns: minmax(0, 1fr); }
+}
+#root .vm-page .vm-trow-action { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: nowrap; min-width: max-content; }
+#root .vm-page .vm-trow-action .mini-button { min-height: 34px; padding: 7px 10px; border-radius: 6px; font-size: .75rem; font-weight: 400; white-space: nowrap; box-shadow: none; }
+#root .vm-page .vm-trow-action .vm-treatment-edit-action { background: transparent; border-color: transparent; color: var(--slate); }
+#root .vm-page .vm-trow-action .vm-treatment-edit-action:hover { background: var(--bg); color: var(--navy); }
+#root .vm-page .vm-trow-action .vm-treatment-primary-action { border: 1px solid var(--line); background: var(--white); color: var(--teal-dark); }
+#root .vm-page .vm-trow-action .vm-treatment-primary-action:hover { border-color: var(--teal); background: var(--teal-tint); }
+@media (max-width: 620px) { #root .vm-page .vm-trow-action { justify-content: flex-start; } }
+.vm-treatment-edit-fields { display: contents; padding: 0; margin: 0; border: 0; min-width: 0; }
+.vm-treatment-edit-fields > label { display: grid; gap: 6px; min-width: 0; font-size: .75rem; color: var(--slate); }
+.vm-treatment-edit-fields > :is(label, .vm-hint) { grid-column: 1 / -1; }

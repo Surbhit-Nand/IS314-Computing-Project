@@ -86,6 +86,10 @@ export function SiteHeader({
   const canReviewAdoptions = isStaffModuleRole;
 
   function handleNotificationNavigation(entityType: string | null, item?: AppNotification) {
+    if (entityType === "animal_publication" && (isStaff || isAdmin)) {
+      navigate("manage-animals");
+      return;
+    }
     const target = item ? takeoverReviewTarget(item) : null;
     if (target && isDispatcher) {
       sessionStorage.setItem(TAKEOVER_REVIEW_STORAGE_KEY, JSON.stringify(target));

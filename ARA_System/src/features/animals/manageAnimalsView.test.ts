@@ -7,7 +7,6 @@ import {
   manageView,
   searchAnimals,
   sortAnimals,
-  speciesOptions,
   statusOptions,
 } from "./manageAnimalsView.js";
 
@@ -74,27 +73,32 @@ describe("sortAnimals", () => {
 });
 
 describe("filterAnimals / statusOptions / search", () => {
-  it("filters by species (Other = typed species), status and vaccination", () => {
-    assert.deepEqual(names(filterAnimals(ANIMALS, { ...ALL_FILTERS, species: "Rabbit" })), ["Clover"]);
-    assert.deepEqual(names(filterAnimals(ANIMALS_WITH_HAMSTER, { ...ALL_FILTERS, species: "Hamster" })), ["Nugget"]);
-    // No catch-all "Other" any more.
-    assert.deepEqual(filterAnimals(ANIMALS, { ...ALL_FILTERS, species: "other" }), []);
+  it("groups non-dog/cat species under Other and combines status and vaccination filters", () => {
+    assert.deepEqual(names(filterAnimals(ANIMALS, { ...ALL_FILTERS, species: "other" })), ["Clover"]);
+    assert.deepEqual(names(filterAnimals(ANIMALS_WITH_HAMSTER, { ...ALL_FILTERS, species: "other" })), ["Clover", "Nugget", "Misty"]);
     assert.deepEqual(names(filterAnimals(ANIMALS, { ...ALL_FILTERS, status: "Adopted" })), ["Duke"]);
     assert.deepEqual(names(filterAnimals(ANIMALS, { ...ALL_FILTERS, vaccination: "not_vaccinated" })), ["Abby"]);
     assert.deepEqual(names(filterAnimals(ANIMALS, { species: "dog", status: "Adopted", vaccination: "all" })), ["Duke"]);
     assert.deepEqual(filterAnimals(ANIMALS, { species: "cat", status: "Adopted", vaccination: "all" }), []);
   });
 
-  it("lists every species registered under Other, A-Z, once each (no dogs, cats or 'Other')", () => {
-    assert.deepEqual(speciesOptions(ANIMALS_WITH_HAMSTER), ["Hamster", "Rabbit"]);
-    assert.deepEqual(speciesOptions([ANIMALS[0], ANIMALS[1]]), []);
+  it("includes legacy rabbits under Other while keeping dogs and cats separate", () => {
+    const legacy = animal({ name: "Legacy rabbit", type: "rabbit" });
+    assert.deepEqual(names(filterAnimals([legacy, ...ANIMALS], { ...ALL_FILTERS, species: "other" })), ["Legacy rabbit", "Clover"]);
+    assert.deepEqual(names(filterAnimals(ANIMALS, { ...ALL_FILTERS, species: "cat" })), ["Abby"]);
   });
 
-  it("offers only statuses that exist", () => {
-    assert.deepEqual(statusOptions(ANIMALS), ["Adopted", "Available for Adoption"]);
-    assert.deepEqual(statusOptions([ANIMALS[0]]), ["Available for Adoption"]);
-    // Not yet medically cleared animals read as awaiting clearance, never available.
-    assert.deepEqual(statusOptions([animal({ name: "Unclear", medicallyCleared: false })]), ["Awaiting veterinary clearance"]);
+  it("always offers the publication workflow stages, including empty queues", () => {
+    assert.deepEqual(statusOptions([]), ["Awaiting clearance", "Ready to publish", "Published", "Adopted"]);
+    assert(statusOptions(ANIMALS).includes("Ready to publish"));
+    assert(statusOptions([animal({ status: "closed" })]).includes("Closed"));
+  });
+
+  it("separates cleared drafts, published profiles, and animals awaiting clearance", () => {
+    const profiles = [animal({ name: "Draft", publishedAt: null }), animal({ name: "Public", publishedAt: "2026-10-19T00:00:00Z" }), animal({ name: "Unclear", medicallyCleared: false }), animal({ name: "Adopted", status: "adopted" })];
+    assert.deepEqual(names(filterAnimals(profiles, { ...ALL_FILTERS, status: "Ready to publish" })), ["Draft"]);
+    assert.deepEqual(names(filterAnimals(profiles, { ...ALL_FILTERS, status: "Published" })), ["Public"]);
+    assert.deepEqual(names(filterAnimals(profiles, { ...ALL_FILTERS, status: "Awaiting clearance" })), ["Unclear"]);
   });
 
   it("applies search, then filters, then sort", () => {

@@ -23,3 +23,22 @@ it("medical clearance still requires Initial Assessment and completed Required T
   await medicallyClear("animal", "vet", undefined, dependencies);
   assert.equal(cleared, 1);
 });
+
+it("clearance hands the same unpublished record to staff without losing medical clearance if notification fails", async () => {
+  const record = { animal: { id: "animal", medicallyCleared: false, publishedAt: null }, examinations: [{}], carePlan: [] } as unknown as MedicalRecord;
+  let notified = 0;
+  const result = await medicallyClear("animal", "vet", undefined, {
+    findMedicalRecord: async () => record,
+    changeCarePlan: async () => { throw new Error("No final care plan"); },
+    clearAnimal: async () => {
+      record.animal.medicallyCleared = true;
+      return { animal: record.animal, clearedBy: "vet", clearedAt: new Date() };
+    },
+    ensureMissingAnimalSearchEmbedding: async () => true,
+    notify: async (id) => { assert.equal(id, "animal"); notified++; throw new Error("Directory unavailable"); },
+  });
+  assert.equal(result.animal.id, "animal");
+  assert.equal(result.animal.medicallyCleared, true);
+  assert.equal(result.animal.publishedAt, null);
+  assert.equal(notified, 1);
+});

@@ -17,6 +17,16 @@ beforeEach(() => {
   });
 });
 afterEach(() => mock.restoreAll());
+it("editing treatment text preserves its status and dates and permits clearing optional fields", async () => {
+  await repository.updateCarePlan("care-plan-id", { details: "Updated treatment instructions", medication: "", notes: "" });
+  const update = queries[0].sql.split(" where ")[0];
+  assert.match(update, /"details" =/);
+  assert.match(update, /"medication" =/);
+  assert.match(update, /"notes" =/);
+  assert.doesNotMatch(update, /"status" =|"scheduled_date" =|"completed_date" =/);
+  assert(queries[0].params.includes("care-plan-id"));
+  assert(queries[0].params.includes(""));
+});
 it("queue and coordination queries work with only active animals and their registration priorities", async () => {
   await repository.listMedicalQueue(); await emergency.listOpenEmergencyResponses();
   assert.equal(queries.length, 2);

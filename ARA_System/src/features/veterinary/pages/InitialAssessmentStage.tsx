@@ -85,7 +85,7 @@ export function InitialAssessmentStage({ record, animal, selected, setSelected, 
 
       <section className="vm-section">
         <SectionTitle icon={<IconStethoscope size={16} />} title="Basic examination" description="Record the core measurements from this visit." />
-        <div className="vm-fields vm-fields-4">
+        <div className="vm-fields vm-fields-4 vm-examination-fields">
           <Field labelText="Assessment date & time" required>
             <DateTimePicker value={examDateTime} onChange={setExamDateTime} required disablePast />
           </Field>
