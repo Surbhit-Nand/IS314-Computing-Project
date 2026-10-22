@@ -46,7 +46,7 @@ const animalSchema = z.object({
   photoUrls: z.array(z.string()), vaccinationStatus: z.enum(["vaccinated", "not_vaccinated"]),
   size: z.enum(["small", "medium", "large", "extra_large"]).nullable(),
   veterinaryPriority: z.enum(["critical", "high", "moderate", "routine"]).nullable(),
-  medicallyCleared: z.boolean(), veterinaryStatus: z.string().optional(),
+  medicallyCleared: z.boolean(), publishedAt: nullableText.optional(), veterinaryStatus: z.string().optional(),
   status: z.enum(["intake", "in_treatment", "medically_cleared", "adopted", "closed"]),
   createdAt: z.string(), updatedAt: z.string(),
 });
@@ -104,7 +104,7 @@ export function resolveNavigation(value: unknown, session: NavigationSession): A
       const animal = animalSchema.safeParse(input.viewedAnimal);
       if (!animal.success) return base("animal-listings");
       // Staff can open intake profiles; those snapshots must not survive sign-out as public profiles.
-      if ((!animal.data.medicallyCleared || animal.data.status === "adopted") && !canVisit("manage-animals", session)) {
+      if ((!animal.data.medicallyCleared || ["adopted", "closed"].includes(animal.data.status)) && !canVisit("manage-animals", session)) {
         return base("animal-listings");
       }
       return { ...next, viewedAnimal: animal.data };

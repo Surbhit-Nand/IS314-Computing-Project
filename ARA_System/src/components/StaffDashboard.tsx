@@ -42,9 +42,10 @@ export function StaffDashboard({ onNavigate, onReviewAnimal }: StaffDashboardPro
         fetchStaffAnimals(token), fetchAllAdoptionApplications(token), fetchAllRescueReports(token),
       ]);
       setCounts({
-        rescue: reports.status === "fulfilled" ? reports.value.filter((entry) => entry.status === "submitted").length : null,
+        rescue: reports.status === "fulfilled" ? reports.value.filter((entry) => ["submitted", "assigned", "in_progress", "awaiting_reassignment"].includes(entry.status)).length : null,
         intake: animals.status === "fulfilled" ? animals.value.filter((entry) => entry.status === "intake").length : null,
-        care: animals.status === "fulfilled" ? animals.value.filter((entry) => entry.status === "in_treatment").length : null,
+        // Match the veterinary medical queue, including animals awaiting assessment or clearance.
+        care: animals.status === "fulfilled" ? animals.value.filter((entry) => !entry.medicallyCleared && !["adopted", "closed"].includes(entry.status)).length : null,
         applications: applications.status === "fulfilled" ? applications.value.filter((entry) => ["submitted", "under_review"].includes(entry.status)).length : null,
       });
       setReadyToPublish(animals.status === "fulfilled" ? animals.value.filter((animal) =>
@@ -67,10 +68,10 @@ export function StaffDashboard({ onNavigate, onReviewAnimal }: StaffDashboardPro
     status: string;
     view: SiteHeaderView;
   }> = [
-    { title: "Rescue alerts", detail: counts?.rescue == null ? "Unavailable" : `${counts.rescue} awaiting initial review`, status: "urgent", view: "manage-rescue-reports" },
+    { title: "Rescue alerts", detail: counts?.rescue == null ? "Unavailable" : `${counts.rescue} active rescue alerts`, status: "urgent", view: "manage-rescue-reports" },
     { title: "Animals awaiting intake", detail: counts?.intake == null ? "Unavailable" : `${counts.intake} animals at intake`, status: "active", view: "manage-animals" },
     { title: "Adoption applications", detail: counts?.applications == null ? "Unavailable" : `${counts.applications} awaiting review`, status: "pending", view: "manage-adoption-applications" },
-    { title: "Animals in treatment", detail: counts?.care == null ? "Unavailable" : `${counts.care} animals receiving care`, status: "medical", view: "veterinary-dashboard" },
+    { title: "Animals in medical queue", detail: counts?.care == null ? "Unavailable" : `${counts.care} animals awaiting or receiving veterinary care`, status: "medical", view: "veterinary-dashboard" },
   ];
 
   if (!isLoaded || !isSignedIn) {
@@ -144,7 +145,7 @@ export function StaffDashboard({ onNavigate, onReviewAnimal }: StaffDashboardPro
           <span className="workspace-metric-icon"><IconClipboard size={18} /></span>
           <span>Rescue alerts</span>
           <strong>{counts?.rescue ?? "—"}</strong>
-          <small>Awaiting initial review</small>
+          <small>Active rescue alerts</small>
         </article>
         <article>
           <span className="workspace-metric-icon"><IconPawPrint size={18} /></span>
@@ -160,9 +161,9 @@ export function StaffDashboard({ onNavigate, onReviewAnimal }: StaffDashboardPro
         </article>
         <article>
           <span className="workspace-metric-icon"><IconMedical size={18} /></span>
-          <span>Animals in treatment</span>
+          <span>Animals in medical queue</span>
           <strong>{counts?.care ?? "—"}</strong>
-          <small>Currently receiving care</small>
+          <small>Awaiting or receiving veterinary care</small>
         </article>
       </section>
 
@@ -198,13 +199,13 @@ export function StaffDashboard({ onNavigate, onReviewAnimal }: StaffDashboardPro
                 <strong>{title}</strong>
                 <span>{detail}</span>
               </p>
-              <button
+              {(view !== "veterinary-dashboard" || isDevBypassEnabled || role === "veterinarian") && <button
                 type="button"
                 className="mini-button"
                 onClick={() => onNavigate(view)}
               >
                 Open queue
-              </button>
+              </button>}
             </div>
           ))}
         </div>

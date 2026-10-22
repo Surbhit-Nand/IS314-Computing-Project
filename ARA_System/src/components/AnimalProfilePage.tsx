@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useLayoutEffect, useState } from "react";
 import { adoptionStatusLabel, sizeDisplayLabel, vaccinationStatusLabel, type Animal } from "../types/animal";
 import { useFavoriteAnimals } from "../utils/favorites";
 import { speciesLabel } from "../utils/format";
@@ -23,6 +23,10 @@ type AnimalProfilePageProps = {
 // returns every field, so there's no need for a second network round trip
 // or a new backend route.
 export function AnimalProfilePage({ animal, isLoaded, isSignedIn, currentPage, onNavigate }: AnimalProfilePageProps) {
+  useLayoutEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+  }, [animal.id]);
+
   const { isFavorite, toggle } = useFavoriteAnimals();
   // Always starts at index 0 - the animal's main/profile picture (see
   // AnimalProfileFields.tsx, where photoUrls[0] is set as the first photo
@@ -223,7 +227,7 @@ export function AnimalProfilePage({ animal, isLoaded, isSignedIn, currentPage, o
                   sign-in/register round trip (and a reload), and the form
                   clears it on successful submit. Hidden once the animal is
                   adopted. */}
-              {animal.status !== "adopted" && animal.medicallyCleared && (
+              {!["adopted", "closed"].includes(animal.status) && animal.medicallyCleared && animal.publishedAt && (
                 <button
                   type="button"
                   className="teal-button profile-adopt-button"

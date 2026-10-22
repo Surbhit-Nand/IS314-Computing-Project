@@ -12,6 +12,14 @@ const animal = (id: string): Animal => ({
   medicallyCleared: true, status: "medically_cleared", createdAt: "", updatedAt: "",
 });
 
+test("public profile and adoption navigation preserve publication state", () => {
+  const published = { ...animal("published"), publishedAt: "2026-10-22T00:00:00.000Z" };
+  for (const view of ["animal-profile", "adoption-apply"] as const) {
+    const resolved = resolveNavigation({ view, viewedAnimal: published }, anonymous);
+    assert.equal(resolved.viewedAnimal?.publishedAt, published.publishedAt);
+  }
+});
+
 // An in-memory browser session history with structured-clone semantics and a
 // real event subscription boundary. No React/module mocks or live credentials.
 function browser(initial: unknown = { clerk: { flow: "existing" }, other: 42 }) {
@@ -180,6 +188,7 @@ test("current Clerk role overrides fabricated history; account changes discard e
   assert.equal(resolveNavigation({ view: "dashboard" }, { ...session(), devBypass: true }).view, "home");
   const privateAnimal = { ...animal("intake"), medicallyCleared: false };
   assert.equal(resolveNavigation({ view: "animal-profile", viewedAnimal: privateAnimal }, anonymous).view, "animal-listings");
+  assert.equal(resolveNavigation({ view: "animal-profile", viewedAnimal: { ...animal("closed"), status: "closed" } }, anonymous).view, "animal-listings");
   for (const view of ["my-animals", "my-animal-record", "my-animal-booking"] as const) {
     assert.equal(resolveNavigation({ view, selectedAnimalId: "A" }, anonymous).view, "home");
   }

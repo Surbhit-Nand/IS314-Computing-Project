@@ -1,0 +1,97 @@
+.adoption-application-progress {
+  scroll-margin-top: 110px;
+}
+
+.page-shell.adoption-confirmation-page {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-height: calc(100svh - 160px);
+  padding-bottom: 32px;
+  box-sizing: border-box;
+}
+.rescue-form-panel.adoption-confirmation {
+  width: 100%;
+  box-sizing: border-box;
+  align-self: center;
+  justify-self: center;
+  max-width: 720px;
+  margin: 32px auto;
+  padding: 40px 28px;
+}
+.adoption-confirmation .rescue-success { padding: 0; }
+.adoption-confirmation-check {
+  display: inline-grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  margin-bottom: 20px;
+  border-radius: 50%;
+  background: #e5f5ed;
+  color: #23744f;
+  font-size: 28px;
+}
+.adoption-confirmation h1 { margin: 0 0 16px; font-size: clamp(26px, 4vw, 34px); color: #12344a; }
+.adoption-confirmation .rescue-success p { max-width: 500px; margin: 0 auto 26px; line-height: 1.7; }
+
+.adoption-review-heading { padding: 12px 0 8px; }
+.adoption-review-heading h3 { margin: 8px 0 12px; font-size: clamp(26px, 3vw, 34px); letter-spacing: -0.8px; color: #12344a; }
+.adoption-review-heading > p:last-child { max-width: 680px; margin: 0; color: #617588; line-height: 1.7; }
+.rescue-form .adoption-recipient { display: flex; flex-wrap: wrap; gap: 14px; padding: 20px; background: #f5f9fc; border-radius: 12px; }
+.adoption-recipient .radio-option { flex: 1 1 240px; display: flex; align-items: center; gap: 12px; margin: 0; padding: 18px; background: white; border: 1px solid #d5e2ec; border-radius: 8px; cursor: pointer; }
+.adoption-recipient .radio-option:has(input:checked) { border-color: #087eb5; background: #edf7fc; box-shadow: 0 0 0 1px #087eb5; }
+.adoption-recipient .radio-option:focus-within { outline: 3px solid #94cee8; outline-offset: 3px; }
+.adoption-recipient input { accent-color: #087eb5; flex-shrink: 0; }
+.adoption-recipient strong, .adoption-recipient small { display: block; }
+.adoption-recipient strong { color: #12344a; font-size: 16px; }
+.adoption-recipient small { margin-top: 6px; color: #617588; font-size: 13px; line-height: 1.5; }
+.adoption-recipient .invite-feedback { flex-basis: 100%; margin: 0; }
+.adoption-review-summary { min-width: 0; padding-top: 12px; }
+.adoption-review-summary-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+.adoption-review-summary-heading h4 { margin: 0; font-size: 20px; color: #12344a; }
+.adoption-review-summary-heading > span { font-size: 13px; color: #617588; }
+.adoption-review-sections { display: block; }
+.adoption-review-section { padding: 24px 0; }
+.adoption-review-section + .adoption-review-section { border-top: 1px solid #d5e2ec; }
+.adoption-review-section:first-child { padding-top: 8px; }
+.adoption-review-section h5 { margin: 0 0 14px; color: #17658c; font-size: 15px; font-weight: 700; }
+.adoption-review-section dl { margin: 0; }
+.adoption-review-answer { padding: 5px 0; color: #18394e; font-size: 15px; line-height: 1.7; overflow-wrap: anywhere; }
+.adoption-review-answer dt { display: inline; font-weight: 700; }
+.adoption-review-answer dt::after { content: ": "; }
+.adoption-review-answer dd { display: inline; margin: 0; font-weight: 400; }
+.adoption-review-summary > .security-note { margin-top: 20px; }
+
+.rescue-form .adoption-application-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border, #d5e2ec);
+}
+
+.rescue-form .adoption-application-actions button {
+  min-height: 48px;
+  min-width: 112px;
+  margin: 0;
+}
+
+.rescue-form .adoption-application-actions .rescue-submit-button {
+  margin-left: auto;
+}
+
+@media (max-width: 540px) {
+  .rescue-form .adoption-application-actions {
+    gap: 12px;
+  }
+
+  .rescue-form .adoption-application-actions button {
+    min-width: 0;
+    padding: 12px 18px;
+  }
+
+  .rescue-form .adoption-application-actions .rescue-submit-button {
+    max-width: 70%;
+  }
+}

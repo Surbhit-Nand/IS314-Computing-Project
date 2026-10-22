@@ -1,5 +1,6 @@
 import { SignInButton, useAuth, useUser } from "@clerk/react";
-import { useState, type CSSProperties, type FormEvent } from "react";
+import { useLayoutEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
+import "./adoption-application-form.css";
 import { submitAdoptionApplication, uploadAdoptionIdDocument } from "../../services/adoptionsApi";
 import type { Animal } from "../../types/animal";
 import { clearPendingAdoption } from "../../utils/pendingAdoption";
@@ -213,6 +214,10 @@ export function AdoptionApplicationForm({
 
   const steps = visibleSteps(form);
   const step = steps[Math.min(stepIndex, steps.length - 1)] as StepId;
+  const progressRef = useRef<HTMLOListElement>(null);
+  useLayoutEffect(() => {
+    progressRef.current?.scrollIntoView({ block: "start", behavior: "instant" });
+  }, [step]);
 
   function setField<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((previous) => ({ ...previous, [key]: value }));
@@ -406,7 +411,7 @@ export function AdoptionApplicationForm({
         onNavigate={onNavigate}
       />
 
-      <main className="page-shell">
+      <main className={`page-shell${submittedAnimal ? " adoption-confirmation-page" : ""}`}>
         <Breadcrumbs
           trail={[
             { label: "Home", onClick: () => onNavigate("home") },
@@ -415,10 +420,10 @@ export function AdoptionApplicationForm({
               label: animal?.name ?? "this animal",
               onClick: animal ? () => onNavigate("animal-profile") : undefined,
             },
-            { label: "Apply to adopt" },
+            { label: submittedAnimal ? "Application received" : "Apply to adopt" },
           ]}
         />
-        <section className="catalog-hero">
+        {!submittedAnimal && <section className="catalog-hero">
           <p className="eyebrow">Adoption application</p>
           <h1>Apply to adopt {animal?.name ?? "this animal"}</h1>
           <p className="lead-copy">
@@ -426,7 +431,7 @@ export function AdoptionApplicationForm({
             can match you with {animal?.name ?? "this animal"}. A staff member
             will review every application before an animal is approved.
           </p>
-        </section>
+        </section>}
 
         {!animal ? (
           <section className="rescue-form-panel">
@@ -462,21 +467,19 @@ export function AdoptionApplicationForm({
             </div>
           </section>
         ) : submittedAnimal ? (
-          <section className="rescue-form-panel">
+          <section className="rescue-form-panel adoption-confirmation">
             <div className="rescue-success" role="status" aria-live="polite">
-              <p className="eyebrow">Application received</p>
-              <h2>Thank you for applying to adopt {submittedAnimal}.</h2>
+              <span className="adoption-confirmation-check" aria-hidden="true">✓</span>
+              <h1>Application received</h1>
               <p>
-                Our team will review your application against {submittedAnimal}&apos;s
-                needs and get back to you. Follow the link below to watch your
-                application move through each stage.
+                Thank you for applying to adopt {submittedAnimal}. Our team will review your application and get back to you.
               </p>
               <button
                 type="button"
                 className="teal-button"
                 onClick={onShowMyApplications}
               >
-                Track my applications
+                View my applications
               </button>
             </div>
           </section>
@@ -497,7 +500,7 @@ export function AdoptionApplicationForm({
 
             {/* Wizard progress: one dot per visible page. Completed pages are
                 clickable so applicants can go back and fix an answer. */}
-            <ol className="wizard-progress" aria-label="Application progress">
+            <ol ref={progressRef} className="wizard-progress adoption-application-progress" aria-label="Application progress">
               {steps.map((id, index) => (
                 <li
                   key={id}
@@ -520,7 +523,7 @@ export function AdoptionApplicationForm({
               ))}
             </ol>
 
-            {errorMessage && (
+            {errorMessage && !(step === "review" && errorMessage === "Choose who this adoption is for.") && (
               <p className="invite-feedback error" role="alert">
                 {errorMessage}
               </p>
@@ -854,28 +857,12 @@ export function AdoptionApplicationForm({
 
                 {step === "review" && (
                   <>
-                    <h3 className="animal-form-full form-section-title">Review & submit</h3>
-                    <div className="animal-form-full">
-                      <h4 className="rescue-card-subtitle">Your answers so far</h4>
-                      <dl className="rescue-detail-grid">
-                        {reviewSummary(form).map((section) => (
-                          <div key={section.title} className="rescue-detail-item full">
-                            <dt>{section.title}</dt>
-                            <dd>
-                              {section.rows.map((row) => (
-                                <p key={row.label} className="adoption-answer-row">
-                                  <strong>{row.label}:</strong> {row.value}
-                                </p>
-                              ))}
-                            </dd>
-                          </div>
-                        ))}
-                      </dl>
-                      <p className="security-note">
-                        Use the numbered steps above to go back and change any answer.
-                      </p>
+                    <div className="animal-form-full adoption-review-heading">
+                      <p className="eyebrow">One last look</p>
+                      <h3>Review your application</h3>
+                      <p>Check your details before sending your application to adopt {animal.name}. You can return to any completed step to make changes.</p>
                     </div>
-                    <fieldset className="radio-group animal-form-full">
+                    <fieldset className="radio-group animal-form-full adoption-recipient" aria-describedby={errorMessage === "Choose who this adoption is for." ? "adoption-recipient-error" : undefined}>
                       <legend className="form-label-text">Is this adoption for yourself or someone else?</legend>
                       <label className="radio-option">
                         <input
@@ -883,9 +870,9 @@ export function AdoptionApplicationForm({
                           name="adoptionFor"
                           value="self"
                           checked={form.adoptionFor === "self"}
-                          onChange={() => setField("adoptionFor", "self")}
+                          onChange={() => { setField("adoptionFor", "self"); setErrorMessage(""); }}
                         />
-                        Myself
+                        <span><strong>For myself</strong><small>I will be responsible for their care.</small></span>
                       </label>
                       <label className="radio-option">
                         <input
@@ -893,22 +880,45 @@ export function AdoptionApplicationForm({
                           name="adoptionFor"
                           value="gift"
                           checked={form.adoptionFor === "gift"}
-                          onChange={() => setField("adoptionFor", "gift")}
+                          onChange={() => { setField("adoptionFor", "gift"); setErrorMessage(""); }}
                         />
-                        Gift for someone else
+                        <span><strong>For someone else</strong><small>Our team will confirm the recipient is ready.</small></span>
                       </label>
+                      {errorMessage === "Choose who this adoption is for." && (
+                        <p id="adoption-recipient-error" className="invite-feedback error" role="alert">{errorMessage}</p>
+                      )}
                     </fieldset>
                     {form.adoptionFor === "gift" && (
-                      <p className="animal-form-full security-note">
+                      <p className="animal-form-full security-note adoption-recipient-note">
                         Gift adoptions get an extra review step - our team will
                         confirm the recipient is ready for a pet.
                       </p>
                     )}
+                    <div className="animal-form-full adoption-review-summary">
+                      <div className="adoption-review-summary-heading"><h4>Application details</h4><span>Review before submitting</span></div>
+                      <div className="adoption-review-sections">
+                        {reviewSummary(form).map((section) => (
+                          <section key={section.title} className="adoption-review-section">
+                            <h5>{section.title.replace(/^\d+\.\s*/, "")}</h5>
+                            <dl>
+                              {section.rows.map((row) => (
+                                <div key={row.label} className="adoption-review-answer">
+                                  <dt>{row.label}</dt><dd>{row.value}</dd>
+                                </div>
+                              ))}
+                            </dl>
+                          </section>
+                        ))}
+                      </div>
+                      <p className="security-note">
+                        Use the numbered steps above to go back and change any answer.
+                      </p>
+                    </div>
                   </>
                 )}
               </div>
 
-              <div className="rescue-form-actions">
+              <div className="rescue-form-actions adoption-application-actions">
                 {steps.indexOf(step) > 0 && (
                   <button type="button" className="ghost-button" onClick={goBack} disabled={isSubmitting}>
                     Back
